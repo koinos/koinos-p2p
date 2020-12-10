@@ -1,30 +1,21 @@
 language: go
-
 go:
-  - 1.x
-
+- 1.x
 addons:
   apt:
     packages:
-      - ruby-full
-
+    - ruby-full
   update: true
-
 jobs:
   include:
-    - os: linux
-      dist: focal
-
+  - os: linux
+    dist: focal
 install:
-  - source ci/install.sh
-
+- source ci/install.sh
 script:
-  - ci/build.sh && ci/test.sh
-
+- ci/build.sh && ci/test.sh
 after_success:
-  - ci/after_success.sh
-
+- ci/after_success.sh
 notifications:
   slack:
-    secure: AzhMztfB/P6kXb18ky/9HzO2PXHlPmcc5UF+oXrKmTi+rqnWBKXfXILO9ZwbMQr81b2y6CL64XE7s6kcChzgLewxrkckKI0BA2FT65i5CzrzXyHWDk+2bbOT0NB09CDEccxFj+EMC6481/HKOfhdbwO6w8lIgFSsUmUuxrKBJJqeLMmiy+asXAXn1skyQjkqRP4k/MpKA5nY4JYpnd0lTZUOXypxDZ5uqFOfSls6AlXZIoOuKFS43xXuTjH68wxk7eD15HSu+JF+fqyrSLpB+vUShOf3/8D2VYB9l0Xv2qjkW4kAhcUGs5KepAepj+V5Wnq4MnKbKeuamKIknvDbzupAoA0ciGgZ4O4HZr2pmWYO1Kk7VyBhb1gptNpqTkfAVpQqbhn4JIagCmOJ/X0gFic4DK8YORKxoKk7th2mxO/jm6RAtyyy6RFJUZkBa0iyHmaZLRGMyGtZaqbOaG3mmI19c/6ipEJe2PRhOEjvpjMj98LDftTrX2QnvtapKVG60G0MDjr9fowDtcEB2CK5lCKHj+/r7WsuHuuKx5SAGBmz1hG6pekv1qKF6kJIOiC9KYatV4SkZBDgOd9n4M6whKyj+tO0I3WfiSDVOVHUe0ZFROVLXcV1nZvKS5E5px61DOLCBDAfjnAWi7pZHLzkARMb8t/yeC1TZahGuLhlaLs=
-    on_success: never
+    secure: uLagb4g9pgxtO6pa+ReiRLXdAwSLv39W4BUi5/5Ury27JGZn2zobPhOcsGglbGwH2QTGomoTLJ4VU/wWLnYSrb5lRYhRYBgpmi0BVIqXrCDGEa7QWIlwtM9sY5nrSGB3CqsUZh0M/5etTJkcD281VVQ1qiowWIykKrkcN73WqGssJJqRU/Gu2eyqDmWar7ymDrKSjsmQw0nFGJwhDTrFIg9F6h81OaHsEk+A0A8V6ldZ2FcucKJGeta6hnh1UUKBnHitj0FUMIBW+lxKqm86Y3U1RFAKYS7GIBnQLdhpH2x5I36+kkGFgp1ZUg4KRy59Fh3D75HF4yxA4jp94cTPUAxSufYH+kcC9b2KCbKuCNeHlpMf1sHD3BxEFD7kRERjvSSzIl2Je4DgUO8eiqruMBe5GPkoQ8QQkzi0Kh02+mCx5G8IfiivRrgjvVGFl8+IXokIEeeTCYrZT7qeO1hashro/CDXFx318sPcA4FYQ9ToDhuWuKiLFyPYO3wua78nyQCZlX1x7FQrgEBc6MFfMAwi+aiGU+pu9t7gmcnLIOO2yuOpkksanIIVZ9jaTmJOdw3L0hWmK1dnNhHha3gJydydNA41bLHkoAHaOKTb3rxf4MkSLpiUQeoBkT9PUabxS56J3bd+2sn5DipQ3SsjXrtM1LurBxsiUb11F1y/sdE=
