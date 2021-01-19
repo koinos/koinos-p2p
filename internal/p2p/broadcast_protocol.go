@@ -14,7 +14,7 @@ const broadcastID = "/broadcast/1.0.0"
 
 // BroadcastProtocol handles broadcasting inventory to peers
 type BroadcastProtocol struct {
-	Host *KoinosP2PHost
+	Host *KoinosP2PNode
 }
 
 // BroadcastPeerStatus is an enum which represent peer's response
@@ -32,7 +32,7 @@ type BroadcastResponse struct {
 }
 
 // NewBroadcastProtocol constructs a new broadcast protocol object
-func NewBroadcastProtocol(host *KoinosP2PHost) *BroadcastProtocol {
+func NewBroadcastProtocol(host *KoinosP2PNode) *BroadcastProtocol {
 	ps := &BroadcastProtocol{Host: host}
 	host.Host.SetStreamHandler(broadcastID, ps.handleStream)
 	return ps
@@ -60,7 +60,7 @@ func (c *BroadcastProtocol) handleStream(s network.Stream) {
 
 // InitiateProtocol begins the communication with the peer
 // TODO: Consider interface for protocols
-func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, host *KoinosP2PHost, p peer.ID) {
+func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, host *KoinosP2PNode, p peer.ID) {
 	// Start a stream with the given peer
 	s, err := host.Host.NewStream(ctx, p, broadcastID)
 	if err != nil {

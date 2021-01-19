@@ -18,7 +18,7 @@ func main() {
 
 	flag.Parse()
 
-	host, _ := p2p.NewKoinosP2PHost(*addr, int64(*seed))
+	host, _ := p2p.NewKoinosP2PNode(*addr, int64(*seed))
 	log.Printf("Starting node at with address: %s\n", host.GetPeerAddress())
 
 	bp := p2p.NewBroadcastProtocol(host)
