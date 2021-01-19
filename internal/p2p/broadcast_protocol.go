@@ -20,16 +20,18 @@ type BroadcastProtocol struct {
 // BroadcastPeerStatus is an enum which represent peer's response
 type BroadcastPeerStatus int
 
+// The possible peer status results
 const (
 	Ok BroadcastPeerStatus = iota
-	MismatchedID
-	Reject
+	Error
 )
 
+// BroadcastResponse is the message a peer returns
 type BroadcastResponse struct {
 	Status BroadcastPeerStatus
 }
 
+// NewBroadcastProtocol constructs a new broadcast protocol object
 func NewBroadcastProtocol(host *KoinosP2PHost) *BroadcastProtocol {
 	ps := &BroadcastProtocol{Host: host}
 	host.Host.SetStreamHandler(broadcastID, ps.handleStream)

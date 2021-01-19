@@ -26,17 +26,17 @@ func GetNumber() types.UInt64 {
 	return types.UInt64(10)
 }
 
-// KoinosP2PHost is the core object representing
-type KoinosP2PHost struct {
+// KoinosP2PNode is the core object representing
+type KoinosP2PNode struct {
 	Host      host.Host
 	Inventory NodeInventory
 }
 
-// NewKoinosP2PHost creates a libp2p host object listening on the given multiaddress
+// NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use a negative number for a random seed.
-func NewKoinosP2PHost(listenAddr string, seed int64) (*KoinosP2PHost, error) {
+func NewKoinosP2PNode(listenAddr string, seed int64) (*KoinosP2PNode, error) {
 	var r io.Reader
 	if seed == 0 {
 		r = crand.Reader
@@ -59,13 +59,13 @@ func NewKoinosP2PHost(listenAddr string, seed int64) (*KoinosP2PHost, error) {
 		return nil, err
 	}
 
-	kHost := KoinosP2PHost{Host: host}
+	node := KoinosP2PNode{Host: host}
 
-	return &kHost, nil
+	return &node, nil
 }
 
 // ConnectToPeer connects the node to the given peer
-func (n KoinosP2PHost) ConnectToPeer(peerAddr string) (*peerstore.AddrInfo, error) {
+func (n KoinosP2PNode) ConnectToPeer(peerAddr string) (*peerstore.AddrInfo, error) {
 	addr, err := multiaddr.NewMultiaddr(peerAddr)
 	if err != nil {
 		return nil, err
@@ -86,23 +86,23 @@ func (n KoinosP2PHost) ConnectToPeer(peerAddr string) (*peerstore.AddrInfo, erro
 
 // MakeContext creates and returns the canonical context which should be used for peer connections
 // TODO: create this from configuration
-func (n KoinosP2PHost) MakeContext() (ctx context.Context, cancel context.CancelFunc) {
+func (n KoinosP2PNode) MakeContext() (ctx context.Context, cancel context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 30*time.Second)
 }
 
 // GetListenAddress returns the multiaddress on which the node is listening
-func (n KoinosP2PHost) GetListenAddress() multiaddr.Multiaddr {
+func (n KoinosP2PNode) GetListenAddress() multiaddr.Multiaddr {
 	return n.Host.Addrs()[0]
 }
 
 // GetPeerAddress returns the ipfs multiaddress to which other peers should connect
-func (n KoinosP2PHost) GetPeerAddress() multiaddr.Multiaddr {
+func (n KoinosP2PNode) GetPeerAddress() multiaddr.Multiaddr {
 	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", n.Host.ID().Pretty()))
 	return n.GetListenAddress().Encapsulate(hostAddr)
 }
 
 // Close closes the node
-func (n KoinosP2PHost) Close() error {
+func (n KoinosP2PNode) Close() error {
 	if err := n.Host.Close(); err != nil {
 		return err
 	}
