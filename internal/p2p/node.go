@@ -26,10 +26,25 @@ func GetNumber() types.UInt64 {
 	return types.UInt64(10)
 }
 
+type nodeProtocols struct {
+	Sync      SyncProtocol
+	Broadcast BroadcastProtocol
+}
+
+// create new node protocol object
+func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
+	np := new(nodeProtocols)
+	np.Sync = *NewSyncProtocol(node)
+	np.Broadcast = *NewBroadcastProtocol(node)
+
+	return np
+}
+
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
 	Host      host.Host
 	Inventory NodeInventory
+	Protocols nodeProtocols
 }
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
@@ -59,9 +74,11 @@ func NewKoinosP2PNode(listenAddr string, seed int64) (*KoinosP2PNode, error) {
 		return nil, err
 	}
 
-	node := KoinosP2PNode{Host: host}
+	node := new(KoinosP2PNode)
+	node.Host = host
+	node.Protocols = *newNodeProtocols(node)
 
-	return &node, nil
+	return node, nil
 }
 
 // ConnectToPeer connects the node to the given peer
