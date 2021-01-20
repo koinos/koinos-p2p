@@ -8,7 +8,7 @@ import (
 	// imports as package "cbor"
 )
 
-const syncID = "/sync/1.0.0"
+const syncID = "/koinos/sync/1.0.0"
 
 // SyncProtocol handles broadcasting inventory to peers
 type SyncProtocol struct {

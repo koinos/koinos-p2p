@@ -10,7 +10,7 @@ import (
 	"github.com/fxamacker/cbor/v2" // imports as package "cbor"
 )
 
-const broadcastID = "/broadcast/1.0.0"
+const broadcastID = "/koinos/broadcast/1.0.0"
 
 // BroadcastProtocol handles broadcasting inventory to peers
 type BroadcastProtocol struct {
