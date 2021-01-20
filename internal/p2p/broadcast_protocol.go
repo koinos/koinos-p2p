@@ -2,7 +2,7 @@ package p2p
 
 import (
 	"context"
-	"fmt"
+	"log"
 
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -47,7 +47,7 @@ func (c *BroadcastProtocol) handleStream(s network.Stream) {
 		panic(err)
 	}
 
-	fmt.Printf("Received message from peer: %s\n", message)
+	log.Printf("Received message from peer: %s\n", message)
 
 	// Encode response
 	response := BroadcastResponse{Status: Ok}
@@ -70,7 +70,7 @@ func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, host *KoinosP2
 	go func() {
 		for ctx.Err() == nil {
 			message := "Koinos 2021"
-			fmt.Printf("Sending message to peer: %s\n", message)
+			log.Printf("Sending message to peer: %s\n", message)
 
 			// Say hello to other node
 			encoder := cbor.NewEncoder(s)
@@ -88,7 +88,7 @@ func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, host *KoinosP2
 			}
 
 			if response.Status == Ok {
-				fmt.Println("Received Ok response from peer.")
+				log.Println("Received Ok response from peer.")
 			}
 
 			<-ctx.Done()

@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -19,11 +18,11 @@ func main() {
 	flag.Parse()
 
 	host, _ := p2p.NewKoinosP2PNode(*addr, int64(*seed))
-	log.Printf("Starting node at with address: %s\n", host.GetPeerAddress())
+	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
 
 	// Connect to a peer
 	if *peer != "" {
-		fmt.Println("Connecting to peer and sending broadcast")
+		log.Println("Connecting to peer and sending broadcast")
 		peer, err := host.ConnectToPeer(*peer)
 		if err != nil {
 			panic(err)

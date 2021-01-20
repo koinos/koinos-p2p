@@ -5,7 +5,6 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	// imports as package "cbor"
 )
 
 const syncID = "/koinos/sync/1.0.0"
