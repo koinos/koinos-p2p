@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -17,7 +18,7 @@ func main() {
 
 	flag.Parse()
 
-	host, _ := p2p.NewKoinosP2PNode(*addr, int64(*seed))
+	host, _ := p2p.NewKoinosP2PNode(context.Background(), *addr, int64(*seed))
 	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
 
 	// Connect to a peer

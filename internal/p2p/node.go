@@ -8,23 +8,12 @@ import (
 	mrand "math/rand"
 	"time"
 
-	types "github.com/koinos/koinos-types-golang"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	peerstore "github.com/libp2p/go-libp2p-core/peer"
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
-
-// GetInfo returns a test string
-func GetInfo() string {
-	return "test"
-}
-
-// GetNumber returns a test number
-func GetNumber() types.UInt64 {
-	return types.UInt64(10)
-}
 
 type nodeProtocols struct {
 	Sync      SyncProtocol
@@ -51,7 +40,7 @@ type KoinosP2PNode struct {
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use a negative number for a random seed.
-func NewKoinosP2PNode(listenAddr string, seed int64) (*KoinosP2PNode, error) {
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, seed int64) (*KoinosP2PNode, error) {
 	var r io.Reader
 	if seed == 0 {
 		r = crand.Reader
@@ -69,7 +58,7 @@ func NewKoinosP2PNode(listenAddr string, seed int64) (*KoinosP2PNode, error) {
 		libp2p.Identity(privateKey),
 	}
 
-	host, err := libp2p.New(context.Background(), options...)
+	host, err := libp2p.New(ctx, options...)
 	if err != nil {
 		return nil, err
 	}
