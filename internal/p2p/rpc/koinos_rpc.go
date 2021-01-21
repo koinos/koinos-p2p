@@ -24,7 +24,7 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) bool {
 }
 
 // GetBlocksByHeight rpc call
-func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.UInt32, numBlock koinos_types.Uint32) *[]koinos_types.Block {
+func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.UInt32, numBlock koinos_types.UInt32) *[]koinos_types.Block {
 	blocks := make([]koinos_types.Block, 0)
 	return &blocks
 }
