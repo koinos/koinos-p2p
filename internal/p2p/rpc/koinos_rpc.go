@@ -23,9 +23,10 @@ func (k KoinosRPC) ApplyBlock( block *koinos_types.Block ) bool {
 	return true
 }
 
-// GetAncestorAtHeight rpc call
-func (k KoinosRPC) GetAncestorAtHeight( blockID *koinos_types.Multihash, height koinos_types.UInt32 ) *koinos_types.Block {
-	return koinos_types.NewBlock()
+// GetBlocksByHeight rpc call
+func GetBlocksByHeight( blockID *koinos_types.Multihash, height koinos_types.UInt32, numBlock koinos_types.Uint32 ) *koinos_types.Block[] {
+	blocks := make(koinos_types.Block, 0)
+	return &blocks
 }
 
 // GetChainID rpc call
