@@ -5,7 +5,7 @@ import (
 )
 
 // KoinosRPC Implementation of RPC Interface
-type KoinosRPC struct {}
+type KoinosRPC struct{}
 
 // NewKoinosRPC factory
 func NewKoinosRPC() *KoinosRPC {
@@ -19,13 +19,13 @@ func (k KoinosRPC) GetHeadBlock() *koinos_types.BlockTopology {
 }
 
 // ApplyBlock rpc call
-func (k KoinosRPC) ApplyBlock( block *koinos_types.Block ) bool {
+func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) bool {
 	return true
 }
 
 // GetBlocksByHeight rpc call
-func GetBlocksByHeight( blockID *koinos_types.Multihash, height koinos_types.UInt32, numBlock koinos_types.Uint32 ) *koinos_types.Block[] {
-	blocks := make(koinos_types.Block, 0)
+func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.UInt32, numBlock koinos_types.Uint32) *[]koinos_types.Block {
+	blocks := make([]koinos_types.Block, 0)
 	return &blocks
 }
 
