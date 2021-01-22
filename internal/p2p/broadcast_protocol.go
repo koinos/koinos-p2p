@@ -14,7 +14,7 @@ const broadcastID = "/koinos/broadcast/1.0.0"
 
 // BroadcastProtocol handles broadcasting inventory to peers
 type BroadcastProtocol struct {
-	Host *KoinosP2PNode
+	Node *KoinosP2PNode
 }
 
 // BroadcastPeerStatus is an enum which represent peer's response
@@ -33,7 +33,7 @@ type BroadcastResponse struct {
 
 // NewBroadcastProtocol constructs a new broadcast protocol object
 func NewBroadcastProtocol(host *KoinosP2PNode) *BroadcastProtocol {
-	ps := &BroadcastProtocol{Host: host}
+	ps := &BroadcastProtocol{Node: host}
 	host.Host.SetStreamHandler(broadcastID, ps.handleStream)
 	return ps
 }
@@ -60,39 +60,38 @@ func (c *BroadcastProtocol) handleStream(s network.Stream) {
 
 // InitiateProtocol begins the communication with the peer
 // TODO: Consider interface for protocols
-func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, host *KoinosP2PNode, p peer.ID) {
+func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 	// Start a stream with the given peer
-	s, err := host.Host.NewStream(ctx, p, broadcastID)
+	s, err := c.Node.Host.NewStream(ctx, p, broadcastID)
 	if err != nil {
 		panic(err)
 	}
 
-	go func() {
-		for ctx.Err() == nil {
-			message := "Koinos 2021"
-			log.Printf("Sending message to peer: %s\n", message)
+	if ctx.Err() == nil {
+		message := "Koinos 2021"
+		log.Printf("Sending message to peer: %s\n", message)
 
-			// Say hello to other node
-			encoder := cbor.NewEncoder(s)
-			err := encoder.Encode(message)
-			if err != nil {
-				panic(err)
-			}
-
-			// Receive response
-			var response BroadcastResponse
-			decoder := cbor.NewDecoder(s)
-			err = decoder.Decode(&response)
-			if err != nil {
-				panic(err)
-			}
-
-			if response.Status == Ok {
-				log.Println("Received Ok response from peer.")
-			}
-
-			<-ctx.Done()
-			s.Reset()
+		// Say hello to other node
+		encoder := cbor.NewEncoder(s)
+		err := encoder.Encode(message)
+		if err != nil {
+			panic(err)
 		}
-	}()
+
+		// Receive response
+		var response BroadcastResponse
+		decoder := cbor.NewDecoder(s)
+		err = decoder.Decode(&response)
+		if err != nil {
+			s.Reset()
+			return
+		}
+
+		if response.Status == Ok {
+			log.Println("Received Ok response from peer.")
+		}
+
+		ctx.Done()
+		s.Reset()
+	}
 }

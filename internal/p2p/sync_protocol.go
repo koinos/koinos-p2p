@@ -11,12 +11,12 @@ const syncID = "/koinos/sync/1.0.0"
 
 // SyncProtocol handles broadcasting inventory to peers
 type SyncProtocol struct {
-	Host *KoinosP2PNode
+	Node *KoinosP2PNode
 }
 
 // NewSyncProtocol constructs a new broadcast protocol object
 func NewSyncProtocol(host *KoinosP2PNode) *SyncProtocol {
-	p := &SyncProtocol{Host: host}
+	p := &SyncProtocol{Node: host}
 	host.Host.SetStreamHandler(broadcastID, p.handleStream)
 	return p
 }
@@ -26,17 +26,15 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 
 // InitiateProtocol begins the communication with the peer
 // TODO: Consider interface for protocols
-func (c SyncProtocol) InitiateProtocol(ctx context.Context, host *KoinosP2PNode, p peer.ID) {
+func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 	// Start a stream with the given peer
-	s, err := host.Host.NewStream(ctx, p, broadcastID)
+	s, err := c.Node.Host.NewStream(ctx, p, broadcastID)
 	if err != nil {
-		panic(err)
+		s.Reset()
+		return
 	}
 
-	go func() {
-		for ctx.Err() == nil {
-			<-ctx.Done()
-			s.Reset()
-		}
-	}()
+	if ctx.Err() == nil {
+		s.Reset()
+	}
 }

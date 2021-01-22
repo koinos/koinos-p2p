@@ -29,10 +29,7 @@ func main() {
 			panic(err)
 		}
 
-		ctx, cancel := host.MakeContext()
-		defer cancel()
-
-		host.Protocols.Broadcast.InitiateProtocol(ctx, host, peer.ID)
+		go host.Protocols.Broadcast.InitiateProtocol(context.Background(), peer.ID)
 	}
 
 	// Wait for a SIGINT or SIGTERM signal
