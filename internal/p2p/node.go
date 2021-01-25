@@ -8,6 +8,7 @@ import (
 	mrand "math/rand"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -34,13 +35,14 @@ type KoinosP2PNode struct {
 	Host      host.Host
 	Inventory NodeInventory
 	Protocols nodeProtocols
+	RPC       rpc.RPC
 }
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use a negative number for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, seed int64) (*KoinosP2PNode, error) {
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed int64) (*KoinosP2PNode, error) {
 	var r io.Reader
 	if seed == 0 {
 		r = crand.Reader

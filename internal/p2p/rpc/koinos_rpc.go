@@ -1,4 +1,4 @@
-package p2p
+package rpc
 
 import (
 	koinos_types "github.com/koinos/koinos-types-golang"

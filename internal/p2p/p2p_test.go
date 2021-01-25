@@ -4,13 +4,17 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
 )
 
 func TestBasicNode(t *testing.T) {
 	ctx := context.Background()
 
+	rpc := rpc.NewKoinosRPC()
+
 	// With an explicit seed
-	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", 1234)
+	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 1234)
 	if err != nil {
 		t.Error(err)
 	}
@@ -22,27 +26,28 @@ func TestBasicNode(t *testing.T) {
 	}
 
 	// With 0 seed
-	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", 0)
+	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 0)
 	if err != nil {
 		t.Error(err)
 	}
 	bn.Close()
 
 	// Give an invalid listen address
-	bn, err = NewKoinosP2PNode(ctx, "---", 0)
+	bn, err = NewKoinosP2PNode(ctx, "---", rpc, 0)
 	if err == nil {
 		t.Error("Starting a node with an invalid address should give an error, but it did not")
 	}
 }
 
 func TestBroadcastProtocol(t *testing.T) {
+	rpc := rpc.NewKoinosRPC()
 
-	bnListen, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", 1234)
+	bnListen, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", rpc, 1234)
 	if err != nil {
 		t.Error(err)
 	}
 
-	bnSend, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", 2345)
+	bnSend, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", rpc, 2345)
 	if err != nil {
 		t.Error(err)
 	}
@@ -61,12 +66,14 @@ func TestBroadcastProtocol(t *testing.T) {
 }
 
 func TestSyncProtocol(t *testing.T) {
-	bnListen, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", 1234)
+	rpc := rpc.NewKoinosRPC()
+
+	bnListen, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", rpc, 1234)
 	if err != nil {
 		t.Error(err)
 	}
 
-	bnSend, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", 2345)
+	bnSend, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", rpc, 2345)
 	if err != nil {
 		t.Error(err)
 	}
