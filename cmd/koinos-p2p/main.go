@@ -1,8 +1,8 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -18,14 +18,12 @@ func main() {
 
 	flag.Parse()
 
-	host, _ := p2p.NewKoinosP2PNode(*addr, int64(*seed))
-	log.Printf("Starting node at with address: %s\n", host.GetPeerAddress())
-
-	bp := p2p.NewBroadcastProtocol(host)
+	host, _ := p2p.NewKoinosP2PNode(context.Background(), *addr, int64(*seed))
+	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
 
 	// Connect to a peer
 	if *peer != "" {
-		fmt.Println("Connecting to peer and sending broadcast")
+		log.Println("Connecting to peer and sending broadcast")
 		peer, err := host.ConnectToPeer(*peer)
 		if err != nil {
 			panic(err)
@@ -34,7 +32,7 @@ func main() {
 		ctx, cancel := host.MakeContext()
 		defer cancel()
 
-		bp.InitiateProtocol(ctx, host, peer.ID)
+		host.Protocols.Broadcast.InitiateProtocol(ctx, host, peer.ID)
 	}
 
 	// Wait for a SIGINT or SIGTERM signal
