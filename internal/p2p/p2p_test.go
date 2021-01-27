@@ -17,7 +17,9 @@ type TestRPC struct {
 
 // GetHeadBlock rpc call
 func (k TestRPC) GetHeadBlock() *types.BlockTopology {
-	return types.NewBlockTopology()
+	bt := types.NewBlockTopology()
+	bt.Height = k.Height
+	return bt
 }
 
 // ApplyBlock rpc call

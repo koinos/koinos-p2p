@@ -45,6 +45,8 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		s.Reset()
 		return
 	}
+
+	s.Close()
 }
 
 // InitiateProtocol begins the communication with the peer
@@ -95,7 +97,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 	_, peerHeadBlock, err := types.DeserializeBlockTopology(vb)
 	headBlock := c.Node.RPC.GetHeadBlock()
 	if peerHeadBlock.Height == headBlock.Height && peerHeadBlock.ID.Equals(&headBlock.ID) {
-		errs <- fmt.Errorf("Peer has same block height")
+		errs <- fmt.Errorf("Peer is in sync")
 		s.Reset()
 		return
 	}
