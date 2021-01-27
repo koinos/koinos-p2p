@@ -2,13 +2,43 @@ package p2p
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
+	types "github.com/koinos/koinos-types-golang"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-func TestBasicNode(t *testing.T) {
+type TestRPC struct {
+	Height             types.BlockHeightType
+	MultihashID        types.UInt64
+	ApplyBlockResponse bool
+}
+
+// GetHeadBlock rpc call
+func (k TestRPC) GetHeadBlock() *types.BlockTopology {
+	return types.NewBlockTopology()
+}
+
+// ApplyBlock rpc call
+func (k TestRPC) ApplyBlock(block *types.Block) bool {
+	return true
+}
+
+// GetBlocksByHeight rpc call
+func (k TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.UInt32, numBlock types.UInt32) *[]types.Block {
+	blocks := make([]types.Block, 0)
+	return &blocks
+}
+
+// GetChainID rpc call
+func (k TestRPC) GetChainID() *types.Multihash {
+	mh := types.NewMultihash()
+	mh.ID = k.MultihashID
+	return mh
+}
+
+/*func TestBasicNode(t *testing.T) {
 	ctx := context.Background()
 
 	rpc := rpc.NewKoinosRPC()
@@ -63,30 +93,89 @@ func TestBroadcastProtocol(t *testing.T) {
 
 	bnListen.Close()
 	bnSend.Close()
-}
+}*/
 
-func TestSyncProtocol(t *testing.T) {
-	rpc := rpc.NewKoinosRPC()
-
-	bnListen, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", rpc, 1234)
+func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*KoinosP2PNode, *KoinosP2PNode, *peer.AddrInfo, error) {
+	listenNode, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234)
 	if err != nil {
-		t.Error(err)
+		return nil, nil, nil, err
 	}
 
-	bnSend, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", rpc, 2345)
+	sendNode, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345)
 	if err != nil {
-		t.Error(err)
+		return nil, nil, nil, err
 	}
 
 	// Connect to the listener
-	peerAddr := bnListen.GetPeerAddress()
-	peer, err := bnSend.ConnectToPeer(peerAddr.String())
+	peerAddr := listenNode.GetPeerAddress()
+	peer, err := sendNode.ConnectToPeer(peerAddr.String())
 	if err != nil {
-		t.Error(err)
+		return nil, nil, nil, err
 	}
 
-	bnSend.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID)
+	return listenNode, sendNode, peer, nil
+}
 
-	bnListen.Close()
-	bnSend.Close()
+func TestSyncProtocol(t *testing.T) {
+	{
+		// Test no error sync
+		{
+			listenRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
+			sendRPC := TestRPC{Height: 5, MultihashID: 1, ApplyBlockResponse: true}
+			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+
+			errs := make(chan error, 1)
+			sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
+			err = getChannelError(errs)
+			if err != nil {
+				t.Error(err)
+			}
+
+			listenNode.Close()
+			sendNode.Close()
+		}
+
+		// Test different chain IDs
+		{
+			listenRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
+			sendRPC := TestRPC{Height: 5, MultihashID: 2, ApplyBlockResponse: true}
+			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+
+			errs := make(chan error, 1)
+			sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
+			err = getChannelError(errs)
+			if err == nil {
+				t.Error("Nodes with different chain ids should return an error, but did not")
+			}
+
+			listenNode.Close()
+			sendNode.Close()
+		}
+
+		// Test same head block
+		{
+			listenRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
+			sendRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
+			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+
+			errs := make(chan error, 1)
+			sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
+			err = getChannelError(errs)
+			if err == nil {
+				t.Error("Nodes with same head block should return an error, but did not")
+			}
+
+			listenNode.Close()
+			sendNode.Close()
+		}
+	}
+}
+
+func getChannelError(errs chan error) error {
+	select {
+	case err := <-errs:
+		return err
+	default:
+		return nil
+	}
 }

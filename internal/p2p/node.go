@@ -69,6 +69,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.Host = host
 	node.Protocols = *newNodeProtocols(node)
 
+	node.RPC = rpc
+
 	return node, nil
 }
 
