@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
-  
+
 	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
 	types "github.com/koinos/koinos-types-golang"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -162,6 +162,7 @@ func TestSyncProtocol(t *testing.T) {
 			sendNode.Close()
 		}
 	}
+}
 
 func getChannelError(errs chan error) error {
 	select {
