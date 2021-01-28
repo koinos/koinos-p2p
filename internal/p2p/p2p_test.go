@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
@@ -40,7 +41,7 @@ func (k TestRPC) GetChainID() *types.Multihash {
 	return mh
 }
 
-/*func TestBasicNode(t *testing.T) {
+func TestBasicNode(t *testing.T) {
 	ctx := context.Background()
 
 	rpc := rpc.NewKoinosRPC()
@@ -95,7 +96,7 @@ func TestBroadcastProtocol(t *testing.T) {
 
 	bnListen.Close()
 	bnSend.Close()
-}*/
+}
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*KoinosP2PNode, *KoinosP2PNode, *peer.AddrInfo, error) {
 	listenNode, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234)

@@ -56,6 +56,8 @@ func (c *BroadcastProtocol) handleStream(s network.Stream) {
 	if err != nil {
 		panic(err)
 	}
+
+	s.Close()
 }
 
 // InitiateProtocol begins the communication with the peer
@@ -67,31 +69,28 @@ func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 		panic(err)
 	}
 
-	if ctx.Err() == nil {
-		message := "Koinos 2021"
-		log.Printf("Sending message to peer: %s\n", message)
+	message := "Koinos 2021"
+	log.Printf("Sending message to peer: %s\n", message)
 
-		// Say hello to other node
-		encoder := cbor.NewEncoder(s)
-		err := encoder.Encode(message)
-		if err != nil {
-			panic(err)
-		}
-
-		// Receive response
-		var response BroadcastResponse
-		decoder := cbor.NewDecoder(s)
-		err = decoder.Decode(&response)
-		if err != nil {
-			s.Reset()
-			return
-		}
-
-		if response.Status == Ok {
-			log.Println("Received Ok response from peer.")
-		}
-
-		ctx.Done()
-		s.Reset()
+	// Say hello to other node
+	encoder := cbor.NewEncoder(s)
+	err = encoder.Encode(message)
+	if err != nil {
+		panic(err)
 	}
+
+	// Receive response
+	var response BroadcastResponse
+	decoder := cbor.NewDecoder(s)
+	err = decoder.Decode(&response)
+	if err != nil {
+		s.Reset()
+		return
+	}
+
+	if response.Status == Ok {
+		log.Println("Received Ok response from peer.")
+	}
+
+	s.Close()
 }
