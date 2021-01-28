@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"encoding/json"
+	"errors"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	koinos_types "github.com/koinos/koinos-types-golang"
@@ -20,7 +21,7 @@ func NewKoinosRPC() *KoinosRPC {
 }
 
 // GetHeadBlock rpc call
-func (k KoinosRPC) GetHeadBlock() (*koinos_types.BlockTopology, error) {
+func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 	args := koinos_types.QueryParamItem{
 		Value: koinos_types.NewGetHeadInfoParams(),
 	}
@@ -37,8 +38,36 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.BlockTopology, error) {
 		return nil, err
 	}
 
-	result := koinos_types.NewBlockTopology()
-	err = json.Unmarshal(resultBytes, result)
+	resultVariant := koinos_types.NewSubmissionResult()
+	err = json.Unmarshal(resultBytes, resultVariant)
+	if err != nil {
+		return nil, nil
+	}
+
+	var result *koinos_types.HeadInfo
+
+	submissionResult, ok := resultVariant.Value.(koinos_types.QuerySubmissionResult)
+	if !ok {
+		return nil, errors.New("Unexpected return type")
+	}
+
+	opaqueQueryItemResult := koinos_types.OpaqueQueryItemResult(submissionResult)
+	opaqueQueryItemResult.Unbox()
+	var queryItemResult = koinos_types.NewQueryItemResult()
+	queryItemResult, err = opaqueQueryItemResult.GetNative()
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch t := queryItemResult.Value.(type) {
+	default:
+		err = errors.New("Unexptected return type")
+	case *koinos_types.QueryError:
+		err = errors.New(string([]byte(t.ErrorText)))
+	case *koinos_types.GetHeadInfoResult:
+		result = (*koinos_types.HeadInfo)(t)
+	}
 
 	return result, err
 }
@@ -68,11 +97,22 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
 		return false, err
 	}
 
-	// TODO: Koinosd needs to return a proper response object
-	result := koinos_types.NewBoolean()
-	err = json.Unmarshal(resultBytes, result)
+	resultVariant := koinos_types.NewSubmissionResult()
+	err = json.Unmarshal(resultBytes, resultVariant)
+	if err != nil {
+		return false, nil
+	}
 
-	return bool(*result), err
+	result := false
+
+	switch resultVariant.Value.(type) {
+	case *koinos_types.BlockSubmissionResult:
+		result = true
+	default:
+		result = false
+	}
+
+	return result, err
 }
 
 // GetBlocksByHeight rpc call
@@ -99,10 +139,18 @@ func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koi
 		return nil, err
 	}
 
-	result := koinos_types.NewGetBlocksByHeightResp()
-	err = json.Unmarshal(resultBytes, result)
+	resultVariant := koinos_types.NewBlockStoreResp()
+	err = json.Unmarshal(resultBytes, resultVariant)
+	if err != nil {
+		return nil, nil
+	}
 
-	return result, err
+	result, ok := resultVariant.Value.(*koinos_types.GetBlocksByHeightResp)
+	if !ok {
+		return nil, errors.New("Unexpected return type")
+	}
+
+	return result, nil
 }
 
 // GetChainID rpc call
@@ -123,8 +171,36 @@ func (k KoinosRPC) GetChainID() (*koinos_types.GetChainIDResult, error) {
 		return nil, err
 	}
 
-	result := koinos_types.NewGetChainIDResult()
-	err = json.Unmarshal(resultBytes, result)
+	resultVariant := koinos_types.NewSubmissionResult()
+	err = json.Unmarshal(resultBytes, resultVariant)
+	if err != nil {
+		return nil, nil
+	}
+
+	var result *koinos_types.GetChainIDResult
+
+	submissionResult, ok := resultVariant.Value.(koinos_types.QuerySubmissionResult)
+	if !ok {
+		return nil, errors.New("Unexpected return type")
+	}
+
+	opaqueQueryItemResult := koinos_types.OpaqueQueryItemResult(submissionResult)
+	opaqueQueryItemResult.Unbox()
+	var queryItemResult = koinos_types.NewQueryItemResult()
+	queryItemResult, err = opaqueQueryItemResult.GetNative()
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch t := queryItemResult.Value.(type) {
+	default:
+		err = errors.New("Unexptected return type")
+	case *koinos_types.QueryError:
+		err = errors.New(string([]byte(t.ErrorText)))
+	case *koinos_types.GetChainIDResult:
+		result = (*koinos_types.GetChainIDResult)(t)
+	}
 
 	return result, err
 }
