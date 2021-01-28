@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/p2p"
+	koinos_types "github.com/koinos/koinos-types-golang"
 )
 
 func main() {
@@ -38,6 +40,23 @@ func main() {
 		defer cancel()
 
 		host.Protocols.Broadcast.InitiateProtocol(ctx, host, peer.ID)
+	}
+
+	args := koinos_types.NewSubmissionItem()
+	opaqueParamItem := koinos_types.NewOpaqueQueryParamItem()
+	paramItem, _ := opaqueParamItem.GetNative()
+	paramItem.Value = koinos_types.NewGetHeadInfoParams()
+	args.Value = (*koinos_types.QuerySubmission)(opaqueParamItem)
+
+	data, err := json.Marshal(args)
+
+	if err == nil {
+		var resultBytes []byte
+		resultBytes, err = mq.SendRPC("application/json", "koinosd", data)
+
+		if err == nil {
+			log.Println(string(resultBytes))
+		}
 	}
 
 	// Wait for a SIGINT or SIGTERM signal

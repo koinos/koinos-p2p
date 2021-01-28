@@ -22,9 +22,12 @@ func NewKoinosRPC() *KoinosRPC {
 
 // GetHeadBlock rpc call
 func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
-	args := koinos_types.QueryParamItem{
-		Value: koinos_types.NewGetHeadInfoParams(),
-	}
+	args := koinos_types.NewSubmissionItem()
+	opaqueParamItem := koinos_types.NewOpaqueQueryParamItem()
+	paramItem, _ := opaqueParamItem.GetNative()
+	paramItem.Value = koinos_types.NewGetHeadInfoParams()
+	args.Value = opaqueParamItem
+
 	data, err := json.Marshal(args)
 
 	if err != nil {
@@ -32,7 +35,7 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 	}
 
 	var resultBytes []byte
-	resultBytes, err = k.mq.SendRPC("application/json", data)
+	resultBytes, err = k.mq.SendRPC("application/json", "koinosd", data)
 
 	if err != nil {
 		return nil, err
@@ -74,6 +77,8 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 
 // ApplyBlock rpc call
 func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
+	args := koinos_types.NewSubmissionItem()
+
 	blockSub := koinos_types.NewBlockSubmission()
 	blockSub.Block = *block
 	// TODO: Fill in Block Topology
@@ -81,9 +86,7 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
 	blockSub.VerifyBlockSignature = true
 	blockSub.VerifyTransactionSignatures = true
 
-	args := koinos_types.SubmissionItem{
-		Value: blockSub,
-	}
+	args.Value = blockSub
 	data, err := json.Marshal(args)
 
 	if err != nil {
@@ -91,7 +94,7 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
 	}
 
 	var resultBytes []byte
-	resultBytes, err = k.mq.SendRPC("application/json", data)
+	resultBytes, err = k.mq.SendRPC("application/json", "koinosd", data)
 
 	if err != nil {
 		return false, err
@@ -133,7 +136,7 @@ func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koi
 	}
 
 	var resultBytes []byte
-	resultBytes, err = k.mq.SendRPC("application/json", data)
+	resultBytes, err = k.mq.SendRPC("application/json", "block_store", data)
 
 	if err != nil {
 		return nil, err
@@ -155,9 +158,12 @@ func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koi
 
 // GetChainID rpc call
 func (k KoinosRPC) GetChainID() (*koinos_types.GetChainIDResult, error) {
-	args := koinos_types.QueryParamItem{
-		Value: koinos_types.NewGetChainIDParams(),
-	}
+	args := koinos_types.NewSubmissionItem()
+	opaqueParamItem := koinos_types.NewOpaqueQueryParamItem()
+	paramItem, _ := opaqueParamItem.GetNative()
+	paramItem.Value = koinos_types.NewGetChainIDParams()
+	args.Value = opaqueParamItem
+
 	data, err := json.Marshal(args)
 
 	if err != nil {
@@ -165,7 +171,7 @@ func (k KoinosRPC) GetChainID() (*koinos_types.GetChainIDResult, error) {
 	}
 
 	var resultBytes []byte
-	resultBytes, err = k.mq.SendRPC("application/json", data)
+	resultBytes, err = k.mq.SendRPC("application/json", "koinosd", data)
 
 	if err != nil {
 		return nil, err
