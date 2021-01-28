@@ -33,15 +33,24 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 
 	// Serialize and send chain ID
 	vb := types.NewVariableBlob()
-	vb = c.Node.RPC.GetChainID().Serialize(vb)
-	err := encoder.Encode(vb)
+	cid, err := c.Node.RPC.GetChainID()
+	if err != nil {
+		s.Reset()
+		return
+	}
+	vb = cid.ChainID.Serialize(vb)
+	err = encoder.Encode(vb)
 	if err != nil {
 		s.Reset()
 		return
 	}
 
 	// Serialize and send the head block
-	headBlock := c.Node.RPC.GetHeadBlock() // Cache head block so it doesn't change during communication
+	headBlock, err := c.Node.RPC.GetHeadBlock() // Cache head block so it doesn't change during communication
+	if err != nil {
+		s.Reset()
+		return
+	}
 	vb = types.NewVariableBlob()
 	vb = headBlock.Serialize(vb)
 	err = encoder.Encode(vb)
@@ -50,7 +59,7 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		return
 	}
 
-	decoder := cbor.NewDecoder(s)
+	/*decoder := cbor.NewDecoder(s)
 
 	// Receive sender's head block
 	vb = types.NewVariableBlob()
@@ -64,7 +73,7 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 	_, senderHeadBlock, err := types.DeserializeBlockTopology(vb)
 	ancestor := c.Node.RPC.GetBlocksByHeight(&headBlock.ID, types.UInt32(senderHeadBlock.Height), 1)
 
-	s.Close()
+	s.Close()*/
 }
 
 // InitiateProtocol begins the communication with the peer
@@ -96,8 +105,13 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 
 	// Deserialize and check peer's chain ID
 	_, peerChainID, err := types.DeserializeMultihash(vb)
-	chainID := c.Node.RPC.GetChainID()
-	if !chainID.Equals(peerChainID) {
+	chainID, err := c.Node.RPC.GetChainID()
+	if err != nil {
+		errs <- err
+		s.Reset()
+		return
+	}
+	if !chainID.ChainID.Equals(peerChainID) {
 		errs <- fmt.Errorf("Peer's chain ID does not match")
 		s.Reset()
 		return
@@ -112,24 +126,35 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 	}
 
 	// Deserialize and check peer's head block
-	_, peerHeadBlock, err := types.DeserializeBlockTopology(vb)
-	headBlock := c.Node.RPC.GetHeadBlock()
+	_, peerHeadBlock, err := types.DeserializeHeadInfo(vb)
+	headBlock, err := c.Node.RPC.GetHeadBlock()
+	if err != nil {
+		errs <- err
+		s.Reset()
+		return
+	}
 	if peerHeadBlock.Height == headBlock.Height && peerHeadBlock.ID.Equals(&headBlock.ID) {
 		errs <- fmt.Errorf("Peer is in sync")
 		s.Reset()
 		return
 	}
 
-	encoder := cbor.NewEncoder(s)
+	/*encoder := cbor.NewEncoder(s)
 
 	// Serialize and send my head block to peer
 	vb = types.NewVariableBlob()
-	vb = c.Node.RPC.GetHeadBlock().Serialize(vb)
+	headBlock, err = c.Node.RPC.GetHeadBlock()
+	vb = headBlock.Serialize(vb)
+	if err != nil {
+		errs <- err
+		s.Reset()
+		return
+	}
 	err = encoder.Encode(vb)
 	if err != nil {
 		s.Reset()
 		return
-	}
+	}*/
 
 	s.Close()
 }

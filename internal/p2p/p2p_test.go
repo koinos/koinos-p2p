@@ -17,28 +17,28 @@ type TestRPC struct {
 }
 
 // GetHeadBlock rpc call
-func (k TestRPC) GetHeadBlock() *types.BlockTopology {
-	bt := types.NewBlockTopology()
-	bt.Height = k.Height
-	return bt
+func (k TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
+	hi := types.NewHeadInfo()
+	hi.Height = k.Height
+	return hi, nil
 }
 
 // ApplyBlock rpc call
-func (k TestRPC) ApplyBlock(block *types.Block) bool {
-	return true
+func (k TestRPC) ApplyBlock(block *types.Block) (bool, error) {
+	return true, nil
 }
 
 // GetBlocksByHeight rpc call
-func (k TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.UInt32, numBlock types.UInt32) *[]types.Block {
-	blocks := make([]types.Block, 0)
-	return &blocks
+func (k TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResp, error) {
+	blocks := types.NewGetBlocksByHeightResp()
+	return blocks, nil
 }
 
 // GetChainID rpc call
-func (k TestRPC) GetChainID() *types.Multihash {
-	mh := types.NewMultihash()
-	mh.ID = k.MultihashID
-	return mh
+func (k TestRPC) GetChainID() (*types.GetChainIDResult, error) {
+	mh := types.NewGetChainIDResult()
+	mh.ChainID.ID = k.MultihashID
+	return mh, nil
 }
 
 func TestBasicNode(t *testing.T) {
