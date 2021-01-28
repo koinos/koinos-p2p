@@ -13,6 +13,9 @@ import (
 
 const syncID = "/koinos/sync/1.0.0"
 
+//type ForkCheckResponse struct {
+//}
+
 // SyncProtocol handles broadcasting inventory to peers
 type SyncProtocol struct {
 	Node *KoinosP2PNode
@@ -38,13 +41,28 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 	}
 
 	// Serialize and send the head block
+	headBlock := c.Node.RPC.GetHeadBlock() // Cache head block so it doesn't change during communication
 	vb = types.NewVariableBlob()
-	vb = c.Node.RPC.GetHeadBlock().Serialize(vb)
+	vb = headBlock.Serialize(vb)
 	err = encoder.Encode(vb)
 	if err != nil {
 		s.Reset()
 		return
 	}
+
+	decoder := cbor.NewDecoder(s)
+
+	// Receive sender's head block
+	vb = types.NewVariableBlob()
+	err = decoder.Decode(vb)
+	if err != nil {
+		s.Reset()
+		return
+	}
+
+	// Deserialize and and get ancestor of block
+	_, senderHeadBlock, err := types.DeserializeBlockTopology(vb)
+	ancestor := c.Node.RPC.GetBlocksByHeight(&headBlock.ID, types.UInt32(senderHeadBlock.Height), 1)
 
 	s.Close()
 }
@@ -93,11 +111,22 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 		return
 	}
 
-	// Deserialize and check peer's chain ID
+	// Deserialize and check peer's head block
 	_, peerHeadBlock, err := types.DeserializeBlockTopology(vb)
 	headBlock := c.Node.RPC.GetHeadBlock()
 	if peerHeadBlock.Height == headBlock.Height && peerHeadBlock.ID.Equals(&headBlock.ID) {
 		errs <- fmt.Errorf("Peer is in sync")
+		s.Reset()
+		return
+	}
+
+	encoder := cbor.NewEncoder(s)
+
+	// Serialize and send my head block to peer
+	vb = types.NewVariableBlob()
+	vb = c.Node.RPC.GetHeadBlock().Serialize(vb)
+	err = encoder.Encode(vb)
+	if err != nil {
 		s.Reset()
 		return
 	}
