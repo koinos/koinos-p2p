@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"log"
 	"os"
@@ -11,28 +10,7 @@ import (
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/p2p"
-	types "github.com/koinos/koinos-types-golang"
 )
-
-type jsonContentTypeHandler struct {
-}
-
-func (*jsonContentTypeHandler) FromBytes(data []byte) (interface{}, error) {
-	req := types.NewBlockStoreReq()
-	err := json.Unmarshal(data, &req)
-	if err != nil {
-		return nil, err
-	}
-	return req, nil
-}
-
-func (*jsonContentTypeHandler) ToBytes(resp interface{}) ([]byte, error) {
-	respBytes, err := json.Marshal(&resp)
-	if err != nil {
-		return nil, err
-	}
-	return respBytes, nil
-}
 
 func main() {
 	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
@@ -43,7 +21,6 @@ func main() {
 	flag.Parse()
 
 	mq := koinosmq.NewKoinosMQ(*amqpFlag)
-	mq.SetContentTypeHandler("application/json", &jsonContentTypeHandler{})
 	mq.Start()
 
 	host, _ := p2p.NewKoinosP2PNode(context.Background(), *addr, int64(*seed))

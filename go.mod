@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/fxamacker/cbor/v2 v2.2.0
-	github.com/koinos/koinos-mq-golang v0.0.0-20210127194150-f8f94927783b // indirect
+	github.com/koinos/koinos-mq-golang v0.0.0-20210128000402-97414f6c8950 // indirect
 	github.com/koinos/koinos-types-golang v0.1.1-0.20210122085046-f29e13e5a471
 	github.com/libp2p/go-libp2p v0.13.0
 	github.com/libp2p/go-libp2p-core v0.8.0
