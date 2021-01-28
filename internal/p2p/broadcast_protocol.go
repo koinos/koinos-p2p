@@ -41,22 +41,14 @@ func (c *BroadcastProtocol) handleStream(s network.Stream) {
 	// Decode hello string
 	var message string
 	decoder := cbor.NewDecoder(s)
-	err := decoder.Decode(&message)
-	if err != nil {
-		s.Reset()
-		return
-	}
+	decoder.Decode(&message)
 
-	// Act on message is here
+	// Act on message here
 
 	// Encode response
 	response := BroadcastResponse{Status: Ok}
 	encoder := cbor.NewEncoder(s)
-	err = encoder.Encode(response)
-	if err != nil {
-		s.Reset()
-		return
-	}
+	encoder.Encode(response)
 
 	s.Close()
 }
@@ -65,35 +57,20 @@ func (c *BroadcastProtocol) handleStream(s network.Stream) {
 // TODO: Consider interface for protocols
 func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 	// Start a stream with the given peer
-	s, err := c.Node.Host.NewStream(ctx, p, broadcastID)
-	if err != nil {
-		s.Reset()
-		return
-	}
+	s, _ := c.Node.Host.NewStream(ctx, p, broadcastID)
 
 	message := "Koinos 2021"
 
 	// Say hello to other node
 	encoder := cbor.NewEncoder(s)
-	err = encoder.Encode(message)
-	if err != nil {
-		s.Reset()
-		return
-	}
+	encoder.Encode(message)
 
 	// Receive response
 	var response BroadcastResponse
 	decoder := cbor.NewDecoder(s)
-	err = decoder.Decode(&response)
-	if err != nil {
-		s.Reset()
-		return
-	}
+	decoder.Decode(&response)
 
-	if response.Status != Ok {
-		s.Reset()
-		return
-	}
+	// handle response here
 
 	s.Close()
 }
