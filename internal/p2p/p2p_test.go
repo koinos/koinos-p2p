@@ -74,28 +74,15 @@ func TestBasicNode(t *testing.T) {
 
 func TestBroadcastProtocol(t *testing.T) {
 	rpc := rpc.NewKoinosRPC()
-
-	bnListen, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", rpc, 1234)
+	listenNode, sendNode, peer, err := createTestClients(rpc, rpc)
 	if err != nil {
 		t.Error(err)
 	}
 
-	bnSend, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", rpc, 2345)
-	if err != nil {
-		t.Error(err)
-	}
+	sendNode.Protocols.Broadcast.InitiateProtocol(context.Background(), peer.ID)
 
-	// Connect to the listener
-	peerAddr := bnListen.GetPeerAddress()
-	peer, err := bnSend.ConnectToPeer(peerAddr.String())
-	if err != nil {
-		t.Error(err)
-	}
-
-	bnSend.Protocols.Broadcast.InitiateProtocol(context.Background(), peer.ID)
-
-	bnListen.Close()
-	bnSend.Close()
+	listenNode.Close()
+	sendNode.Close()
 }
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*KoinosP2PNode, *KoinosP2PNode, *peer.AddrInfo, error) {
@@ -126,6 +113,9 @@ func TestSyncProtocol(t *testing.T) {
 			listenRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
 			sendRPC := TestRPC{Height: 5, MultihashID: 1, ApplyBlockResponse: true}
 			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+			if err != nil {
+				t.Error(err)
+			}
 
 			errs := make(chan error, 1)
 			sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)

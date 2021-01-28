@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"context"
-	"log"
 
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -44,17 +43,19 @@ func (c *BroadcastProtocol) handleStream(s network.Stream) {
 	decoder := cbor.NewDecoder(s)
 	err := decoder.Decode(&message)
 	if err != nil {
-		panic(err)
+		s.Reset()
+		return
 	}
 
-	log.Printf("Received message from peer: %s\n", message)
+	// Act on message is here
 
 	// Encode response
 	response := BroadcastResponse{Status: Ok}
 	encoder := cbor.NewEncoder(s)
 	err = encoder.Encode(response)
 	if err != nil {
-		panic(err)
+		s.Reset()
+		return
 	}
 
 	s.Close()
@@ -66,17 +67,18 @@ func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 	// Start a stream with the given peer
 	s, err := c.Node.Host.NewStream(ctx, p, broadcastID)
 	if err != nil {
-		panic(err)
+		s.Reset()
+		return
 	}
 
 	message := "Koinos 2021"
-	log.Printf("Sending message to peer: %s\n", message)
 
 	// Say hello to other node
 	encoder := cbor.NewEncoder(s)
 	err = encoder.Encode(message)
 	if err != nil {
-		panic(err)
+		s.Reset()
+		return
 	}
 
 	// Receive response
@@ -88,8 +90,9 @@ func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 		return
 	}
 
-	if response.Status == Ok {
-		log.Println("Received Ok response from peer.")
+	if response.Status != Ok {
+		s.Reset()
+		return
 	}
 
 	s.Close()
