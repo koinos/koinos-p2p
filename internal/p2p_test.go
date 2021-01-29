@@ -39,6 +39,9 @@ func (k TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockH
 		blockItem.BlockHeight = height + types.BlockHeightType(i)
 		blockItem.BlockID = *types.NewMultihash()
 		blockItem.BlockID.ID = types.UInt64(blockItem.BlockHeight) + k.HeadBlockIDDelta
+		vb := types.NewVariableBlob()
+		block := types.NewBlock()
+		blockItem.BlockBlob = *block.Serialize(vb)
 		blocks.BlockItems = append(blocks.BlockItems, *blockItem)
 	}
 

@@ -14,7 +14,7 @@ import (
 
 const syncID = "/koinos/sync/1.0.0"
 
-const batchSize = 10 // TODO: consider tuning this (or making it customizable)
+const batchSize types.UInt64 = 20 // TODO: consider how to tune this and/or make it customizable
 
 // BroadcastPeerStatus is an enum which represent peer's response
 type forkStatus int
@@ -31,6 +31,15 @@ type forkCheckResponse struct {
 	StartHeight types.BlockHeightType
 }
 
+type batchRequest struct {
+	StartBlock types.BlockHeightType
+	BatchSize  types.UInt64
+}
+
+type blockBatch struct {
+	Blocks types.VectorBlockItem
+}
+
 // SyncProtocol handles broadcasting inventory to peers
 type SyncProtocol struct {
 	Data Data
@@ -45,6 +54,13 @@ func NewSyncProtocol(data *Data) *SyncProtocol {
 // GetProtocolRegistration returns the registration information
 func (c SyncProtocol) GetProtocolRegistration() (pid protocol.ID, handler network.StreamHandler) {
 	return syncID, c.handleStream
+}
+
+func min(a, b types.UInt64) types.UInt64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (c SyncProtocol) handleStream(s network.Stream) {
@@ -107,7 +123,37 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		return
 	}
 
-	s.Close()
+	// Handle batch requests until they hang up
+	for {
+		req := batchRequest{}
+		err = decoder.Decode(&req)
+		if err != nil {
+			s.Reset()
+			return
+		}
+
+		// If they requested more blocks than we have, then there is a problem with the peer
+		if (types.UInt64(req.StartBlock) + req.BatchSize) > types.UInt64(headBlock.Height) {
+			s.Reset()
+			return
+		}
+
+		// Fetch blocks
+		blocks, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID,
+			req.StartBlock, types.UInt32(min(batchSize, req.BatchSize)))
+		if err != nil {
+			s.Reset()
+			return
+		}
+
+		// Create and send a batch
+		batch := blockBatch{Blocks: blocks.BlockItems}
+		err = encoder.Encode(batch)
+		if err != nil {
+			s.Reset()
+			return
+		}
+	}
 }
 
 // InitiateProtocol begins the communication with the peer
@@ -205,5 +251,59 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 		errs <- fmt.Errorf("Peer is on a different fork")
 	}
 
+	// Request and apply batches until caught up
+	currentHeight := headBlock.Height
+	for currentHeight < peerHeadBlock.Height {
+		// Request a batch either batchSize long, or the remaining size if it's less
+		size := min(types.UInt64(peerHeadBlock.Height)-types.UInt64(currentHeight), batchSize)
+		req := batchRequest{StartBlock: currentHeight,
+			BatchSize: size}
+
+		// Send batch request
+		err = encoder.Encode(req)
+		if err != nil {
+			errs <- err
+			s.Reset()
+			return
+		}
+
+		// Receive batch
+		batch := blockBatch{}
+		err = decoder.Decode(&batch)
+		if err != nil {
+			errs <- err
+			s.Reset()
+			return
+		}
+
+		err = c.applyBlocks(&batch)
+		if err != nil {
+			errs <- err
+		}
+
+		currentHeight += types.BlockHeightType(size)
+	}
+
 	s.Close()
+}
+
+func (c SyncProtocol) applyBlocks(batch *blockBatch) error {
+	for i := 0; i < len(batch.Blocks); i++ {
+		bi := batch.Blocks[i]
+		_, block, err := types.DeserializeBlock(&bi.BlockBlob)
+		if err != nil {
+			return err
+		}
+
+		ok, err := c.Data.RPC.ApplyBlock(block)
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			return fmt.Errorf("Block apply failed")
+		}
+	}
+
+	return nil
 }
