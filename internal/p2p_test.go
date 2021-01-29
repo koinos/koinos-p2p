@@ -72,11 +72,14 @@ func TestBasicNode(t *testing.T) {
 		t.Errorf("Peer address returned by node is not correct")
 	}
 
+	bn.Close()
+
 	// With 0 seed
 	bn, err = node.NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 0)
 	if err != nil {
 		t.Error(err)
 	}
+
 	bn.Close()
 
 	// Give an invalid listen address
@@ -93,12 +96,10 @@ func TestBroadcastProtocol(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	defer listenNode.Close()
+	defer listenNode.Close()
 
 	sendNode.Protocols.Broadcast.InitiateProtocol(context.Background(), peer.ID)
-	//sendNode.Protocols.Broadcast
-
-	listenNode.Close()
-	sendNode.Close()
 }
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, *peer.AddrInfo, error) {
