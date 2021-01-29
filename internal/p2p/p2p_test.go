@@ -11,8 +11,9 @@ import (
 )
 
 type TestRPC struct {
+	ChainID            types.UInt64
 	Height             types.BlockHeightType
-	MultihashID        types.UInt64
+	HeadBlockIDDelta   types.UInt64 // To ensure unique IDs within a "test chain", the multihash ID of each block is its height + this delta
 	ApplyBlockResponse bool
 }
 
@@ -31,13 +32,21 @@ func (k TestRPC) ApplyBlock(block *types.Block) (bool, error) {
 // GetBlocksByHeight rpc call
 func (k TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResp, error) {
 	blocks := types.NewGetBlocksByHeightResp()
+	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
+		blockItem := types.NewBlockItem()
+		blockItem.BlockHeight = height + types.BlockHeightType(i)
+		blockItem.BlockID = *types.NewMultihash()
+		blockItem.BlockID.ID = types.UInt64(blockItem.BlockHeight) + k.HeadBlockIDDelta
+		blocks.BlockItems = append(blocks.BlockItems, *blockItem)
+	}
+
 	return blocks, nil
 }
 
 // GetChainID rpc call
 func (k TestRPC) GetChainID() (*types.GetChainIDResult, error) {
 	mh := types.NewGetChainIDResult()
-	mh.ChainID.ID = k.MultihashID
+	mh.ChainID.ID = k.ChainID
 	return mh, nil
 }
 
@@ -110,8 +119,8 @@ func TestSyncProtocol(t *testing.T) {
 	{
 		// Test no error sync
 		{
-			listenRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
-			sendRPC := TestRPC{Height: 5, MultihashID: 1, ApplyBlockResponse: true}
+			listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
+			sendRPC := TestRPC{Height: 5, ChainID: 1, ApplyBlockResponse: true}
 			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
 			if err != nil {
 				t.Error(err)
@@ -130,8 +139,8 @@ func TestSyncProtocol(t *testing.T) {
 
 		// Test different chain IDs
 		{
-			listenRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
-			sendRPC := TestRPC{Height: 5, MultihashID: 2, ApplyBlockResponse: true}
+			listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
+			sendRPC := TestRPC{Height: 5, ChainID: 2, ApplyBlockResponse: true}
 			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
 
 			errs := make(chan error, 1)
@@ -147,8 +156,8 @@ func TestSyncProtocol(t *testing.T) {
 
 		// Test same head block
 		{
-			listenRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
-			sendRPC := TestRPC{Height: 128, MultihashID: 1, ApplyBlockResponse: true}
+			listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
+			sendRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
 			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
 
 			errs := make(chan error, 1)

@@ -59,7 +59,7 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		return
 	}
 
-	/*decoder := cbor.NewDecoder(s)
+	decoder := cbor.NewDecoder(s)
 
 	// Receive sender's head block
 	vb = types.NewVariableBlob()
@@ -70,10 +70,14 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 	}
 
 	// Deserialize and and get ancestor of block
-	_, senderHeadBlock, err := types.DeserializeBlockTopology(vb)
-	ancestor := c.Node.RPC.GetBlocksByHeight(&headBlock.ID, types.UInt32(senderHeadBlock.Height), 1)
+	_, senderHeadBlock, err := types.DeserializeHeadInfo(vb)
+	ancestor, err := c.Node.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height, 1)
+	if !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) {
+		s.Reset()
+		return
+	}
 
-	s.Close()*/
+	s.Close()
 }
 
 // InitiateProtocol begins the communication with the peer
@@ -139,7 +143,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 		return
 	}
 
-	/*encoder := cbor.NewEncoder(s)
+	encoder := cbor.NewEncoder(s)
 
 	// Serialize and send my head block to peer
 	vb = types.NewVariableBlob()
@@ -154,7 +158,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 	if err != nil {
 		s.Reset()
 		return
-	}*/
+	}
 
 	s.Close()
 }
