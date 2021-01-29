@@ -14,6 +14,8 @@ import (
 
 const syncID = "/koinos/sync/1.0.0"
 
+const batchSize = 10 // TODO: consider tuning this (or making it customizable)
+
 // BroadcastPeerStatus is an enum which represent peer's response
 type forkStatus int
 
