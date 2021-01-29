@@ -82,6 +82,7 @@ func TestBasicNode(t *testing.T) {
 	// Give an invalid listen address
 	bn, err = node.NewKoinosP2PNode(ctx, "---", rpc, 0)
 	if err == nil {
+		bn.Close()
 		t.Error("Starting a node with an invalid address should give an error, but it did not")
 	}
 }
@@ -121,61 +122,61 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 	return listenNode, sendNode, peer, nil
 }
 
-func TestSyncProtocol(t *testing.T) {
-	{
-		// Test no error sync
-		{
-			listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
-			sendRPC := TestRPC{Height: 5, ChainID: 1, ApplyBlockResponse: true}
-			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
-			if err != nil {
-				t.Error(err)
-			}
+func TestSyncNoError(t *testing.T) {
+	// Test no error sync
 
-			errs := make(chan error, 1)
-			sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-			err = getChannelError(errs)
-			if err != nil {
-				t.Error(err)
-			}
+	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
+	sendRPC := TestRPC{Height: 5, ChainID: 1, ApplyBlockResponse: true}
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
 
-			listenNode.Close()
-			sendNode.Close()
-		}
+	errs := make(chan error, 1)
+	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
+	err = getChannelError(errs)
+	if err != nil {
+		t.Error(err)
+	}
+}
 
-		// Test different chain IDs
-		{
-			listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
-			sendRPC := TestRPC{Height: 5, ChainID: 2, ApplyBlockResponse: true}
-			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+// Test different chain IDs
+func TestSyncChainID(t *testing.T) {
+	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
+	sendRPC := TestRPC{Height: 5, ChainID: 2, ApplyBlockResponse: true}
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
 
-			errs := make(chan error, 1)
-			sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-			err = getChannelError(errs)
-			if err == nil {
-				t.Error("Nodes with different chain ids should return an error, but did not")
-			}
+	errs := make(chan error, 1)
+	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
+	err = getChannelError(errs)
+	if err == nil {
+		t.Error("Nodes with different chain ids should return an error, but did not")
+	}
+}
 
-			listenNode.Close()
-			sendNode.Close()
-		}
+// Test same head block
+func TestSyncHeadBlock(t *testing.T) {
+	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
+	sendRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
 
-		// Test same head block
-		{
-			listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
-			sendRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
-			listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
-
-			errs := make(chan error, 1)
-			sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-			err = getChannelError(errs)
-			if err == nil {
-				t.Error("Nodes with same head block should return an error, but did not")
-			}
-
-			listenNode.Close()
-			sendNode.Close()
-		}
+	errs := make(chan error, 1)
+	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
+	err = getChannelError(errs)
+	if err == nil {
+		t.Error("Nodes with same head block should return an error, but did not")
 	}
 }
 
