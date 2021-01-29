@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/koinos/koinos-p2p/internal/p2p/node"
 	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
 	types "github.com/koinos/koinos-types-golang"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -57,7 +58,7 @@ func TestBasicNode(t *testing.T) {
 	rpc := rpc.NewKoinosRPC()
 
 	// With an explicit seed
-	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 1234)
+	bn, err := node.NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 1234)
 	if err != nil {
 		t.Error(err)
 	}
@@ -69,14 +70,14 @@ func TestBasicNode(t *testing.T) {
 	}
 
 	// With 0 seed
-	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 0)
+	bn, err = node.NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 0)
 	if err != nil {
 		t.Error(err)
 	}
 	bn.Close()
 
 	// Give an invalid listen address
-	bn, err = NewKoinosP2PNode(ctx, "---", rpc, 0)
+	bn, err = node.NewKoinosP2PNode(ctx, "---", rpc, 0)
 	if err == nil {
 		t.Error("Starting a node with an invalid address should give an error, but it did not")
 	}
@@ -95,13 +96,13 @@ func TestBroadcastProtocol(t *testing.T) {
 	sendNode.Close()
 }
 
-func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*KoinosP2PNode, *KoinosP2PNode, *peer.AddrInfo, error) {
-	listenNode, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234)
+func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, *peer.AddrInfo, error) {
+	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	sendNode, err := NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345)
+	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345)
 	if err != nil {
 		return nil, nil, nil, err
 	}

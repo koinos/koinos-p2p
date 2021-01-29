@@ -1,4 +1,4 @@
-package p2p
+package node
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	mrand "math/rand"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/p2p/protocol"
 	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -17,15 +18,21 @@ import (
 )
 
 type nodeProtocols struct {
-	Sync      SyncProtocol
-	Broadcast BroadcastProtocol
+	Sync      protocol.SyncProtocol
+	Broadcast protocol.BroadcastProtocol
 }
 
 // create new node protocol object
 func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 	np := new(nodeProtocols)
-	np.Sync = *NewSyncProtocol(node)
-	np.Broadcast = *NewBroadcastProtocol(node)
+
+	data := protocol.Data{RPC: node.RPC, Host: node.Host}
+
+	np.Sync = *protocol.NewSyncProtocol(&data)
+	node.registerProtocol(np.Sync)
+
+	np.Broadcast = *protocol.NewBroadcastProtocol(&data)
+	node.registerProtocol((np.Broadcast))
 
 	return np
 }
@@ -67,11 +74,15 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 
 	node := new(KoinosP2PNode)
 	node.Host = host
+	node.RPC = rpc
 	node.Protocols = *newNodeProtocols(node)
 
-	node.RPC = rpc
-
 	return node, nil
+}
+
+func (n KoinosP2PNode) registerProtocol(p protocol.Protocol) {
+	pid, handler := p.GetProtocolRegistration()
+	n.Host.SetStreamHandler(pid, handler)
 }
 
 // ConnectToPeer connects the node to the given peer

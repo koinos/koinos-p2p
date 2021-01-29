@@ -1,4 +1,4 @@
-package p2p
+package node
 
 // InventoryItem contains the inventory item and the set of peers known to already have this item
 type InventoryItem struct {

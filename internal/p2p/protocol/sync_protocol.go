@@ -1,4 +1,4 @@
-package p2p
+package protocol
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 )
 
 const syncID = "/koinos/sync/1.0.0"
@@ -30,14 +31,17 @@ type forkCheckResponse struct {
 
 // SyncProtocol handles broadcasting inventory to peers
 type SyncProtocol struct {
-	Node *KoinosP2PNode
+	Data Data
 }
 
 // NewSyncProtocol constructs a new broadcast protocol object
-func NewSyncProtocol(host *KoinosP2PNode) *SyncProtocol {
-	p := &SyncProtocol{Node: host}
-	host.Host.SetStreamHandler(syncID, p.handleStream)
+func NewSyncProtocol(data *Data) *SyncProtocol {
+	p := &SyncProtocol{Data: *data}
 	return p
+}
+
+func (c SyncProtocol) GetProtocolRegistration() (pid protocol.ID, handler network.StreamHandler) {
+	return syncID, c.handleStream
 }
 
 func (c SyncProtocol) handleStream(s network.Stream) {
@@ -45,7 +49,7 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 
 	// Serialize and send chain ID
 	vb := types.NewVariableBlob()
-	cid, err := c.Node.RPC.GetChainID()
+	cid, err := c.Data.RPC.GetChainID()
 	if err != nil {
 		s.Reset()
 		return
@@ -58,7 +62,7 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 	}
 
 	// Serialize and send the head block
-	headBlock, err := c.Node.RPC.GetHeadBlock() // Cache head block so it doesn't change during communication
+	headBlock, err := c.Data.RPC.GetHeadBlock() // Cache head block so it doesn't change during communication
 	if err != nil {
 		s.Reset()
 		return
@@ -83,7 +87,7 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 
 	// Deserialize and and get ancestor of block
 	_, senderHeadBlock, err := types.DeserializeHeadInfo(vb)
-	ancestor, err := c.Node.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height, 1)
+	ancestor, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height, 1)
 	response := forkCheckResponse{}
 	if !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) { // Different fork
 		response.StartHeight = 0
@@ -108,7 +112,7 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan error) {
 
 	// Start a stream with the given peer
-	s, err := c.Node.Host.NewStream(ctx, p, syncID)
+	s, err := c.Data.Host.NewStream(ctx, p, syncID)
 	if err != nil {
 		s.Reset()
 		errs <- err
@@ -132,7 +136,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 
 	// Deserialize and check peer's chain ID
 	_, peerChainID, err := types.DeserializeMultihash(vb)
-	chainID, err := c.Node.RPC.GetChainID()
+	chainID, err := c.Data.RPC.GetChainID()
 	if err != nil {
 		errs <- err
 		s.Reset()
@@ -154,7 +158,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 
 	// Deserialize and check peer's head block
 	_, peerHeadBlock, err := types.DeserializeHeadInfo(vb)
-	headBlock, err := c.Node.RPC.GetHeadBlock()
+	headBlock, err := c.Data.RPC.GetHeadBlock()
 	if err != nil {
 		errs <- err
 		s.Reset()
@@ -170,7 +174,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 
 	// Serialize and send my head block to peer for fork check
 	vb = types.NewVariableBlob()
-	headBlock, err = c.Node.RPC.GetHeadBlock()
+	headBlock, err = c.Data.RPC.GetHeadBlock()
 	vb = headBlock.Serialize(vb)
 	if err != nil {
 		errs <- err
