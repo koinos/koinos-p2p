@@ -13,8 +13,20 @@ import (
 
 const syncID = "/koinos/sync/1.0.0"
 
-//type ForkCheckResponse struct {
-//}
+// BroadcastPeerStatus is an enum which represent peer's response
+type forkStatus int
+
+// The possible peer status results
+const (
+	SameFork forkStatus = iota
+	DifferentFork
+)
+
+// BroadcastResponse is the message a peer returns
+type forkCheckResponse struct {
+	Status      forkStatus
+	StartHeight types.BlockHeightType
+}
 
 // SyncProtocol handles broadcasting inventory to peers
 type SyncProtocol struct {
@@ -72,7 +84,18 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 	// Deserialize and and get ancestor of block
 	_, senderHeadBlock, err := types.DeserializeHeadInfo(vb)
 	ancestor, err := c.Node.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height, 1)
-	if !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) {
+	response := forkCheckResponse{}
+	if !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) { // Different fork
+		response.StartHeight = 0
+		response.Status = DifferentFork
+	} else { // Same fork
+		response.StartHeight = senderHeadBlock.Height
+		response.Status = SameFork
+	}
+
+	// Send fork check response
+	err = encoder.Encode(response)
+	if err != nil {
 		s.Reset()
 		return
 	}
@@ -145,7 +168,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 
 	encoder := cbor.NewEncoder(s)
 
-	// Serialize and send my head block to peer
+	// Serialize and send my head block to peer for fork check
 	vb = types.NewVariableBlob()
 	headBlock, err = c.Node.RPC.GetHeadBlock()
 	vb = headBlock.Serialize(vb)
@@ -156,8 +179,23 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 	}
 	err = encoder.Encode(vb)
 	if err != nil {
+		errs <- err
 		s.Reset()
 		return
+	}
+
+	// Receive fork check response
+	forkCheck := forkCheckResponse{}
+	err = decoder.Decode(&forkCheck)
+	if err != nil {
+		errs <- err
+		s.Reset()
+		return
+	}
+
+	// If fork is different, hang up for now
+	if forkCheck.Status == DifferentFork {
+		errs <- fmt.Errorf("Peer is on a different fork")
 	}
 
 	s.Close()

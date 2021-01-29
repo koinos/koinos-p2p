@@ -21,6 +21,7 @@ type TestRPC struct {
 func (k TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
 	hi := types.NewHeadInfo()
 	hi.Height = k.Height
+	hi.ID.ID = types.UInt64(k.Height) + k.HeadBlockIDDelta
 	return hi, nil
 }
 
