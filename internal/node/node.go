@@ -8,8 +8,8 @@ import (
 	mrand "math/rand"
 	"time"
 
-	"github.com/koinos/koinos-p2p/internal/p2p/protocol"
-	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
+	"github.com/koinos/koinos-p2p/internal/protocol"
+	"github.com/koinos/koinos-p2p/internal/rpc"
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -32,7 +32,7 @@ func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 	node.registerProtocol(np.Sync)
 
 	np.Broadcast = *protocol.NewBroadcastProtocol(&data)
-	node.registerProtocol((np.Broadcast))
+	node.registerProtocol(np.Broadcast)
 
 	return np
 }
@@ -40,7 +40,7 @@ func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
 	Host      host.Host
-	Inventory NodeInventory
+	Inventory Inventory
 	Protocols nodeProtocols
 	RPC       rpc.RPC
 }

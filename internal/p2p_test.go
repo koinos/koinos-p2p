@@ -1,12 +1,12 @@
-package p2p
+package protocol
 
 import (
 	"context"
 	"strings"
 	"testing"
 
-	"github.com/koinos/koinos-p2p/internal/p2p/node"
-	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
+	"github.com/koinos/koinos-p2p/internal/node"
+	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
@@ -91,6 +91,7 @@ func TestBroadcastProtocol(t *testing.T) {
 	}
 
 	sendNode.Protocols.Broadcast.InitiateProtocol(context.Background(), peer.ID)
+	//sendNode.Protocols.Broadcast
 
 	listenNode.Close()
 	sendNode.Close()

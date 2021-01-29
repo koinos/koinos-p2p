@@ -40,6 +40,7 @@ func NewSyncProtocol(data *Data) *SyncProtocol {
 	return p
 }
 
+// GetProtocolRegistration returns the registration information
 func (c SyncProtocol) GetProtocolRegistration() (pid protocol.ID, handler network.StreamHandler) {
 	return syncID, c.handleStream
 }

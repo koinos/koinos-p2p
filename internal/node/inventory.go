@@ -6,8 +6,8 @@ type InventoryItem struct {
 	Peers map[string]string // List of peers to whom this item has been broadcast
 }
 
-// NodeInventory represents the current inventory of a node
-type NodeInventory struct {
+// Inventory represents the current inventory of a node
+type Inventory struct {
 	Transactions map[string]InventoryItem
 	Blocks       map[string]InventoryItem
 }

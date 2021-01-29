@@ -9,8 +9,8 @@ import (
 	"syscall"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
-	"github.com/koinos/koinos-p2p/internal/p2p"
-	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
+	"github.com/koinos/koinos-p2p/internal/node"
+	"github.com/koinos/koinos-p2p/internal/rpc"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	mq := koinosmq.NewKoinosMQ(*amqpFlag)
 	mq.Start()
 
-	host, _ := p2p.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(), int64(*seed))
+	host, _ := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(), int64(*seed))
 	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
 
 	// Connect to a peer

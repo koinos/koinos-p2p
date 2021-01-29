@@ -38,11 +38,12 @@ func NewBroadcastProtocol(data *Data) *BroadcastProtocol {
 	return ps
 }
 
+// GetProtocolRegistration returns the registration information
 func (c BroadcastProtocol) GetProtocolRegistration() (pid protocol.ID, handler network.StreamHandler) {
 	return broadcastID, c.handleStream
 }
 
-func (c *BroadcastProtocol) handleStream(s network.Stream) {
+func (c BroadcastProtocol) handleStream(s network.Stream) {
 	// Decode hello string
 	var message string
 	decoder := cbor.NewDecoder(s)
@@ -60,7 +61,7 @@ func (c *BroadcastProtocol) handleStream(s network.Stream) {
 
 // InitiateProtocol begins the communication with the peer
 // TODO: Consider interface for protocols
-func (c *BroadcastProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
+func (c BroadcastProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 	// Start a stream with the given peer
 	s, _ := c.Data.Host.NewStream(ctx, p, broadcastID)
 
