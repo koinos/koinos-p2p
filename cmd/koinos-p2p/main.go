@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/p2p"
 	"github.com/koinos/koinos-p2p/internal/p2p/rpc"
 )
@@ -16,8 +17,12 @@ func main() {
 	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
 	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
 	var peer = flag.String("peer", "", "Address of a peer to which to connect")
+	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
 
 	flag.Parse()
+
+	mq := koinosmq.NewKoinosMQ(*amqpFlag)
+	mq.Start()
 
 	host, _ := p2p.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(), int64(*seed))
 	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
