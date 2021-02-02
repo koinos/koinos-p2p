@@ -22,7 +22,7 @@ func NewKoinosRPC() *KoinosRPC {
 
 // GetHeadBlock rpc call
 func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
-	args := koinos_types.KoinosdRPCParams{
+	args := koinos_types.ChainRPCParams{
 		Value: koinos_types.NewGetHeadInfoParams(),
 	}
 	data, err := json.Marshal(args)
@@ -38,7 +38,7 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 		return nil, err
 	}
 
-	resultVariant := koinos_types.NewKoinosdRPCResult()
+	resultVariant := koinos_types.NewChainRPCResult()
 	err = json.Unmarshal(resultBytes, resultVariant)
 	if err != nil {
 		return nil, nil
@@ -144,7 +144,7 @@ func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koi
 // GetChainID rpc call
 func (k KoinosRPC) GetChainID() (*koinos_types.GetChainIDResult, error) {
 	args := koinos_types.QueryParamItem{
-		Value: koinos_types.NewKoinosdRPCParams(),
+		Value: koinos_types.NewChainRPCParams(),
 	}
 	data, err := json.Marshal(args)
 
