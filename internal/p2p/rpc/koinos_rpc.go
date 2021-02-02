@@ -110,8 +110,8 @@ func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koi
 			HeadBlockID:         *blockID,
 			AncestorStartHeight: height,
 			NumBlocks:           numBlocks,
-			ReturnBlockBlob:     true,
-			ReturnReceiptBlob:   false,
+			ReturnBlock:         true,
+			ReturnReceipt:       false,
 		},
 	}
 	data, err := json.Marshal(args)
