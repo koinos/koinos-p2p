@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/koinos/koinos-p2p/internal/node"
@@ -71,10 +72,10 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	return &rpc
 }
 
-/*func TestBasicNode(t *testing.T) {
+func TestBasicNode(t *testing.T) {
 	ctx := context.Background()
 
-	rpc := rpc.NewKoinosRPC()
+	rpc := NewTestRPC(128)
 
 	// With an explicit seed
 	bn, err := node.NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 1234)
@@ -99,12 +100,12 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	bn.Close()
 
 	// Give an invalid listen address
-	bn, err = node.NewKoinosP2PNode(ctx, "---", &rpc, 0)
+	bn, err = node.NewKoinosP2PNode(ctx, "---", rpc, 0)
 	if err == nil {
 		bn.Close()
 		t.Error("Starting a node with an invalid address should give an error, but it did not")
 	}
-}*/
+}
 
 func TestBroadcastProtocol(t *testing.T) {
 	rpc := rpc.NewKoinosRPC()
@@ -165,9 +166,10 @@ func TestSyncNoError(t *testing.T) {
 
 // Test different chain IDs
 func TestSyncChainID(t *testing.T) {
-	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlocks: -1}
-	sendRPC := TestRPC{Height: 5, ChainID: 2, ApplyBlocks: -1}
-	listenNode, sendNode, peer, err := createTestClients(&listenRPC, &sendRPC)
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(5)
+	sendRPC.ChainID = 2
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -184,9 +186,9 @@ func TestSyncChainID(t *testing.T) {
 
 // Test same head block
 func TestSyncHeadBlock(t *testing.T) {
-	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlocks: -1}
-	sendRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlocks: -1}
-	listenNode, sendNode, peer, err := createTestClients(&listenRPC, &sendRPC)
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(128)
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -203,9 +205,12 @@ func TestSyncHeadBlock(t *testing.T) {
 
 // Test same head block
 func TestDifferentFork(t *testing.T) {
-	listenRPC := TestRPC{Height: 128, ChainID: 1, HeadBlockIDDelta: 1, ApplyBlocks: -1}
-	sendRPC := TestRPC{Height: 15, ChainID: 1, ApplyBlocks: -1}
-	listenNode, sendNode, peer, err := createTestClients(&listenRPC, &sendRPC)
+	//listenRPC := TestRPC{Height: 128, ChainID: 1, HeadBlockIDDelta: 1, ApplyBlocks: -1}
+	//sendRPC := TestRPC{Height: 15, ChainID: 1, ApplyBlocks: -1}
+	listenRPC := NewTestRPC(128)
+	listenRPC.HeadBlockIDDelta = 1
+	sendRPC := NewTestRPC(15)
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
