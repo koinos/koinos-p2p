@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/koinos/koinos-p2p/internal/node"
@@ -12,14 +11,15 @@ import (
 )
 
 type TestRPC struct {
-	ChainID            types.UInt64
-	Height             types.BlockHeightType
-	HeadBlockIDDelta   types.UInt64 // To ensure unique IDs within a "test chain", the multihash ID of each block is its height + this delta
-	ApplyBlockResponse bool
+	ChainID          types.UInt64
+	Height           types.BlockHeightType
+	HeadBlockIDDelta types.UInt64 // To ensure unique IDs within a "test chain", the multihash ID of each block is its height + this delta
+	ApplyBlocks      int          // Number of blocks to apply before failure. < 0 = always apply
+	BlocksApplied    []*types.Block
 }
 
 // GetHeadBlock rpc call
-func (k TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
+func (k *TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
 	hi := types.NewHeadInfo()
 	hi.Height = k.Height
 	hi.ID.ID = types.UInt64(k.Height) + k.HeadBlockIDDelta
@@ -27,12 +27,21 @@ func (k TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
 }
 
 // ApplyBlock rpc call
-func (k TestRPC) ApplyBlock(block *types.Block) (bool, error) {
+func (k *TestRPC) ApplyBlock(block *types.Block) (bool, error) {
+	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
+		return false, nil
+	}
+
+	if k.BlocksApplied != nil {
+		b := append(k.BlocksApplied, block)
+		k.BlocksApplied = b
+	}
+
 	return true, nil
 }
 
 // GetBlocksByHeight rpc call
-func (k TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResp, error) {
+func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResp, error) {
 	blocks := types.NewGetBlocksByHeightResp()
 	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
 		blockItem := types.NewBlockItem()
@@ -49,13 +58,20 @@ func (k TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockH
 }
 
 // GetChainID rpc call
-func (k TestRPC) GetChainID() (*types.GetChainIDResult, error) {
+func (k *TestRPC) GetChainID() (*types.GetChainIDResult, error) {
 	mh := types.NewGetChainIDResult()
 	mh.ChainID.ID = k.ChainID
 	return mh, nil
 }
 
-func TestBasicNode(t *testing.T) {
+func NewTestRPC(height types.BlockHeightType) *TestRPC {
+	rpc := TestRPC{ChainID: 1, Height: height, HeadBlockIDDelta: 0, ApplyBlocks: -1}
+	rpc.BlocksApplied = make([]*types.Block, 0)
+
+	return &rpc
+}
+
+/*func TestBasicNode(t *testing.T) {
 	ctx := context.Background()
 
 	rpc := rpc.NewKoinosRPC()
@@ -83,12 +99,12 @@ func TestBasicNode(t *testing.T) {
 	bn.Close()
 
 	// Give an invalid listen address
-	bn, err = node.NewKoinosP2PNode(ctx, "---", rpc, 0)
+	bn, err = node.NewKoinosP2PNode(ctx, "---", &rpc, 0)
 	if err == nil {
 		bn.Close()
 		t.Error("Starting a node with an invalid address should give an error, but it did not")
 	}
-}
+}*/
 
 func TestBroadcastProtocol(t *testing.T) {
 	rpc := rpc.NewKoinosRPC()
@@ -125,9 +141,8 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 
 func TestSyncNoError(t *testing.T) {
 	// Test no error sync
-
-	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
-	sendRPC := TestRPC{Height: 5, ChainID: 1, ApplyBlockResponse: true}
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(5)
 	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
@@ -141,13 +156,18 @@ func TestSyncNoError(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	// SendRPC should have applied 123 blocks
+	if len(sendRPC.BlocksApplied) != 123 {
+		t.Errorf("Incorrect number of blocks applied")
+	}
 }
 
 // Test different chain IDs
 func TestSyncChainID(t *testing.T) {
-	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
-	sendRPC := TestRPC{Height: 5, ChainID: 2, ApplyBlockResponse: true}
-	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlocks: -1}
+	sendRPC := TestRPC{Height: 5, ChainID: 2, ApplyBlocks: -1}
+	listenNode, sendNode, peer, err := createTestClients(&listenRPC, &sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -164,9 +184,9 @@ func TestSyncChainID(t *testing.T) {
 
 // Test same head block
 func TestSyncHeadBlock(t *testing.T) {
-	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
-	sendRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlockResponse: true}
-	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	listenRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlocks: -1}
+	sendRPC := TestRPC{Height: 128, ChainID: 1, ApplyBlocks: -1}
+	listenNode, sendNode, peer, err := createTestClients(&listenRPC, &sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -178,6 +198,50 @@ func TestSyncHeadBlock(t *testing.T) {
 	err = getChannelError(errs)
 	if err == nil {
 		t.Error("Nodes with same head block should return an error, but did not")
+	}
+}
+
+// Test same head block
+func TestDifferentFork(t *testing.T) {
+	listenRPC := TestRPC{Height: 128, ChainID: 1, HeadBlockIDDelta: 1, ApplyBlocks: -1}
+	sendRPC := TestRPC{Height: 15, ChainID: 1, ApplyBlocks: -1}
+	listenNode, sendNode, peer, err := createTestClients(&listenRPC, &sendRPC)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
+
+	errs := make(chan error, 1)
+	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
+	err = getChannelError(errs)
+	if err == nil {
+		t.Error("Nodes on different forks should return an error, but do not")
+	}
+}
+
+// Test same head block
+func TestApplyBlockFailure(t *testing.T) {
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(5)
+	sendRPC.ApplyBlocks = 18
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
+
+	errs := make(chan error, 1)
+	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
+	err = getChannelError(errs)
+	if err == nil {
+		t.Error("Apply block failure should have returned an error, but did not")
+	}
+
+	// SendRPC should have applied 18 blocks
+	if len(sendRPC.BlocksApplied) != 18 {
+		t.Errorf("Incorrect number of blocks applied")
 	}
 }
 

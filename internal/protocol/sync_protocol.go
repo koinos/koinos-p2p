@@ -279,6 +279,8 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 		err = c.applyBlocks(&batch)
 		if err != nil {
 			errs <- err
+			s.Reset()
+			return
 		}
 
 		currentHeight += types.BlockHeightType(size)
