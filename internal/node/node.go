@@ -76,17 +76,18 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.Host = host
 	node.RPC = rpc
 	node.Protocols = *newNodeProtocols(node)
+	node.Inventory = *NewInventory(time.Minute * time.Duration(30))
 
 	return node, nil
 }
 
-func (n KoinosP2PNode) registerProtocol(p protocol.Protocol) {
+func (n *KoinosP2PNode) registerProtocol(p protocol.Protocol) {
 	pid, handler := p.GetProtocolRegistration()
 	n.Host.SetStreamHandler(pid, handler)
 }
 
 // ConnectToPeer connects the node to the given peer
-func (n KoinosP2PNode) ConnectToPeer(peerAddr string) (*peerstore.AddrInfo, error) {
+func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peerstore.AddrInfo, error) {
 	addr, err := multiaddr.NewMultiaddr(peerAddr)
 	if err != nil {
 		return nil, err
@@ -107,23 +108,23 @@ func (n KoinosP2PNode) ConnectToPeer(peerAddr string) (*peerstore.AddrInfo, erro
 
 // MakeContext creates and returns the canonical context which should be used for peer connections
 // TODO: create this from configuration
-func (n KoinosP2PNode) MakeContext() (ctx context.Context, cancel context.CancelFunc) {
+func (n *KoinosP2PNode) MakeContext() (ctx context.Context, cancel context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 30*time.Second)
 }
 
 // GetListenAddress returns the multiaddress on which the node is listening
-func (n KoinosP2PNode) GetListenAddress() multiaddr.Multiaddr {
+func (n *KoinosP2PNode) GetListenAddress() multiaddr.Multiaddr {
 	return n.Host.Addrs()[0]
 }
 
 // GetPeerAddress returns the ipfs multiaddress to which other peers should connect
-func (n KoinosP2PNode) GetPeerAddress() multiaddr.Multiaddr {
+func (n *KoinosP2PNode) GetPeerAddress() multiaddr.Multiaddr {
 	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", n.Host.ID().Pretty()))
 	return n.GetListenAddress().Encapsulate(hostAddr)
 }
 
 // Close closes the node
-func (n KoinosP2PNode) Close() error {
+func (n *KoinosP2PNode) Close() error {
 	if err := n.Host.Close(); err != nil {
 		return err
 	}
