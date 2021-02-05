@@ -22,7 +22,7 @@ func NewKoinosRPC() *KoinosRPC {
 
 // GetHeadBlock rpc call
 func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
-	args := koinos_types.QueryParamItem{
+	args := koinos_types.ChainRPCParams{
 		Value: koinos_types.NewGetHeadInfoParams(),
 	}
 	data, err := json.Marshal(args)
@@ -38,7 +38,7 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 		return nil, err
 	}
 
-	resultVariant := koinos_types.NewSubmissionResult()
+	resultVariant := koinos_types.NewChainRPCResult()
 	err = json.Unmarshal(resultBytes, resultVariant)
 	if err != nil {
 		return nil, nil
@@ -46,27 +46,13 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 
 	var result *koinos_types.HeadInfo
 
-	submissionResult, ok := resultVariant.Value.(koinos_types.QuerySubmissionResult)
-	if !ok {
-		return nil, errors.New("Unexpected return type")
-	}
-
-	opaqueQueryItemResult := koinos_types.OpaqueQueryItemResult(submissionResult)
-	opaqueQueryItemResult.Unbox()
-	var queryItemResult = koinos_types.NewQueryItemResult()
-	queryItemResult, err = opaqueQueryItemResult.GetNative()
-
-	if err != nil {
-		return nil, err
-	}
-
-	switch t := queryItemResult.Value.(type) {
-	default:
-		err = errors.New("Unexptected return type")
-	case *koinos_types.QueryError:
-		err = errors.New(string([]byte(t.ErrorText)))
+	switch t := resultVariant.Value.(type) {
 	case *koinos_types.GetHeadInfoResult:
 		result = (*koinos_types.HeadInfo)(t)
+	case *koinos_types.RPCError:
+		err = errors.New(string(t.ErrorText))
+	default:
+		err = errors.New("Unexptected return type")
 	}
 
 	return result, err
@@ -74,7 +60,7 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 
 // ApplyBlock rpc call
 func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
-	blockSub := koinos_types.NewBlockSubmission()
+	blockSub := koinos_types.NewSubmitBlockParams()
 	blockSub.Block = *block
 	// TODO: Fill in Block Topology
 	blockSub.VerifyPassiveData = true
@@ -105,9 +91,11 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
 
 	result := false
 
-	switch resultVariant.Value.(type) {
+	switch t := resultVariant.Value.(type) {
 	case *koinos_types.BlockSubmissionResult:
 		result = true
+	case *koinos_types.RPCError:
+		err = errors.New(string(t.ErrorText))
 	default:
 		result = false
 	}
@@ -122,8 +110,8 @@ func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koi
 			HeadBlockID:         *blockID,
 			AncestorStartHeight: height,
 			NumBlocks:           numBlocks,
-			ReturnBlockBlob:     true,
-			ReturnReceiptBlob:   false,
+			ReturnBlock:         true,
+			ReturnReceipt:       false,
 		},
 	}
 	data, err := json.Marshal(args)
@@ -156,7 +144,7 @@ func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koi
 // GetChainID rpc call
 func (k KoinosRPC) GetChainID() (*koinos_types.GetChainIDResult, error) {
 	args := koinos_types.QueryParamItem{
-		Value: koinos_types.NewGetChainIDParams(),
+		Value: koinos_types.NewChainRPCParams(),
 	}
 	data, err := json.Marshal(args)
 
@@ -179,27 +167,13 @@ func (k KoinosRPC) GetChainID() (*koinos_types.GetChainIDResult, error) {
 
 	var result *koinos_types.GetChainIDResult
 
-	submissionResult, ok := resultVariant.Value.(koinos_types.QuerySubmissionResult)
-	if !ok {
-		return nil, errors.New("Unexpected return type")
-	}
-
-	opaqueQueryItemResult := koinos_types.OpaqueQueryItemResult(submissionResult)
-	opaqueQueryItemResult.Unbox()
-	var queryItemResult = koinos_types.NewQueryItemResult()
-	queryItemResult, err = opaqueQueryItemResult.GetNative()
-
-	if err != nil {
-		return nil, err
-	}
-
-	switch t := queryItemResult.Value.(type) {
+	switch t := resultVariant.Value.(type) {
+	case *koinos_types.GetChainIDResult:
+		result = t
+	case *koinos_types.RPCError:
+		err = errors.New(string(t.ErrorText))
 	default:
 		err = errors.New("Unexptected return type")
-	case *koinos_types.QueryError:
-		err = errors.New(string([]byte(t.ErrorText)))
-	case *koinos_types.GetChainIDResult:
-		result = (*koinos_types.GetChainIDResult)(t)
 	}
 
 	return result, err
