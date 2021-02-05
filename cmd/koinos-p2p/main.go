@@ -52,7 +52,7 @@ func main() {
 
 	if err == nil {
 		var resultBytes []byte
-		resultBytes, err = mq.SendRPC("application/json", "koinosd", data)
+		resultBytes, err = mq.SendRPC("application/json", "chain", data)
 
 		if err == nil {
 			log.Println(string(resultBytes))
