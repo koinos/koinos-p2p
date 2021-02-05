@@ -9,6 +9,6 @@ go test -v github.com/koinos/koinos-p2p/internal/node -coverprofile=./build/node
 gcov2lcov -infile=./build/internal.out -outfile=./build/internal.info
 gcov2lcov -infile=./build/node.out -outfile=./build/node.info
 
-lcov -a ./build/internal.out -a ./build/node.info -o ./build/merged.info
+lcov -a ./build/internal.info -a ./build/node.info -o ./build/merged.info
 
 golint -set_exit_status ./...
