@@ -50,6 +50,11 @@ func TestInventoryExpiration(t *testing.T) {
 		t.Errorf("Fetched transaction ID mismatch")
 	}
 
+	// Ensure Contains returns true
+	if !(inv.Transactions.Contains(&it.ID)) {
+		t.Errorf("Inventory.Contains returning false")
+	}
+
 	// Fetch one of the blocks, make sure it is correct
 	block, err := inv.Blocks.Fetch(&ib.ID)
 	if err != nil {
@@ -57,6 +62,11 @@ func TestInventoryExpiration(t *testing.T) {
 	}
 	if !block.ID.Equals(&ib.ID) {
 		t.Errorf("Fetched block ID mismatch")
+	}
+
+	// Ensure Contains returns true
+	if !(inv.Blocks.Contains(&ib.ID)) {
+		t.Errorf("Inventory.Contains returning false")
 	}
 
 	// Make sure the entries counts are correct
@@ -84,5 +94,15 @@ func TestInventoryExpiration(t *testing.T) {
 	block, err = inv.Blocks.Fetch(&ib.ID)
 	if err == nil {
 		t.Error("Fetching an expired block did not return an error")
+	}
+
+	// Ensure Contains returns false
+	if inv.Transactions.Contains(&it.ID) {
+		t.Errorf("Inventory.Contains wrongly returning true")
+	}
+
+	// Ensure Contains returns false
+	if inv.Blocks.Contains(&ib.ID) {
+		t.Errorf("Inventory.Contains wrongly returning true")
 	}
 }
