@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
@@ -292,11 +293,13 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 func (c SyncProtocol) applyBlocks(batch *blockBatch) error {
 	for i := 0; i < len(batch.Blocks); i++ {
 		bi := batch.Blocks[i]
-		_, block, err := types.DeserializeBlock(&bi.BlockBlob)
-		if err != nil {
-			return err
+		bi.Block.Unbox()
+
+		if bi.Block.IsBoxed() {
+			return errors.New("Could not unbox block")
 		}
 
+		block, _ := bi.Block.GetNative()
 		ok, err := c.Data.RPC.ApplyBlock(block)
 		if err != nil {
 			return err

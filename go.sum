@@ -160,8 +160,16 @@ github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+o
 github.com/kkdai/bstream v0.0.0-20161212061736-f391b8402d23/go.mod h1:J+Gs4SYgM6CZQHDETBtE9HaSEkGmuNXF86RwHhHUvq4=
 github.com/koinos/koinos-mq-golang v0.0.0-20210128000402-97414f6c8950 h1:Hgb6AB+Q+GylUJ/u8n73e3Jf/EdkP5TleNXAxOpXBf0=
 github.com/koinos/koinos-mq-golang v0.0.0-20210128000402-97414f6c8950/go.mod h1:hpJtYohmiG7AuuEr9IjFwdpuo7t2COEJksEXMfYrtsQ=
+github.com/koinos/koinos-mq-golang v0.0.0-20210205210801-8d044ae15573 h1:MMAxfypYq3BzbeoOWOfNAORDvq2Jpcl+ctP75vnWQjs=
+github.com/koinos/koinos-mq-golang v0.0.0-20210205210801-8d044ae15573/go.mod h1:hpJtYohmiG7AuuEr9IjFwdpuo7t2COEJksEXMfYrtsQ=
 github.com/koinos/koinos-types-golang v0.1.1-0.20210122085046-f29e13e5a471 h1:ygVNW1sHnkszA6buBWPw7UFB3uxRMDL7y0BFoV8uRNQ=
 github.com/koinos/koinos-types-golang v0.1.1-0.20210122085046-f29e13e5a471/go.mod h1:inTj1woeLBXfRICUkKYjW7pCsrVJCBBJvMcOzx7+PSs=
+github.com/koinos/koinos-types-golang v0.1.1-0.20210202214151-bc7376aab8b0 h1:uHltwf6Dy8UBpO3umn6zjF5rnhuZITAppoK6TEHCAGQ=
+github.com/koinos/koinos-types-golang v0.1.1-0.20210202214151-bc7376aab8b0/go.mod h1:inTj1woeLBXfRICUkKYjW7pCsrVJCBBJvMcOzx7+PSs=
+github.com/koinos/koinos-types-golang v0.1.1-0.20210202222111-4de511034720 h1:Hcm5LPFYU+c6SH8YwuYl6JzMh5Y5qx8DVu1YuwISlPs=
+github.com/koinos/koinos-types-golang v0.1.1-0.20210202222111-4de511034720/go.mod h1:inTj1woeLBXfRICUkKYjW7pCsrVJCBBJvMcOzx7+PSs=
+github.com/koinos/koinos-types-golang v0.1.1-0.20210205195419-0771331eb7b2 h1:T4+5NA8Cdav1r6k0ezIza73jdaXQNkqz6UrPCzUv7Wk=
+github.com/koinos/koinos-types-golang v0.1.1-0.20210205195419-0771331eb7b2/go.mod h1:inTj1woeLBXfRICUkKYjW7pCsrVJCBBJvMcOzx7+PSs=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/koron/go-ssdp v0.0.0-20191105050749-2e1c40ed0b5d h1:68u9r4wEvL3gYg2jvAOgROwZ3H+Y3hIDk4tbbmIjcYQ=
 github.com/koron/go-ssdp v0.0.0-20191105050749-2e1c40ed0b5d/go.mod h1:5Ky9EC2xfoUKUor0Hjgi2BJhCSXJfMOFlmyYrVKGQMk=
