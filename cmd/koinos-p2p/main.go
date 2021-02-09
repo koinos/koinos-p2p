@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
 	"os"
@@ -11,6 +12,7 @@ import (
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	types "github.com/koinos/koinos-types-golang"
 )
 
 func main() {
@@ -22,10 +24,26 @@ func main() {
 	flag.Parse()
 
 	mq := koinosmq.NewKoinosMQ(*amqpFlag)
-	mq.Start()
 
 	host, _ := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(), int64(*seed))
 	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
+
+	mq.SetBroadcastHandler("koinos.block.accept", func(topic string, data []byte) {
+		sub := types.NewBlockSubmission()
+		err := json.Unmarshal(data, sub)
+		if err != nil {
+			log.Println("an error occurred while unmarshaling block submission")
+			return
+		}
+
+		item := node.NewInventoryItem(sub.Topology.ID, sub)
+		host.Inventory.Blocks.Add(item)
+	})
+
+	mq.SetBroadcastHandler("koinos.transaction.accept", func(topic string, data []byte) {
+	})
+
+	mq.Start()
 
 	// Connect to a peer
 	if *peer != "" {
