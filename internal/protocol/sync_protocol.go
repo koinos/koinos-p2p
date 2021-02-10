@@ -2,8 +2,8 @@ package protocol
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/fxamacker/cbor/v2"
 	types "github.com/koinos/koinos-types-golang"
@@ -65,68 +65,101 @@ func min(a, b types.UInt64) types.UInt64 {
 }
 
 func (c SyncProtocol) handleStream(s network.Stream) {
+
+	log.Printf("Peer connected to us to sync: %v", s.ID())
+
 	encoder := cbor.NewEncoder(s)
+	decoder := cbor.NewDecoder(s)
+
+	log.Printf("%v: checking peer's chain id", s.ID())
 
 	// Serialize and send chain ID
 	vb := types.NewVariableBlob()
-	cid, err := c.Data.RPC.GetChainID()
+	chainID, err := c.Data.RPC.GetChainID()
 	if err != nil {
+		log.Printf("%v: error retrieving chain id", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
 		s.Reset()
 		return
 	}
-	vb = cid.ChainID.Serialize(vb)
+
+	vb = chainID.ChainID.Serialize(vb)
 	err = encoder.Encode(vb)
 	if err != nil {
+		log.Printf("%v: error sending chain id", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
+		s.Reset()
+		return
+	}
+
+	// Receive and deserialize peer's chain id
+	vb = types.NewVariableBlob()
+	err = decoder.Decode(vb)
+	if err != nil {
+		log.Printf("%v: error retrieving chain id", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
+		s.Reset()
+		return
+	}
+
+	_, peerChainID, err := types.DeserializeMultihash(vb)
+	if err != nil {
+		log.Printf("%v: error deserializing chain id", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
+		s.Reset()
+		return
+	}
+
+	// Check against peer's chain id
+	if !chainID.ChainID.Equals(peerChainID) {
+		log.Printf("%v: peer's chain id does not match", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
 		s.Reset()
 		return
 	}
 
 	// Serialize and send the head block
+	log.Printf("%v: sending head block to peer", s.ID())
 	headBlock, err := c.Data.RPC.GetHeadBlock() // Cache head block so it doesn't change during communication
 	if err != nil {
+		log.Printf("%v: error getting head block", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
 		s.Reset()
 		return
 	}
-	var b []byte
-	b, _ = json.Marshal(headBlock.ID)
-	fmt.Println(string(b))
 
 	vb = types.NewVariableBlob()
 	vb = headBlock.Serialize(vb)
 	err = encoder.Encode(vb)
 	if err != nil {
+		log.Printf("%v: error serializing head block", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
 		s.Reset()
 		return
 	}
-
-	decoder := cbor.NewDecoder(s)
 
 	// Receive sender's head block
 	vb = types.NewVariableBlob()
 	err = decoder.Decode(vb)
 	if err != nil {
+		log.Printf("%v: error retreiving peer's head block", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
 		s.Reset()
 		return
 	}
 
 	// Deserialize and and get ancestor of block
 	_, senderHeadBlock, err := types.DeserializeHeadInfo(vb)
-	ancestor, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height+1, 1)
+	ancestor, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height, 1)
 
 	if err != nil { // Should not happen, requested blocks from ID that we do not have
-		fmt.Println(err)
+		log.Printf("%v: error getting oldest ancestor", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
 		s.Reset()
 		return
 	}
 
-	b, _ = json.Marshal(ancestor)
-	fmt.Println(string(b))
-
 	response := forkCheckResponse{}
-	b, _ = json.Marshal((ancestor.BlockItems[0]).BlockID)
-	fmt.Println(string(b))
-	b, _ = json.Marshal(senderHeadBlock.ID)
-	fmt.Println(string(b))
 
 	if senderHeadBlock.Height > 0 && !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) { // Different fork
 		response.StartHeight = 0
@@ -139,6 +172,8 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 	// Send fork check response
 	err = encoder.Encode(response)
 	if err != nil {
+		log.Printf("%v: error sending fork response", s.ID())
+		log.Printf("%v: %e", s.ID(), err)
 		s.Reset()
 		return
 	}
@@ -148,26 +183,30 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		req := batchRequest{}
 		err = decoder.Decode(&req)
 		if err != nil {
+			log.Printf("%v: error retrieving batch request", s.ID())
+			log.Printf("%v: %e", s.ID(), err)
 			s.Reset()
 			return
 		}
 
 		// If they requested more blocks than we have, then there is a problem with the peer
-		if (types.UInt64(req.StartBlock) + req.BatchSize) > types.UInt64(headBlock.Height) {
+		if (types.UInt64(req.StartBlock) + req.BatchSize - 1) > types.UInt64(headBlock.Height) {
+			log.Printf("%v: peer requested more blocks than we know of", s.ID())
 			s.Reset()
 			return
 		}
+
+		log.Printf("%v: responding to batch request for blocks %v-%v", s.ID(), req.StartBlock, types.UInt64(req.StartBlock)+req.BatchSize-1)
 
 		// Fetch blocks
 		blocks, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID,
 			req.StartBlock, types.UInt32(min(batchSize, req.BatchSize)))
 		if err != nil {
+			log.Printf("%v: error getting blocks", s.ID())
+			log.Printf("%v: %e", s.ID(), err)
 			s.Reset()
 			return
 		}
-
-		b, _ = json.Marshal(blocks)
-		fmt.Println(string(b))
 
 		// Create and send a batch
 		vb = types.NewVariableBlob()
@@ -175,18 +214,19 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		batch := blockBatch{VectorBlockItems: *vb}
 		err = encoder.Encode(batch)
 		if err != nil {
+			log.Printf("%v: error sending batch response", s.ID())
+			log.Printf("%v: %e", s.ID(), err)
 			s.Reset()
 			return
 		}
-
-		b, _ = json.Marshal(blocks)
-		fmt.Println(string(b))
 	}
 }
 
 // InitiateProtocol begins the communication with the peer
 // TODO: Consider interface for protocols
 func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan error) {
+
+	log.Printf("connected to peer to sync: %v", p)
 
 	// Start a stream with the given peer
 	s, err := c.Data.Host.NewStream(ctx, p, syncID)
@@ -202,8 +242,11 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 	}
 
 	decoder := cbor.NewDecoder(s)
+	encoder := cbor.NewEncoder(s)
 
-	// Receive peer's chain ID
+	log.Printf("%v: checking peer's chain id", p)
+
+	// Receive and deserialize peer's chain ID
 	vb := types.NewVariableBlob()
 	err = decoder.Decode(vb)
 	if err != nil {
@@ -211,64 +254,96 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 		return
 	}
 
-	// Deserialize and check peer's chain ID
 	_, peerChainID, err := types.DeserializeMultihash(vb)
-	chainID, err := c.Data.RPC.GetChainID()
 	if err != nil {
+		log.Printf("%v: error deserializing chain id", p)
 		errs <- err
 		s.Reset()
 		return
 	}
-	if !chainID.ChainID.Equals(peerChainID) {
-		errs <- fmt.Errorf("Peer's chain ID does not match")
+
+	// Get our chain id
+	chainID, err := c.Data.RPC.GetChainID()
+	if err != nil {
+		log.Printf("%v: error retrieving chain id", p)
+		log.Printf("%v: %e", p, err)
+		errs <- err
 		s.Reset()
 		return
 	}
 
-	// Receive peer's head block
-	vb = types.NewVariableBlob()
-	err = decoder.Decode(vb)
+	// Check against peer's chain id
+	if !chainID.ChainID.Equals(peerChainID) {
+		log.Printf("%v: peer's chain id does not match", p)
+		errs <- fmt.Errorf("%v: peer's chain id does not match", p)
+		s.Reset()
+		return
+	}
+
+	// Send our chain ID
+	vb = chainID.Serialize(vb)
+	err = encoder.Encode(vb)
 	if err != nil {
+		log.Printf("%v: error sending chain id", p)
+		log.Printf("%v: %e", p, err)
 		s.Reset()
 		return
 	}
 
 	// Deserialize and check peer's head block
+	log.Printf("%v: checking peer's head block", p)
+
+	// Receive peer's head block
+	vb = types.NewVariableBlob()
+	err = decoder.Decode(vb)
+	if err != nil {
+		log.Printf("%v: error receiving peer's head block", p)
+		log.Printf("%v: %e", p, err)
+		s.Reset()
+		return
+	}
+
 	_, peerHeadBlock, err := types.DeserializeHeadInfo(vb)
+	if err != nil {
+		log.Printf("%v: error deserializing peer's head block", p)
+		log.Printf("%v: %e", p, err)
+		errs <- err
+		s.Reset()
+		return
+	}
+
 	headBlock, err := c.Data.RPC.GetHeadBlock()
 	if err != nil {
+		log.Printf("%v: error getting my head block", p)
+		log.Printf("%v: %e", p, err)
 		errs <- err
 		s.Reset()
 		return
 	}
+
 	if peerHeadBlock.Height == headBlock.Height && peerHeadBlock.ID.Equals(&headBlock.ID) {
-		errs <- fmt.Errorf("Peer is in sync")
+		errs <- fmt.Errorf("%v: peer is in sync with us, disconnecting", p)
 		s.Reset()
 		return
 	}
-
-	encoder := cbor.NewEncoder(s)
 
 	// Serialize and send my head block to peer for fork check
-	vb = types.NewVariableBlob()
-	headBlock, err = c.Data.RPC.GetHeadBlock()
-	vb = headBlock.Serialize(vb)
-	if err != nil {
-		errs <- err
-		s.Reset()
-		return
-	}
 	err = encoder.Encode(vb)
 	if err != nil {
+		log.Printf("%v: error sending my head block", p)
+		log.Printf("%v: %e", p, err)
 		errs <- err
 		s.Reset()
 		return
 	}
 
 	// Receive fork check response
+	log.Printf("%v: checking peer's fork status", p)
 	forkCheck := forkCheckResponse{}
 	err = decoder.Decode(&forkCheck)
 	if err != nil {
+		log.Printf("%v: error receiving fork status", p)
+		log.Printf("%v: %e", p, err)
 		errs <- err
 		s.Reset()
 		return
@@ -276,8 +351,12 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 
 	// If fork is different, hang up for now
 	if forkCheck.Status == DifferentFork {
-		errs <- fmt.Errorf("Peer is on a different fork")
+		errs <- fmt.Errorf("%v: peer is on a different fork", p)
+		s.Reset()
+		return
 	}
+
+	log.Printf("%v: Syncing to block %v", p, peerHeadBlock.Height)
 
 	// Request and apply batches until caught up
 	currentHeight := headBlock.Height
@@ -287,9 +366,13 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 		req := batchRequest{StartBlock: currentHeight + 1,
 			BatchSize: size}
 
+		log.Printf("%v: requesting blocks %v-%v", p, req.StartBlock, types.UInt64(req.StartBlock)+req.BatchSize-1)
+
 		// Send batch request
 		err = encoder.Encode(req)
 		if err != nil {
+			log.Printf("%v: error sending batch request", p)
+			log.Printf("%v: %e", p, err)
 			errs <- err
 			s.Reset()
 			return
@@ -299,13 +382,19 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 		batch := blockBatch{}
 		err = decoder.Decode(&batch)
 		if err != nil {
+			log.Printf("%v: error receiving batch request", p)
+			log.Printf("%v: %e", p, err)
 			errs <- err
 			s.Reset()
 			return
 		}
 
+		log.Printf("%v: pushing blocks %v-%v", p, req.StartBlock, types.UInt64(req.StartBlock)+req.BatchSize-1)
+
 		err = c.applyBlocks(&batch)
 		if err != nil {
+			log.Printf("%v: error applying blocks", p)
+			log.Printf("%v: %e", p, err)
 			errs <- err
 			s.Reset()
 			return
@@ -346,7 +435,7 @@ func (c SyncProtocol) applyBlocks(batch *blockBatch) error {
 		}
 
 		if !ok {
-			return fmt.Errorf("Block apply failed")
+			return fmt.Errorf("block apply failed")
 		}
 	}
 
