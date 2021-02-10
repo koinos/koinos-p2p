@@ -170,6 +170,8 @@ github.com/koinos/koinos-types-golang v0.1.1-0.20210202222111-4de511034720 h1:Hc
 github.com/koinos/koinos-types-golang v0.1.1-0.20210202222111-4de511034720/go.mod h1:inTj1woeLBXfRICUkKYjW7pCsrVJCBBJvMcOzx7+PSs=
 github.com/koinos/koinos-types-golang v0.1.1-0.20210205195419-0771331eb7b2 h1:T4+5NA8Cdav1r6k0ezIza73jdaXQNkqz6UrPCzUv7Wk=
 github.com/koinos/koinos-types-golang v0.1.1-0.20210205195419-0771331eb7b2/go.mod h1:inTj1woeLBXfRICUkKYjW7pCsrVJCBBJvMcOzx7+PSs=
+github.com/koinos/koinos-types-golang v0.1.1-0.20210209202145-66d7aa54e16c h1:1+fkVfb8CfFqvL2/gMeAiup+QtWhhlOmDDhEwrpSu6I=
+github.com/koinos/koinos-types-golang v0.1.1-0.20210209202145-66d7aa54e16c/go.mod h1:inTj1woeLBXfRICUkKYjW7pCsrVJCBBJvMcOzx7+PSs=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/koron/go-ssdp v0.0.0-20191105050749-2e1c40ed0b5d h1:68u9r4wEvL3gYg2jvAOgROwZ3H+Y3hIDk4tbbmIjcYQ=
 github.com/koron/go-ssdp v0.0.0-20191105050749-2e1c40ed0b5d/go.mod h1:5Ky9EC2xfoUKUor0Hjgi2BJhCSXJfMOFlmyYrVKGQMk=

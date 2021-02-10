@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -87,6 +88,10 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		s.Reset()
 		return
 	}
+	var b []byte
+	b, _ = json.Marshal(headBlock.ID)
+	fmt.Println(string(b))
+
 	vb = types.NewVariableBlob()
 	vb = headBlock.Serialize(vb)
 	err = encoder.Encode(vb)
@@ -107,7 +112,17 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 
 	// Deserialize and and get ancestor of block
 	_, senderHeadBlock, err := types.DeserializeHeadInfo(vb)
-	ancestor, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height, 1)
+	ancestor, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height+1, 1)
+
+	if err != nil { // Should not happen, requested blocks from ID that we do not have
+		fmt.Println(err)
+		s.Reset()
+		return
+	}
+
+	b, _ = json.Marshal(ancestor)
+	fmt.Println(string(b))
+
 	response := forkCheckResponse{}
 	if !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) { // Different fork
 		response.StartHeight = 0
@@ -147,8 +162,13 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 			return
 		}
 
+		b, _ = json.Marshal(blocks)
+		fmt.Println(string(b))
+
 		// Create and send a batch
 		batch := blockBatch{Blocks: blocks.BlockItems}
+		b, _ = json.Marshal(blocks)
+		fmt.Println(string(b))
 		err = encoder.Encode(batch)
 		if err != nil {
 			s.Reset()
@@ -257,7 +277,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 	for currentHeight < peerHeadBlock.Height {
 		// Request a batch either batchSize long, or the remaining size if it's less
 		size := min(types.UInt64(peerHeadBlock.Height)-types.UInt64(currentHeight), batchSize)
-		req := batchRequest{StartBlock: currentHeight,
+		req := batchRequest{StartBlock: currentHeight + 1,
 			BatchSize: size}
 
 		// Send batch request
