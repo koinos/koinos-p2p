@@ -104,6 +104,11 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
 	return result, err
 }
 
+// ApplyTransaction rpc call
+func (k KoinosRPC) ApplyTransaction(block *koinos_types.Block) (bool, error) {
+	return true, nil
+}
+
 // GetBlocksByHeight rpc call
 func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.BlockHeightType, numBlocks koinos_types.UInt32) (*koinos_types.GetBlocksByHeightResp, error) {
 	args := koinos_types.BlockStoreReq{

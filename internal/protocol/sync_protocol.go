@@ -39,7 +39,7 @@ type batchRequest struct {
 }
 
 type blockBatch struct {
-	Blocks types.VectorBlockItem
+	VectorBlockItems types.VariableBlob
 }
 
 // SyncProtocol handles broadcasting inventory to peers
@@ -166,14 +166,17 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		fmt.Println(string(b))
 
 		// Create and send a batch
-		batch := blockBatch{Blocks: blocks.BlockItems}
-		b, _ = json.Marshal(blocks)
-		fmt.Println(string(b))
+		vb = types.NewVariableBlob()
+		vb = blocks.BlockItems.Serialize(vb)
+		batch := blockBatch{VectorBlockItems: *vb}
 		err = encoder.Encode(batch)
 		if err != nil {
 			s.Reset()
 			return
 		}
+
+		b, _ = json.Marshal(blocks)
+		fmt.Println(string(b))
 	}
 }
 
@@ -311,12 +314,18 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 }
 
 func (c SyncProtocol) applyBlocks(batch *blockBatch) error {
-	for i := 0; i < len(batch.Blocks); i++ {
-		bi := batch.Blocks[i]
-		bi.Block.Unbox()
+	_, blocks, err := types.DeserializeVectorBlockItem(&batch.VectorBlockItems)
+	if err != nil {
+		return err
+	}
 
-		if bi.Block.IsBoxed() {
-			return errors.New("Could not unbox block")
+	for i := 0; i < len(*blocks); i++ {
+		bi := (*blocks)[i]
+
+		bi.Block.Unbox()
+		block, err := bi.Block.GetNative()
+		if err != nil {
+			return err
 		}
 
 		block, _ := bi.Block.GetNative()

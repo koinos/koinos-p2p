@@ -65,7 +65,7 @@ func main() {
 	// Connect to a peer
 	if *peer != "" {
 		log.Println("Connecting to peer and sending broadcast")
-		peer, err := host.ConnectToPeer(*peer)
+		_, err := host.ConnectToPeer(*peer)
 		if err != nil {
 			panic(err)
 		}
