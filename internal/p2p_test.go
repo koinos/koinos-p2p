@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -69,18 +70,6 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	rpc.BlocksApplied = make([]*types.Block, 0)
 
 	return &rpc
-}
-
-func TestBroadcastProtocol(t *testing.T) {
-	rpc := rpc.NewKoinosRPC()
-	listenNode, sendNode, peer, err := createTestClients(rpc, rpc)
-	if err != nil {
-		t.Error(err)
-	}
-	defer listenNode.Close()
-	defer listenNode.Close()
-
-	sendNode.Protocols.Broadcast.InitiateProtocol(context.Background(), peer.ID)
 }
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, *peer.AddrInfo, error) {
@@ -212,6 +201,23 @@ func TestApplyBlockFailure(t *testing.T) {
 	if len(sendRPC.BlocksApplied) != 18 {
 		t.Errorf("Incorrect number of blocks applied")
 	}
+}
+
+func TestGossipNoError(t *testing.T) {
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(5)
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
+
+	sendNode.Protocols.Gossip.InitiateProtocol(context.Background(), peer.ID)
+
+	time.Sleep(time.Duration(30) * time.Duration(time.Millisecond))
+
+	sendNode.Protocols.Gossip.CloseProtocol()
 }
 
 func getChannelError(errs chan error) error {

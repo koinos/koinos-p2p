@@ -1,4 +1,4 @@
-package node
+package inventory
 
 import (
 	"crypto/md5"

@@ -30,12 +30,12 @@ func main() {
 	// Connect to a peer
 	if *peer != "" {
 		log.Println("Connecting to peer and sending broadcast")
-		peer, err := host.ConnectToPeer(*peer)
+		_, err := host.ConnectToPeer(*peer)
 		if err != nil {
 			panic(err)
 		}
 
-		go host.Protocols.Broadcast.InitiateProtocol(context.Background(), peer.ID)
+		//go host.Protocols.Broadcast.InitiateProtocol(context.Background(), peer.ID)
 	}
 
 	// Wait for a SIGINT or SIGTERM signal

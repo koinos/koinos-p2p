@@ -1,4 +1,4 @@
-package node
+package inventory
 
 import (
 	"encoding/hex"
@@ -33,33 +33,34 @@ type InventoryItem struct {
 
 // NewInventoryItem creates a new inventory item object with the timestamp set to the current time
 func NewInventoryItem(mh types.Multihash, item interface{}) *InventoryItem {
-	ii := InventoryItem{Item: item, TimeStamp: time.Now()}
+	ii := InventoryItem{ID: mh, Item: item, TimeStamp: time.Now()}
 	return &ii
 }
 
-// InventoryStore contains the storage logic for a single type of object
-type InventoryStore struct {
+// inventoryStore contains the storage logic for a single type of object
+type inventoryStore struct {
 	items      map[InventoryKey]InventoryItem
 	inventory  *Inventory
 	mu         sync.Mutex
 	expiration time.Duration
 }
 
-func newInventoryStore(expiration time.Duration) *InventoryStore {
-	store := InventoryStore{expiration: expiration}
+func newInventoryStore(inventory *Inventory, expiration time.Duration) *inventoryStore {
+	store := inventoryStore{expiration: expiration, inventory: inventory}
 	store.items = make(map[InventoryKey]InventoryItem)
 
 	return &store
 }
 
 // Add adds an item to the store, keyed to its ID
-func (store *InventoryStore) Add(item *InventoryItem) error {
+func (store *inventoryStore) Add(item *InventoryItem) error {
 	ik := newInventoryKey(&item.ID)
 
 	store.mu.Lock()
 	store.items[*ik] = *item
 	store.mu.Unlock()
 
+	store.inventory.onAdd(item)
 	store.pruneAsync()
 
 	return nil
@@ -67,13 +68,13 @@ func (store *InventoryStore) Add(item *InventoryItem) error {
 
 // Checks for the existence of the given key
 // Assumes the store is locked by the invoker
-func (store *InventoryStore) contains(ik *InventoryKey) bool {
+func (store *inventoryStore) contains(ik *InventoryKey) bool {
 	_, ok := store.items[*ik]
 	return ok
 }
 
 // Contains check whether or not the store contains an item with the given ID
-func (store *InventoryStore) Contains(id *types.Multihash) bool {
+func (store *inventoryStore) Contains(id *types.Multihash) bool {
 	ik := newInventoryKey(id)
 
 	store.mu.Lock()
@@ -84,7 +85,7 @@ func (store *InventoryStore) Contains(id *types.Multihash) bool {
 }
 
 // Fetch attempts to fetch an item with the given ID. Returns an error if it cannot
-func (store *InventoryStore) Fetch(id *types.Multihash) (*InventoryItem, error) {
+func (store *inventoryStore) Fetch(id *types.Multihash) (*InventoryItem, error) {
 	store.mu.Lock()
 	ik := newInventoryKey(id)
 	if !store.contains(ik) {
@@ -101,7 +102,7 @@ func (store *InventoryStore) Fetch(id *types.Multihash) (*InventoryItem, error) 
 }
 
 // pruneAsync asynchronously prunes the store
-func (store *InventoryStore) pruneAsync() {
+func (store *inventoryStore) pruneAsync() {
 	go func() {
 		store.Prune()
 	}()
@@ -109,7 +110,7 @@ func (store *InventoryStore) pruneAsync() {
 
 // Prunes the store based on the expiration time
 // Assumes the store is locked by the invoker
-func (store *InventoryStore) prune() {
+func (store *inventoryStore) prune() {
 	now := time.Now().Add(-store.expiration) // Time to test against timestamp
 	remove := make([]InventoryKey, 0)        // Slice of keys to be removed
 
@@ -125,7 +126,7 @@ func (store *InventoryStore) prune() {
 }
 
 // Prune synchronously prunes the store
-func (store *InventoryStore) Prune() {
+func (store *inventoryStore) Prune() {
 	store.mu.Lock()
 	store.prune()
 	store.mu.Unlock()
@@ -133,15 +134,44 @@ func (store *InventoryStore) Prune() {
 
 // Inventory represents the current inventory of a node
 type Inventory struct {
-	Transactions InventoryStore
-	Blocks       InventoryStore
+	Transactions  inventoryStore
+	Blocks        inventoryStore
+	mu            sync.Mutex
+	gossipChannel chan *InventoryItem
+}
+
+func (inv *Inventory) EnableGossipChannel() chan *InventoryItem {
+	inv.gossipChannel = make(chan *InventoryItem) // TODO: Make this buffered?
+	return inv.gossipChannel
+}
+
+func (inv *Inventory) DisableGossipChannel() {
+	inv.mu.Lock()
+	if inv.gossipChannel == nil {
+		inv.mu.Unlock()
+		return
+	}
+	close(inv.gossipChannel)
+	inv.gossipChannel = nil
+	inv.mu.Unlock()
+}
+
+func (inv *Inventory) onAdd(item *InventoryItem) {
+	inv.mu.Lock()
+	if inv.gossipChannel == nil {
+		inv.mu.Unlock()
+		return
+	}
+
+	inv.gossipChannel <- item
+	inv.mu.Unlock()
 }
 
 // NewInventory creates a new Inventory object with the given expiration
 func NewInventory(expiration time.Duration) *Inventory {
 	inv := Inventory{}
-	inv.Transactions = *newInventoryStore(expiration)
-	inv.Blocks = *newInventoryStore(expiration)
+	inv.Transactions = *newInventoryStore(&inv, expiration)
+	inv.Blocks = *newInventoryStore(&inv, expiration)
 
 	return &inv
 }

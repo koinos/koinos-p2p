@@ -8,8 +8,10 @@ import (
 	mrand "math/rand"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/inventory"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -18,21 +20,21 @@ import (
 )
 
 type nodeProtocols struct {
-	Sync      protocol.SyncProtocol
-	Broadcast protocol.BroadcastProtocol
+	Sync   protocol.SyncProtocol
+	Gossip protocol.GossipProtocol
 }
 
 // create new node protocol object
 func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 	np := new(nodeProtocols)
 
-	data := protocol.Data{RPC: node.RPC, Host: node.Host}
+	data := protocol.Data{Inventory: &node.Inventory, RPC: node.RPC, Host: node.Host}
 
 	np.Sync = *protocol.NewSyncProtocol(&data)
 	node.registerProtocol(np.Sync)
 
-	np.Broadcast = *protocol.NewBroadcastProtocol(&data)
-	node.registerProtocol(np.Broadcast)
+	np.Gossip = *protocol.NewGossipProtocol(&data)
+	node.registerProtocol(&np.Gossip)
 
 	return np
 }
@@ -40,7 +42,7 @@ func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
 	Host      host.Host
-	Inventory Inventory
+	Inventory inventory.Inventory
 	Protocols nodeProtocols
 	RPC       rpc.RPC
 }
@@ -76,7 +78,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.Host = host
 	node.RPC = rpc
 	node.Protocols = *newNodeProtocols(node)
-	node.Inventory = *NewInventory(time.Minute * time.Duration(30))
+	node.Inventory = *inventory.NewInventory(time.Minute * time.Duration(30))
 
 	return node, nil
 }
