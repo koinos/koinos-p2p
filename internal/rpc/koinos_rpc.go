@@ -60,15 +60,21 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 }
 
 // ApplyBlock rpc call
-func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
+func (k KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_types.BlockTopology) (bool, error) {
 	blockSub := koinos_types.NewSubmitBlockParams()
 	blockSub.Block = *block
-	// TODO: Fill in Block Topology
+
+	if len(topology) == 0 {
+		// TODO: Fill in Block Topology
+	} else {
+		blockSub.Topology = *topology[0]
+	}
+
 	blockSub.VerifyPassiveData = true
 	blockSub.VerifyBlockSignature = true
 	blockSub.VerifyTransactionSignatures = true
 
-	args := koinos_types.SubmissionItem{
+	args := koinos_types.ChainRPCParams{
 		Value: blockSub,
 	}
 	data, err := json.Marshal(args)
@@ -84,7 +90,7 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
 		return false, err
 	}
 
-	resultVariant := koinos_types.NewSubmissionResult()
+	resultVariant := koinos_types.NewChainRPCResult()
 	err = json.Unmarshal(resultBytes, resultVariant)
 	if err != nil {
 		return false, nil
@@ -93,7 +99,7 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block) (bool, error) {
 	result := false
 
 	switch t := resultVariant.Value.(type) {
-	case *koinos_types.BlockSubmissionResult:
+	case *koinos_types.SubmitBlockResult:
 		result = true
 	case *koinos_types.RPCError:
 		err = errors.New(string(t.ErrorText))

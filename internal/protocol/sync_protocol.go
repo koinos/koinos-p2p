@@ -3,7 +3,6 @@ package protocol
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
@@ -124,7 +123,12 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 	fmt.Println(string(b))
 
 	response := forkCheckResponse{}
-	if !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) { // Different fork
+	b, _ = json.Marshal((ancestor.BlockItems[0]).BlockID)
+	fmt.Println(string(b))
+	b, _ = json.Marshal(senderHeadBlock.ID)
+	fmt.Println(string(b))
+
+	if senderHeadBlock.Height > 0 && !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) { // Different fork
 		response.StartHeight = 0
 		response.Status = DifferentFork
 	} else { // Same fork
@@ -323,13 +327,20 @@ func (c SyncProtocol) applyBlocks(batch *blockBatch) error {
 		bi := (*blocks)[i]
 
 		bi.Block.Unbox()
-		block, err := bi.Block.GetNative()
-		if err != nil {
-			return err
-		}
 
 		block, _ := bi.Block.GetNative()
-		ok, err := c.Data.RPC.ApplyBlock(block)
+		topology := types.NewBlockTopology()
+		topology.Height = bi.BlockHeight
+		topology.ID.ID = bi.BlockID.ID
+		topology.ID.Digest = bi.BlockID.Digest
+		block.ActiveData.Unbox()
+		if !block.ActiveData.IsBoxed() {
+			active, _ := block.ActiveData.GetNative()
+			topology.Previous.ID = active.HeaderHashes.ID
+			topology.Previous.Digest = active.HeaderHashes.Digests[0]
+		}
+
+		ok, err := c.Data.RPC.ApplyBlock(block, topology)
 		if err != nil {
 			return err
 		}

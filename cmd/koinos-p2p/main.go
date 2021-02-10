@@ -38,7 +38,7 @@ func main() {
 	if *sync == "true" {
 		addrStr = "/ip4/127.0.0.1/tcp/8889"
 		addr = &addrStr
-		peerStr = "/ip4/127.0.0.1/tcp/8888/p2p/QmexAnfpHrhMmAC5UNQVS8iBuUUgDrMbMY17Cck2gKrqeX"
+		peerStr = "/ip4/127.0.0.1/tcp/8888/p2p/Qmeq45rCLjFt573aFKgLrcAmAMSmYy9WXTuetDsELM2r8m"
 		peer = &peerStr
 		amqpFlagStr = "amqp://guest:guest@localhost:5673/"
 		amqpFlag = &amqpFlagStr
@@ -65,7 +65,7 @@ func main() {
 	// Connect to a peer
 	if *peer != "" {
 		log.Println("Connecting to peer and sending broadcast")
-		_, err := host.ConnectToPeer(*peer)
+		peer, err := host.ConnectToPeer(*peer)
 		if err != nil {
 			panic(err)
 		}
