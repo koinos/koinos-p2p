@@ -17,11 +17,11 @@ const broadcastID = "/koinos/broadcast/1.0.0"
 type idType int
 
 const (
-	TransactionType idType = iota
-	BlockType
+	transactionType idType = iota
+	blockType
 )
 
-type IDBroadcast struct {
+type idBroadcast struct {
 	Type idType
 	ID   types.Multihash
 }
@@ -57,14 +57,14 @@ func (g *GossipProtocol) writeHandler(s network.Stream) {
 		}
 
 		// TODO: Consider batching several items before advertising?
-		broadcast := IDBroadcast{}
+		broadcast := idBroadcast{}
 		broadcast.ID = item.ID
 		switch item.Item.(type) {
 		case *types.Block:
-			broadcast.Type = BlockType
+			broadcast.Type = blockType
 
 		case *types.Transaction:
-			broadcast.Type = TransactionType
+			broadcast.Type = transactionType
 		}
 
 		err := encoder.Encode(&item)
@@ -81,7 +81,7 @@ func (g *GossipProtocol) readHandler(s network.Stream) {
 
 	for {
 		// Receive broadcast from peer
-		bc := IDBroadcast{}
+		bc := idBroadcast{}
 		err := decoder.Decode(bc)
 		log.Print("Received IDBroadcast from peer.")
 		if err != nil {
@@ -90,10 +90,10 @@ func (g *GossipProtocol) readHandler(s network.Stream) {
 		}
 
 		switch bc.Type {
-		case TransactionType:
+		case transactionType:
 			continue
 
-		case BlockType:
+		case blockType:
 			continue
 		}
 	}
@@ -113,6 +113,7 @@ func (g *GossipProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 	g.handleStream(s)
 }
 
+// CloseProtocol closes a running gossip mode cleanly
 func (g *GossipProtocol) CloseProtocol() {
 	g.Data.Inventory.DisableGossipChannel()
 }

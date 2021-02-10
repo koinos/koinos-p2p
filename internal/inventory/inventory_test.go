@@ -9,7 +9,7 @@ import (
 )
 
 // Create a test item, using a serializeable payload
-func makeTestItem(payload types.Serializeable) *InventoryItem {
+func makeTestItem(payload types.Serializeable) *Item {
 	mh := types.NewMultihash()
 	vb := types.NewVariableBlob()
 	sum := md5.Sum(*payload.Serialize(vb))
