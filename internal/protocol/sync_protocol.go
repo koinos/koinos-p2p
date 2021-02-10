@@ -37,7 +37,7 @@ type batchRequest struct {
 }
 
 type blockBatch struct {
-	Blocks types.VectorBlockItem
+	VectorBlockItems types.VariableBlob
 }
 
 // SyncProtocol handles broadcasting inventory to peers
@@ -147,7 +147,9 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 		}
 
 		// Create and send a batch
-		batch := blockBatch{Blocks: blocks.BlockItems}
+		vb = types.NewVariableBlob()
+		vb = blocks.BlockItems.Serialize(vb)
+		batch := blockBatch{VectorBlockItems: *vb}
 		err = encoder.Encode(batch)
 		if err != nil {
 			s.Reset()
@@ -290,9 +292,16 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 }
 
 func (c SyncProtocol) applyBlocks(batch *blockBatch) error {
-	for i := 0; i < len(batch.Blocks); i++ {
-		bi := batch.Blocks[i]
-		_, block, err := types.DeserializeBlock(&bi.BlockBlob)
+	_, blocks, err := types.DeserializeVectorBlockItem(&batch.VectorBlockItems)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < len(*blocks); i++ {
+		bi := (*blocks)[i]
+
+		bi.Block.Unbox()
+		block, err := bi.Block.GetNative()
 		if err != nil {
 			return err
 		}

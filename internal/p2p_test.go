@@ -41,6 +41,10 @@ func (k *TestRPC) ApplyBlock(block *types.Block) (bool, error) {
 	return true, nil
 }
 
+func (k *TestRPC) ApplyTransaction(block *types.Block) (bool, error) {
+	return true, nil
+}
+
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResp, error) {
 	blocks := types.NewGetBlocksByHeightResp()
@@ -51,7 +55,8 @@ func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Block
 		blockItem.BlockID.ID = types.UInt64(blockItem.BlockHeight) + k.HeadBlockIDDelta
 		vb := types.NewVariableBlob()
 		block := types.NewBlock()
-		blockItem.BlockBlob = *block.Serialize(vb)
+		vb = block.Serialize(vb)
+		blockItem.Block = *types.NewOpaqueBlockFromBlob(vb)
 		blocks.BlockItems = append(blocks.BlockItems, *blockItem)
 	}
 
