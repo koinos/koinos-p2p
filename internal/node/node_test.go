@@ -25,7 +25,7 @@ func (k *TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
 }
 
 // ApplyBlock rpc call
-func (k *TestRPC) ApplyBlock(block *types.Block) (bool, error) {
+func (k *TestRPC) ApplyBlock(block *types.Block, topology ...*types.BlockTopology) (bool, error) {
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
