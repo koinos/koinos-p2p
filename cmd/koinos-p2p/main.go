@@ -25,7 +25,7 @@ func getChannelError(errs chan error) error {
 func main() {
 	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8889", "The multiaddress on which the node will listen")
 	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
-	var peer = flag.String("peer", "/ip4/127.0.0.1/tcp/8888/p2p/Qmeq45rCLjFt573aFKgLrcAmAMSmYy9WXTuetDsELM2r8m", "Address of a peer to which to connect")
+	var peer = flag.String("peer", "", "Address of a peer to which to connect")
 	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5673/", "AMQP server URL")
 
 	flag.Parse()

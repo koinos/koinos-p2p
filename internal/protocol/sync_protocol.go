@@ -150,23 +150,33 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 
 	// Deserialize and and get ancestor of block
 	_, senderHeadBlock, err := types.DeserializeHeadInfo(vb)
-	ancestor, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height, 1)
-
-	if err != nil { // Should not happen, requested blocks from ID that we do not have
-		log.Printf("%v: error getting oldest ancestor", s.ID())
+	if err != nil {
+		log.Printf("%v: error deserializing peer head block", s.ID())
 		log.Printf("%v: %e", s.ID(), err)
 		s.Reset()
 		return
 	}
 
-	response := forkCheckResponse{}
+	response := forkCheckResponse{
+		StartHeight: senderHeadBlock.Height,
+		Status: SameFork,
+	}
 
-	if senderHeadBlock.Height > 0 && !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) { // Different fork
-		response.StartHeight = 0
-		response.Status = DifferentFork
-	} else { // Same fork
-		response.StartHeight = senderHeadBlock.Height
-		response.Status = SameFork
+	// If peer is not in genesis state, check if they are on an ancestor chain of our's
+	if senderHeadBlock.Height > 0 {
+		ancestor, err := c.Data.RPC.GetBlocksByHeight(&headBlock.ID, senderHeadBlock.Height, 1)
+
+		if err != nil { // Should not happen, requested blocks from ID that we do not have
+			log.Printf("%v: error getting oldest ancestor", s.ID())
+			log.Printf("%v: %e", s.ID(), err)
+			s.Reset()
+			return
+		}
+
+		if !ancestor.BlockItems[0].BlockID.Equals(&senderHeadBlock.ID) { // Different fork
+			response.StartHeight = 0
+			response.Status = DifferentFork
+		}
 	}
 
 	// Send fork check response
