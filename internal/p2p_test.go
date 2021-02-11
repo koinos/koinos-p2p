@@ -28,7 +28,7 @@ func (k *TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
 }
 
 // ApplyBlock rpc call
-func (k *TestRPC) ApplyBlock(block *types.Block) (bool, error) {
+func (k *TestRPC) ApplyBlock(block *types.Block, topology ...*types.BlockTopology) (bool, error) {
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
@@ -55,6 +55,10 @@ func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Block
 		blockItem.BlockID.ID = types.UInt64(blockItem.BlockHeight) + k.HeadBlockIDDelta
 		vb := types.NewVariableBlob()
 		block := types.NewBlock()
+		activeData := types.NewActiveBlockData()
+		activeData.HeaderHashes = *types.NewMultihashVector()
+		activeData.HeaderHashes.Digests = make([]types.VariableBlob, 3)
+		block.ActiveData = *types.NewOpaqueActiveBlockDataFromNative(*activeData)
 		vb = block.Serialize(vb)
 		blockItem.Block = *types.NewOpaqueBlockFromBlob(vb)
 		blocks.BlockItems = append(blocks.BlockItems, *blockItem)

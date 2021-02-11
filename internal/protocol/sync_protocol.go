@@ -328,6 +328,8 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 	}
 
 	// Serialize and send my head block to peer for fork check
+	vb = types.NewVariableBlob()
+	vb = headBlock.Serialize(vb)
 	err = encoder.Encode(vb)
 	if err != nil {
 		log.Printf("%v: error sending my head block", p)
