@@ -2,14 +2,15 @@ package protocol
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/koinos/koinos-p2p/internal/inventory"
 	types "github.com/koinos/koinos-types-golang"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	// imports as package "cbor"
 )
 
 const broadcastID = "/koinos/broadcast/1.0.0"
@@ -21,7 +22,21 @@ const (
 	blockType
 )
 
-type idBroadcast struct {
+type gossipMessage struct {
+	Message interface{}
+}
+
+type idAdvertise struct {
+	Type idType
+	ID   types.Multihash
+}
+
+type gossipTransmit struct {
+	Type  idType
+	Value types.VariableBlob
+}
+
+type gossipRequest struct {
 	Type idType
 	ID   types.Multihash
 }
@@ -57,20 +72,21 @@ func (g *GossipProtocol) writeHandler(s network.Stream) {
 		}
 
 		// TODO: Consider batching several items before advertising?
-		broadcast := idBroadcast{}
-		broadcast.ID = item.ID
+		advert := idAdvertise{}
+		advert.ID = item.ID
 		switch item.Item.(type) {
 		case *types.Block:
-			broadcast.Type = blockType
+			advert.Type = blockType
 
 		case *types.Transaction:
-			broadcast.Type = transactionType
+			advert.Type = transactionType
 		}
 
-		err := encoder.Encode(&item)
+		message := gossipMessage{Message: advert}
+
+		err := encoder.Encode(&message)
 		if err != nil {
-			log.Print(err)
-			s.Reset()
+			g.hangUp(s, err)
 			return
 		}
 	}
@@ -81,21 +97,131 @@ func (g *GossipProtocol) readHandler(s network.Stream) {
 
 	for {
 		// Receive broadcast from peer
-		bc := idBroadcast{}
-		err := decoder.Decode(bc)
-		log.Print("Received IDBroadcast from peer.")
+		gm := gossipMessage{}
+		err := decoder.Decode(gm)
+		log.Print("Received gossip from peer")
 		if err != nil {
 			s.Reset()
 			return
 		}
 
-		switch bc.Type {
-		case transactionType:
-			continue
+		go g.processMessage(s, &gm)
+	}
+}
 
-		case blockType:
-			continue
+func (g *GossipProtocol) processMessage(s network.Stream, message *gossipMessage) {
+	switch o := message.Message.(type) {
+	case idAdvertise:
+		g.processIDBroadcast(s, &o)
+
+	case gossipRequest:
+		g.processGossipRequest(s, &o)
+
+	case gossipTransmit:
+		g.processGossipTransmit(s, &o)
+	}
+}
+
+func (g *GossipProtocol) processIDBroadcast(s network.Stream, ib *idAdvertise) {
+	switch ib.Type {
+	case blockType:
+		// Ignore if already in inventory
+		if g.Data.Inventory.Blocks.Contains(&ib.ID) {
+			return
 		}
+
+	case transactionType:
+		// Ignore if already in inventory
+		if g.Data.Inventory.Transactions.Contains(&ib.ID) {
+			return
+		}
+
+	default:
+		g.hangUp(s, fmt.Errorf("Unknown message type"))
+	}
+
+	req := gossipRequest{ID: ib.ID, Type: ib.Type}
+	message := gossipMessage{Message: req}
+	encoder := cbor.NewEncoder(s)
+	err := encoder.Encode(&message)
+	if err != nil {
+		g.hangUp(s, err)
+		return
+	}
+}
+
+func (g *GossipProtocol) processGossipRequest(s network.Stream, gr *gossipRequest) {
+	var item *inventory.Item
+	var err error
+
+	switch gr.Type {
+	case blockType:
+		item, err = g.Data.Inventory.Blocks.Fetch(&gr.ID)
+
+	case transactionType:
+		item, err = g.Data.Inventory.Transactions.Fetch(&gr.ID)
+	}
+
+	// We don't have this item, so it's either a bad request or it timed out after I advertised
+	// Right now we will just ignore it and continue
+	// TODO: assign naughty points and decide whether or not to hang up
+	if err != nil {
+		return
+	}
+
+	// Serialize the item
+	ser, ok := item.Item.(types.Serializeable)
+	if !ok {
+		g.hangUp(s, fmt.Errorf("Item in database cannot be serialized"))
+	}
+
+	vb := types.NewVariableBlob()
+	vb = ser.Serialize(vb)
+
+	// Send the requested item to peer
+	t := gossipTransmit{Type: gr.Type, Value: *vb}
+	message := gossipMessage{Message: t}
+	encoder := cbor.NewEncoder(s)
+	err = encoder.Encode(&message)
+	if err != nil {
+		g.hangUp(s, err)
+		return
+	}
+}
+
+func (g *GossipProtocol) processGossipTransmit(s network.Stream, gt *gossipTransmit) {
+	var ok bool
+	var err error
+
+	switch gt.Type {
+	case blockType:
+		_, block, err := types.DeserializeBlock(&gt.Value)
+		if err != nil {
+			g.hangUp(s, err)
+		}
+
+		ok, err = g.Data.RPC.ApplyBlock(block)
+
+	case transactionType:
+		_, transaction, err := types.DeserializeTransaction(&gt.Value)
+		if err != nil {
+			g.hangUp(s, err)
+		}
+
+		ok, err = g.Data.RPC.ApplyTransaction(transaction)
+
+	default:
+		ok = false
+		err = fmt.Errorf("Unknown message type")
+	}
+
+	if err != nil {
+		g.hangUp(s, err)
+		return
+	}
+
+	if !ok {
+		g.hangUp(s, fmt.Errorf("Failed to apply object"))
 	}
 }
 
@@ -111,6 +237,11 @@ func (g *GossipProtocol) InitiateProtocol(ctx context.Context, p peer.ID) {
 	s, _ := g.Data.Host.NewStream(ctx, p, broadcastID)
 
 	g.handleStream(s)
+}
+
+func (g *GossipProtocol) hangUp(s network.Stream, err error) {
+	s.Reset()
+	g.CloseProtocol()
 }
 
 // CloseProtocol closes a running gossip mode cleanly

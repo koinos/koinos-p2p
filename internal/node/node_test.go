@@ -38,7 +38,7 @@ func (k *TestRPC) ApplyBlock(block *types.Block) (bool, error) {
 	return true, nil
 }
 
-func (k *TestRPC) ApplyTransaction(block *types.Block) (bool, error) {
+func (k *TestRPC) ApplyTransaction(block *types.Transaction) (bool, error) {
 	return true, nil
 }
 

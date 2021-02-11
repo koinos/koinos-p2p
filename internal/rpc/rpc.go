@@ -8,7 +8,7 @@ import (
 type RPC interface {
 	GetHeadBlock() (*koinos_types.HeadInfo, error)
 	ApplyBlock(block *koinos_types.Block) (bool, error)
-	ApplyTransaction(block *koinos_types.Block) (bool, error)
+	ApplyTransaction(block *koinos_types.Transaction) (bool, error)
 	GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.BlockHeightType, numBlocks koinos_types.UInt32) (*koinos_types.GetBlocksByHeightResp, error)
 	GetChainID() (*koinos_types.GetChainIDResult, error)
 }
