@@ -28,7 +28,7 @@ type nodeProtocols struct {
 func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 	np := new(nodeProtocols)
 
-	data := protocol.Data{Inventory: &node.Inventory, RPC: node.RPC, Host: node.Host}
+	data := protocol.Data{Inventory: node.Inventory, RPC: node.RPC, Host: node.Host}
 
 	np.Sync = *protocol.NewSyncProtocol(&data)
 	node.registerProtocol(np.Sync)
@@ -42,7 +42,7 @@ func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
 	Host      host.Host
-	Inventory inventory.Inventory
+	Inventory *inventory.Inventory
 	Protocols nodeProtocols
 	RPC       rpc.RPC
 }
@@ -77,8 +77,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node := new(KoinosP2PNode)
 	node.Host = host
 	node.RPC = rpc
+	node.Inventory = inventory.NewInventory(time.Minute * time.Duration(30))
 	node.Protocols = *newNodeProtocols(node)
-	node.Inventory = *inventory.NewInventory(time.Minute * time.Duration(30))
 
 	return node, nil
 }

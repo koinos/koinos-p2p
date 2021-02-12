@@ -33,6 +33,7 @@ type idAdvertise struct {
 
 type gossipTransmit struct {
 	Type  idType
+	ID    types.Multihash
 	Value types.VariableBlob
 }
 
@@ -59,8 +60,12 @@ func (g *GossipProtocol) GetProtocolRegistration() (pid protocol.ID, handler net
 }
 
 func (g *GossipProtocol) writeHandler(s network.Stream) {
-	ch := g.Data.Inventory.EnableGossipChannel()
-	defer g.Data.Inventory.DisableGossipChannel()
+	ch := make(chan *inventory.Item)
+
+	g.Data.Inventory.EnableGossipChannel(ch)
+	defer g.Data.Inventory.DisableGossipChannel(ch)
+	defer close(ch)
+
 	encoder := cbor.NewEncoder(s)
 
 	for {
@@ -84,7 +89,7 @@ func (g *GossipProtocol) writeHandler(s network.Stream) {
 
 		message := gossipMessage{Message: advert}
 
-		err := encoder.Encode(&message)
+		err := encoder.Encode(message)
 		if err != nil {
 			g.hangUp(s, err)
 			return
@@ -98,7 +103,7 @@ func (g *GossipProtocol) readHandler(s network.Stream) {
 	for {
 		// Receive broadcast from peer
 		gm := gossipMessage{}
-		err := decoder.Decode(gm)
+		err := decoder.Decode(&gm)
 		log.Print("Received gossip from peer")
 		if err != nil {
 			s.Reset()
@@ -143,7 +148,7 @@ func (g *GossipProtocol) processIDBroadcast(s network.Stream, ib *idAdvertise) {
 	req := gossipRequest{ID: ib.ID, Type: ib.Type}
 	message := gossipMessage{Message: req}
 	encoder := cbor.NewEncoder(s)
-	err := encoder.Encode(&message)
+	err := encoder.Encode(message)
 	if err != nil {
 		g.hangUp(s, err)
 		return
@@ -179,10 +184,10 @@ func (g *GossipProtocol) processGossipRequest(s network.Stream, gr *gossipReques
 	vb = ser.Serialize(vb)
 
 	// Send the requested item to peer
-	t := gossipTransmit{Type: gr.Type, Value: *vb}
+	t := gossipTransmit{Type: gr.Type, Value: *vb, ID: item.ID}
 	message := gossipMessage{Message: t}
 	encoder := cbor.NewEncoder(s)
-	err = encoder.Encode(&message)
+	err = encoder.Encode(message)
 	if err != nil {
 		g.hangUp(s, err)
 		return
@@ -192,6 +197,8 @@ func (g *GossipProtocol) processGossipRequest(s network.Stream, gr *gossipReques
 func (g *GossipProtocol) processGossipTransmit(s network.Stream, gt *gossipTransmit) {
 	var ok bool
 	var err error
+	var store *inventory.Store
+	var item *inventory.Item
 
 	switch gt.Type {
 	case blockType:
@@ -201,6 +208,8 @@ func (g *GossipProtocol) processGossipTransmit(s network.Stream, gt *gossipTrans
 		}
 
 		ok, err = g.Data.RPC.ApplyBlock(block)
+		store = &g.Data.Inventory.Blocks
+		item = inventory.NewInventoryItem(gt.ID, block)
 
 	case transactionType:
 		_, transaction, err := types.DeserializeTransaction(&gt.Value)
@@ -209,6 +218,8 @@ func (g *GossipProtocol) processGossipTransmit(s network.Stream, gt *gossipTrans
 		}
 
 		ok, err = g.Data.RPC.ApplyTransaction(transaction)
+		store = &g.Data.Inventory.Transactions
+		item = inventory.NewInventoryItem(gt.ID, transaction)
 
 	default:
 		ok = false
@@ -222,6 +233,12 @@ func (g *GossipProtocol) processGossipTransmit(s network.Stream, gt *gossipTrans
 
 	if !ok {
 		g.hangUp(s, fmt.Errorf("Failed to apply object"))
+		return
+	}
+
+	// Now we add the object to our inventory
+	if err := store.Add(item); err != nil {
+		g.hangUp(s, err)
 	}
 }
 
@@ -246,5 +263,5 @@ func (g *GossipProtocol) hangUp(s network.Stream, err error) {
 
 // CloseProtocol closes a running gossip mode cleanly
 func (g *GossipProtocol) CloseProtocol() {
-	g.Data.Inventory.DisableGossipChannel()
+	//g.Data.Inventory.DisableGossipChannel()
 }

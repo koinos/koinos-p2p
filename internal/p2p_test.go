@@ -2,9 +2,11 @@ package protocol
 
 import (
 	"context"
+	"crypto/md5"
 	"testing"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/inventory"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
@@ -221,6 +223,45 @@ func TestGossipNoError(t *testing.T) {
 	sendNode.Protocols.Gossip.InitiateProtocol(context.Background(), peer.ID)
 
 	time.Sleep(time.Duration(30) * time.Duration(time.Millisecond))
+
+	sendNode.Protocols.Gossip.CloseProtocol()
+}
+
+func makeTestItem(payload types.Serializeable) *inventory.Item {
+	mh := types.NewMultihash()
+	vb := types.NewVariableBlob()
+	sum := md5.Sum(*payload.Serialize(vb))
+	mh.Digest = types.VariableBlob(sum[:])
+
+	ii := inventory.NewInventoryItem(*mh, payload)
+
+	return ii
+}
+
+func TestGossip(t *testing.T) {
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(128)
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
+
+	sendNode.Protocols.Gossip.InitiateProtocol(context.Background(), peer.ID)
+
+	time.Sleep(time.Duration(30) * time.Duration(time.Millisecond))
+
+	// Add a block to a node's inventory
+	ib := makeTestItem(*types.NewBlock())
+	listenNode.Inventory.Blocks.Add(ib)
+
+	time.Sleep(time.Duration(100) * time.Duration(time.Millisecond))
+
+	// Make sure it's there in the other node (has been gossiped)
+	if !sendNode.Inventory.Blocks.Contains(&ib.ID) {
+		t.Error("Peer did not receive block via gossip")
+	}
 
 	sendNode.Protocols.Gossip.CloseProtocol()
 }
