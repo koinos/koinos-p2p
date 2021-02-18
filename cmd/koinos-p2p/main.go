@@ -26,7 +26,7 @@ func main() {
 	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8889", "The multiaddress on which the node will listen")
 	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
 	var peer = flag.String("peer", "", "Address of a peer to which to connect")
-	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5673/", "AMQP server URL")
+	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
 
 	flag.Parse()
 
