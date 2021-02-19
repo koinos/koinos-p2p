@@ -48,22 +48,33 @@ func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 func (m *SyncManager) AddPeer(peer peer.ID) error {
 	log.Printf("connecting to peer for sync: %v", peer)
 
+	// TODO: Add timeout via CallContext
 	peerChainID := GetChainIDResponse{}
 	err := m.client.Call(peer, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
 	if err != nil {
+		log.Printf("%v: error getting peer chain id, %v", peer, err)
 		return err
 	}
 
 	chainID, err := m.rpc.GetChainID()
+	if err != nil {
+		log.Printf("%v: error getting chain id, %v", peer, err)
+	}
+
 	if !chainID.ChainID.Equals(&peerChainID.ChainID) {
 		log.Printf("%v: peer's chain id does not match", peer)
 		return fmt.Errorf("%v: peer's chain id does not match", peer)
 	}
 
 	headBlock, err := m.rpc.GetHeadBlock()
+	if err != nil {
+		log.Printf("%v: error getting head block, %v", peer, err)
+	}
+
 	peerForkStatus := GetForkStatusResponse{}
 	err = m.client.Call(peer, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
 	if err != nil {
+		log.Printf("%v: error getting peer fork status, %v", peer, err)
 		return err
 	}
 
