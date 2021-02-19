@@ -15,7 +15,9 @@ import (
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
 	peerstore "github.com/libp2p/go-libp2p-core/peer"
+	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
@@ -30,8 +32,8 @@ func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 
 	data := protocol.Data{Inventory: &node.Inventory, RPC: node.RPC, Host: node.Host}
 
-	np.Sync = *protocol.NewSyncProtocol(&data)
-	node.registerProtocol(np.Sync)
+	//np.Sync = *protocol.NewSyncProtocol(&data)
+	//node.registerProtocol(np.Sync)
 
 	np.Gossip = *protocol.NewGossipProtocol(&data)
 	node.registerProtocol(&np.Gossip)
@@ -41,10 +43,12 @@ func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
-	Host      host.Host
-	Inventory inventory.Inventory
-	Protocols nodeProtocols
-	RPC       rpc.RPC
+	Host        host.Host
+	Inventory   inventory.Inventory
+	Protocols   nodeProtocols
+	RPC         rpc.RPC
+	SyncServer  *gorpc.Server
+	SyncManager *protocol.SyncManager
 }
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
@@ -79,6 +83,14 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.RPC = rpc
 	node.Protocols = *newNodeProtocols(node)
 	node.Inventory = *inventory.NewInventory(time.Minute * time.Duration(30))
+	node.SyncServer = gorpc.NewServer(host, protocol.SyncID)
+	err = node.SyncServer.Register(&protocol.SyncService{})
+	if err != nil {
+		return nil, err
+	}
+
+	node.SyncManager = protocol.NewSyncManager(node.Host, node.RPC)
+	node.SyncManager.Start()
 
 	return node, nil
 }
@@ -89,7 +101,8 @@ func (n *KoinosP2PNode) registerProtocol(p protocol.Protocol) {
 }
 
 // ConnectToPeer connects the node to the given peer
-func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peerstore.AddrInfo, error) {
+func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
+
 	addr, err := multiaddr.NewMultiaddr(peerAddr)
 	if err != nil {
 		return nil, err
@@ -102,6 +115,11 @@ func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peerstore.AddrInfo, err
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := n.Host.Connect(ctx, *peer); err != nil {
+		return nil, err
+	}
+
+	err = n.SyncManager.AddPeer(peer.ID)
+	if err != nil {
 		return nil, err
 	}
 

@@ -1,44 +1,92 @@
 package protocol
 
-import "sync"
+import (
+	"fmt"
+	"log"
+	"sync"
 
-type syncMessage struct {
-	id   string
-	data interface{}
-}
+	"github.com/koinos/koinos-p2p/internal/rpc"
 
-type syncManager struct {
-	fromStream chan syncMessage
-	newStream  *sync.Cond
-	streams    map[string]chan interface{}
-	streamLock sync.Locker
-}
+	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/peer"
 
-var (
-	managerInstance syncManager
-	once            sync.Once
+	gorpc "github.com/libp2p/go-libp2p-gorpc"
 )
 
-func getSyncManager() *syncManager {
-	once.Do(func() {
-		managerInstance.newStream = sync.NewCond(&sync.Mutex{})
-		managerInstance.streams = make(map[string]chan interface{})
-		managerInstance.streamLock = &sync.Mutex{}
-		go managerInstance.run()
-	})
+// SyncID Identifies the koinos sync protocol
+const SyncID = "/koinos/sync/1.0.0"
 
-	return &managerInstance
+// SyncManager syncs blocks using multiple peers
+type SyncManager struct {
+	server *gorpc.Server
+	client *gorpc.Client
+	rpc    rpc.RPC
+
+	peers    []peer.ID
+	peerLock sync.Locker
 }
 
-func (m *syncManager) registerSyncStream(id string, toStream chan interface{}) chan syncMessage {
-	m.streamLock.Lock()
-	defer m.streamLock.Unlock()
+// NewSyncManager factory
+func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 
-	m.streams[id] = toStream
+	manager := SyncManager{
+		server:   gorpc.NewServer(h, SyncID),
+		client:   gorpc.NewClient(h, SyncID),
+		rpc:      rpc,
+		peerLock: &sync.Mutex{},
+	}
 
-	return m.fromStream
+	err := manager.server.Register(NewSyncService(&rpc))
+	if err != nil {
+		panic(err)
+	}
+
+	return &manager
 }
 
-func (m *syncManager) run() {
+// AddPeer to manager to begin requesting blocks from
+func (m *SyncManager) AddPeer(peer peer.ID) error {
+	log.Printf("connecting to peer for sync: %v", peer)
+
+	peerChainID := GetChainIDResponse{}
+	err := m.client.Call(peer, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
+	if err != nil {
+		return err
+	}
+
+	chainID, err := m.rpc.GetChainID()
+	if !chainID.ChainID.Equals(&peerChainID.ChainID) {
+		log.Printf("%v: peer's chain id does not match", peer)
+		return fmt.Errorf("%v: peer's chain id does not match", peer)
+	}
+
+	headBlock, err := m.rpc.GetHeadBlock()
+	peerForkStatus := GetForkStatusResponse{}
+	err = m.client.Call(peer, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
+	if err != nil {
+		return err
+	}
+
+	if peerForkStatus.Status == DifferentFork {
+		log.Printf("%v: peer is on a different fork", peer)
+		return fmt.Errorf("%v: peer is on a different fork", peer)
+	}
+
+	m.peerLock.Lock()
+	defer m.peerLock.Unlock()
+
+	m.peers = append(m.peers, peer)
+
+	log.Printf("%v: connected!", peer)
+
+	return nil
+}
+
+func (m *SyncManager) run() {
 	// TODO: Implement sync manager algorithm here
+}
+
+// Start syncing blocks from peers
+func (m *SyncManager) Start() {
+	go m.run()
 }

@@ -13,8 +13,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 )
 
-const syncID = "/koinos/sync/1.0.0"
-
 const batchSize types.UInt64 = 20 // TODO: consider how to tune this and/or make it customizable
 
 // BroadcastPeerStatus is an enum which represent peer's response
@@ -54,7 +52,7 @@ func NewSyncProtocol(data *Data) *SyncProtocol {
 
 // GetProtocolRegistration returns the registration information
 func (c SyncProtocol) GetProtocolRegistration() (pid protocol.ID, handler network.StreamHandler) {
-	return syncID, c.handleStream
+	return SyncID, c.handleStream
 }
 
 func min(a, b types.UInt64) types.UInt64 {
@@ -159,7 +157,7 @@ func (c SyncProtocol) handleStream(s network.Stream) {
 
 	response := forkCheckResponse{
 		StartHeight: senderHeadBlock.Height,
-		Status: SameFork,
+		Status:      SameFork,
 	}
 
 	// If peer is not in genesis state, check if they are on an ancestor chain of our's
@@ -239,7 +237,7 @@ func (c SyncProtocol) InitiateProtocol(ctx context.Context, p peer.ID, errs chan
 	log.Printf("connected to peer to sync: %v", p)
 
 	// Start a stream with the given peer
-	s, err := c.Data.Host.NewStream(ctx, p, syncID)
+	s, err := c.Data.Host.NewStream(ctx, p, SyncID)
 	if err != nil {
 		s.Reset()
 		errs <- err
