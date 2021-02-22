@@ -24,21 +24,23 @@ func getChannelError(errs chan error) error {
 }
 
 /**
- * AppendFlag is a helper for the golang flag module (import "flag") that lets you specify a flag multiple times.
+ * appendFlag is a helper for the golang flag module (import "flag") that lets you specify a flag multiple times.
+ *
+ * Golint doesn't like it when we export appendFlag, so we don't export it.
  */
-type AppendFlag []string
+type appendFlag []string
 
-func (a *AppendFlag) Set(value string) error {
+func (a *appendFlag) Set(value string) error {
 	*a = append(*a, value)
 	return nil
 }
 
-func (a *AppendFlag) String() string {
+func (a *appendFlag) String() string {
 	return strings.Join(*a, ",")
 }
 
 func main() {
-	var peerFlags AppendFlag
+	var peerFlags appendFlag
 	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8889", "The multiaddress on which the node will listen")
 	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
 	flag.Var(&peerFlags, "peer", "Address of a peer to which to connect (may specify multiple)")
