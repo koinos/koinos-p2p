@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
@@ -22,11 +23,27 @@ func getChannelError(errs chan error) error {
 	}
 }
 
+/**
+ * AppendFlag is a helper for the golang flag module (import "flag") that lets you specify a flag multiple times.
+ */
+type AppendFlag []string
+
+func (a *AppendFlag) Set(value string) error {
+	*a = append(*a, value)
+	return nil
+}
+
+func (a *AppendFlag) String() string {
+	return strings.Join(*a, ",")
+}
+
 func main() {
-	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8889", "The multiaddress on which the node will listen")
+	var peerFlags AppendFlag
+	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
 	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
-	var peer = flag.String("peer", "/ip4/127.0.0.1/tcp/8888/p2p/Qmeq45rCLjFt573aFKgLrcAmAMSmYy9WXTuetDsELM2r8m", "Address of a peer to which to connect")
-	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5673/", "AMQP server URL")
+	flag.Var(&peerFlags, "peer", "Address of a peer to which to connect (may specify multiple)")
+	flag.Var(&peerFlags, "p", "Address of a peer to which to connect (may specify multiple) (short)")
+	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
 
 	flag.Parse()
 
@@ -40,19 +57,14 @@ func main() {
 	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
 
 	// Connect to a peer
-	if *peer != "" {
-		log.Println("Connecting to peer and sending broadcast")
-		_, err := host.ConnectToPeer(*peer)
-		if err != nil {
-			panic(err)
+	for _, pid := range peerFlags {
+		if pid != "" {
+			log.Printf("Connecting to peer %s and sending broadcast\n", pid)
+			_, err := host.ConnectToPeer(pid)
+			if err != nil {
+				panic(err)
+			}
 		}
-
-		//errs := make(chan error, 1)
-		//host.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-		//err = getChannelError(errs)
-		//if err != nil {
-		//	panic(err)
-		//}
 	}
 
 	// Wait for a SIGINT or SIGTERM signal
