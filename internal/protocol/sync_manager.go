@@ -125,11 +125,6 @@ func (m *SyncManager) AddPeer(peer peer.ID) error {
 	return nil
 }
 
-func remove(s []int, i int) []int {
-	s[i] = s[len(s)-1]
-	return s[:len(s)-1]
-}
-
 func createBlockRequests(headBlock uint64, targetSyncBlock uint64, requestQueue chan BatchBlockRequest) {
 	currentBlock := uint64(headBlock)
 	currentBatchSize := batchSize
