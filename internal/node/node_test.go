@@ -61,8 +61,8 @@ func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Block
 }
 
 // GetChainID rpc call
-func (k *TestRPC) GetChainID() (*types.GetChainIDResult, error) {
-	mh := types.NewGetChainIDResult()
+func (k *TestRPC) GetChainID() (*types.GetChainIDResponse, error) {
+	mh := types.NewGetChainIDResponse()
 	mh.ChainID.ID = k.ChainID
 	return mh, nil
 }

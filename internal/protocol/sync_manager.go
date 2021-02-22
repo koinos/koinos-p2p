@@ -24,7 +24,7 @@ const SyncID = "/koinos/sync/1.0.0"
 
 const (
 	batchSize     = uint64(20)
-	syncDelta     = uint64(0)
+	syncDelta     = uint64(1)
 	maxBlockDelta = uint64(10000)
 )
 
@@ -133,6 +133,10 @@ func remove(s []int, i int) []int {
 func createBlockRequests(headBlock uint64, targetSyncBlock uint64, requestQueue chan BatchBlockRequest) {
 	currentBlock := uint64(headBlock)
 	currentBatchSize := batchSize
+
+	if currentBlock+batchSize > targetSyncBlock {
+		currentBatchSize = targetSyncBlock - currentBlock
+	}
 
 	for currentBlock <= targetSyncBlock {
 		requestQueue <- BatchBlockRequest{
@@ -316,7 +320,8 @@ func (m *SyncManager) run() {
 				log.Printf("%v: error getting peer head block, disconnecting from peer", peer)
 				peersToDisconnect[peer] = void{}
 			} else {
-				if peerHeadBlock.Height <= headBlock.Height-types.BlockHeightType(syncDelta) {
+				log.Print(peerHeadBlock.Height)
+				if peerHeadBlock.Height <= headBlock.Height+types.BlockHeightType(syncDelta) {
 					peersToGossip[peer] = void{}
 				} else if uint64(peerHeadBlock.Height) < smallestHeadBlock {
 					smallestHeadBlock = uint64(peerHeadBlock.Height)
