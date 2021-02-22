@@ -47,6 +47,7 @@ type KoinosGossip struct {
 	node        *KoinosP2PNode
 	Block       *gossipManager
 	Transaction *gossipManager
+	PubSub      *pubsub.PubSub
 }
 
 func NewKoinosGossip(ctx context.Context, node *KoinosP2PNode) (*KoinosGossip, error) {
@@ -65,7 +66,7 @@ func NewKoinosGossip(ctx context.Context, node *KoinosP2PNode) (*KoinosGossip, e
 		return nil, err
 	}
 
-	kg := KoinosGossip{node: node, Block: block, Transaction: transaction}
+	kg := KoinosGossip{node: node, Block: block, Transaction: transaction, PubSub: ps}
 
 	return &kg, nil
 }
