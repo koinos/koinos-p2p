@@ -44,6 +44,7 @@ type KoinosP2PNode struct {
 	Host      host.Host
 	Inventory inventory.Inventory
 	Protocols nodeProtocols
+	Gossip    *KoinosGossip
 	RPC       rpc.RPC
 }
 
@@ -79,6 +80,11 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.RPC = rpc
 	node.Protocols = *newNodeProtocols(node)
 	node.Inventory = *inventory.NewInventory(time.Minute * time.Duration(30))
+
+	node.Gossip, err = NewKoinosGossip(ctx, node)
+	if err != nil {
+		return nil, err
+	}
 
 	return node, nil
 }
