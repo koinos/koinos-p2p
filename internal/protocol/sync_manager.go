@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -22,7 +23,9 @@ import (
 const SyncID = "/koinos/sync/1.0.0"
 
 const (
-	batchSize = uint64(20)
+	batchSize     = uint64(20)
+	syncDelta     = uint64(0)
+	maxBlockDelta = uint64(10000)
 )
 
 // BatchBlockRequest a batch block request
@@ -37,10 +40,12 @@ type SyncManager struct {
 	client *gorpc.Client
 	rpc    rpc.RPC
 
-	peers      []peer.ID
+	peers      map[peer.ID]void
 	peerLock   sync.Locker
 	peerSignal *sync.Cond
 }
+
+type void struct{}
 
 // NewSyncManager factory
 func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
@@ -49,6 +54,7 @@ func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 		server:     gorpc.NewServer(h, SyncID),
 		client:     gorpc.NewClient(h, SyncID),
 		rpc:        rpc,
+		peers:      make(map[peer.ID]void),
 		peerLock:   &sync.Mutex{},
 		peerSignal: sync.NewCond(&sync.Mutex{}),
 	}
@@ -65,12 +71,15 @@ func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 func (m *SyncManager) AddPeer(peer peer.ID) error {
 	log.Printf("connecting to peer for sync: %v", peer)
 
-	// TODO: Add timeout via CallContext
 	peerChainID := GetChainIDResponse{}
-	err := m.client.Call(peer, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
-	if err != nil {
-		log.Printf("%v: error getting peer chain id, %v", peer, err)
-		return err
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		err := m.client.CallContext(ctx, peer, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
+		if err != nil {
+			log.Printf("%v: error getting peer chain id, %v", peer, err)
+			return err
+		}
 	}
 
 	chainID, err := m.rpc.GetChainID()
@@ -90,10 +99,14 @@ func (m *SyncManager) AddPeer(peer peer.ID) error {
 	}
 
 	peerForkStatus := GetForkStatusResponse{}
-	err = m.client.Call(peer, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
-	if err != nil {
-		log.Printf("%v: error getting peer fork status, %v", peer, err)
-		return err
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		err = m.client.CallContext(ctx, peer, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
+		if err != nil {
+			log.Printf("%v: error getting peer fork status, %v", peer, err)
+			return err
+		}
 	}
 
 	if peerForkStatus.Status == DifferentFork {
@@ -104,7 +117,7 @@ func (m *SyncManager) AddPeer(peer peer.ID) error {
 	m.peerLock.Lock()
 	defer m.peerLock.Unlock()
 
-	m.peers = append(m.peers, peer)
+	m.peers[peer] = void{}
 	m.peerSignal.Signal()
 
 	log.Printf("%v: connected!", peer)
@@ -118,12 +131,12 @@ func remove(s []int, i int) []int {
 }
 
 func createBlockRequests(headBlock uint64, targetSyncBlock uint64, requestQueue chan BatchBlockRequest) {
-	currentBlock := uint64(headBlock) + 1
+	currentBlock := uint64(headBlock)
 	currentBatchSize := batchSize
 
-	for currentBlock < targetSyncBlock {
+	for currentBlock <= targetSyncBlock {
 		requestQueue <- BatchBlockRequest{
-			StartBlockHeight: types.BlockHeightType(currentBlock),
+			StartBlockHeight: types.BlockHeightType(currentBlock) + 1,
 			BatchSize:        types.UInt64(currentBatchSize),
 		}
 
@@ -134,9 +147,7 @@ func createBlockRequests(headBlock uint64, targetSyncBlock uint64, requestQueue 
 	}
 }
 
-func applyBlocks(headBlock types.BlockHeightType, rpc rpc.RPC, requestQueue chan BatchBlockRequest, responseQueue chan BlockBatch, doneChan chan int) {
-	defer close(doneChan)
-	defer close(requestQueue)
+func applyBlocks(headBlock uint64, targetSyncBlock uint64, rpc rpc.RPC, requestQueue chan BatchBlockRequest, responseQueue chan BlockBatch, doneChan chan int) {
 	blockHeap := &BlockBatchHeap{}
 	heap.Init(blockHeap)
 
@@ -145,7 +156,7 @@ func applyBlocks(headBlock types.BlockHeightType, rpc rpc.RPC, requestQueue chan
 		heap.Push(blockHeap, resp)
 
 		// While the heap's head is <= head block + 1, pop and apply.
-		for len(*blockHeap) > 0 && (*blockHeap)[0].StartBlockHeight <= headBlock+1 {
+		for len(*blockHeap) > 0 && uint64((*blockHeap)[0].StartBlockHeight) <= headBlock+1 {
 			batch := heap.Pop(blockHeap).(BlockBatch)
 			_, blocks, err := types.DeserializeVectorBlockItem(batch.VectorBlockItems)
 			if err != nil {
@@ -177,30 +188,33 @@ func applyBlocks(headBlock types.BlockHeightType, rpc rpc.RPC, requestQueue chan
 					break
 				}
 
-				if topology.Height > headBlock {
-					headBlock = topology.Height
+				if uint64(topology.Height) > headBlock {
+					headBlock = uint64(topology.Height)
 				}
 			}
+		}
+
+		if headBlock >= targetSyncBlock {
+			doneChan <- 0
+			return
 		}
 	}
 }
 
 func fetchBlocksFromPeer(peer peer.ID, headBlockID types.Multihash, client *gorpc.Client, requestQueue chan BatchBlockRequest, responseQueue chan BlockBatch) {
-	//parent := context.Background()
 	request := GetBlocksRequest{
 		HeadBlockID: headBlockID,
 	}
 
 	for batch := range requestQueue {
-		log.Printf("%v: Request blocks from peer %v-%v", peer, batch.StartBlockHeight, batch.StartBlockHeight+types.BlockHeightType(batch.BatchSize-1))
+		log.Printf("request blocks %v-%v from peer %v", batch.StartBlockHeight, batch.StartBlockHeight+types.BlockHeightType(batch.BatchSize-1), peer)
 		request.StartBlockHeight = batch.StartBlockHeight
 		request.BatchSize = batch.BatchSize
 		response := GetBlocksResponse{}
 
-		//ctx, cancel := context.WithTimeout(parent, 1*time.Second)
-		//defer cancel()
-		//err := client.CallContext(ctx, peer, "SyncService", "GetBlocks", request, &response)
-		err := client.Call(peer, "SyncService", "GetBlocks", request, &response)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		err := client.CallContext(ctx, peer, "SyncService", "GetBlocks", request, &response)
 		if err != nil {
 			requestQueue <- batch
 			time.Sleep(time.Duration(1000000000 + rand.Int31()%1000000000))
@@ -230,39 +244,69 @@ func (m *SyncManager) run() {
 		}
 		smallestHeadBlock := ^uint64(0)
 		peerHeads := make(map[peer.ID]types.Multihash)
+		peersToDisconnect := make(map[peer.ID]void)
+		peersToGossip := make(map[peer.ID]void)
 
-		for _, peer := range peers {
+		for peer := range peers {
 			peerHeadBlock := GetHeadBlockResponse{}
-			err := m.client.Call(peer, "SyncService", "GetHeadBlock", GetHeadBlockRequest{}, &peerHeadBlock)
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+			err := m.client.CallContext(ctx, peer, "SyncService", "GetHeadBlock", GetHeadBlockRequest{}, &peerHeadBlock)
 			if err != nil {
 				log.Printf("%v: error getting peer head block, disconnecting from peer", peer)
-				// TODO: Remove peer
-			}
+				peersToDisconnect[peer] = void{}
+			} else {
+				if peerHeadBlock.Height <= headBlock.Height-types.BlockHeightType(syncDelta) {
+					peersToGossip[peer] = void{}
+				} else if uint64(peerHeadBlock.Height) < smallestHeadBlock {
+					smallestHeadBlock = uint64(peerHeadBlock.Height)
+				}
 
-			if peerHeadBlock.Height <= headBlock.Height {
-				// TODO: Remove peer / move them to gossip
-			} else if uint64(peerHeadBlock.Height) < smallestHeadBlock {
-				smallestHeadBlock = uint64(peerHeadBlock.Height)
+				peerHeads[peer] = peerHeadBlock.ID
 			}
-
-			peerHeads[peer] = peerHeadBlock.ID
 		}
 
-		//targetSyncBlock := (smallestHeadBlock - types.UInt64(headBlock.Height)) / 2
-		targetSyncBlock := smallestHeadBlock
+		m.peerLock.Lock()
+		for peer := range peersToGossip {
+			log.Printf("synced with peer %v, moving to gossip", peer)
+			// TODO: Send to gossip
+			delete(m.peers, peer)
+			delete(peers, peer)
+		}
+		for peer := range peersToDisconnect {
+			log.Printf("disconnecting from peer %v", peer)
+			// TODO: Trigger disconnect?
+			delete(m.peers, peer)
+			delete(peers, peer)
+		}
+		m.peerLock.Unlock()
+
+		if len(peers) == 0 {
+			continue
+		}
+
+		blockDelta := (smallestHeadBlock - uint64(headBlock.Height)) / 2
+		if blockDelta > maxBlockDelta {
+			blockDelta = maxBlockDelta
+		}
+		targetSyncBlock := uint64(headBlock.Height) + blockDelta
 		requestQueue := make(chan BatchBlockRequest, len(peers))
 		responseQueue := make(chan BlockBatch, len(peers))
 		doneChan := make(chan int)
+		defer close(requestQueue)
+		defer close(responseQueue)
+		defer close(doneChan)
+
+		log.Printf("target sync block is %v", targetSyncBlock)
 
 		go createBlockRequests(uint64(headBlock.Height), targetSyncBlock, requestQueue)
-		go applyBlocks(headBlock.Height, m.rpc, requestQueue, responseQueue, doneChan)
+		go applyBlocks(uint64(headBlock.Height), targetSyncBlock, m.rpc, requestQueue, responseQueue, doneChan)
 
-		for _, peer := range peers {
+		for peer := range peers {
 			go fetchBlocksFromPeer(peer, peerHeads[peer], m.client, requestQueue, responseQueue)
 		}
 
 		<-doneChan
-		close(responseQueue)
 	}
 }
 
