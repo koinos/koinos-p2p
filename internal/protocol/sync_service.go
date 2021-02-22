@@ -16,6 +16,24 @@ type GetChainIDResponse struct {
 	ChainID types.Multihash
 }
 
+// GetHeadBlockRequest args
+type GetHeadBlockRequest struct{}
+
+// GetHeadBlockResponse return
+type GetHeadBlockResponse struct {
+	ID     types.Multihash
+	Height types.BlockHeightType
+}
+
+// BroadcastPeerStatus is an enum which represent peer's response
+type forkStatus int
+
+// The possible peer status results
+const (
+	SameFork forkStatus = iota
+	DifferentFork
+)
+
 // GetForkStatusRequest args
 type GetForkStatusRequest struct {
 	HeadID     types.Multihash
@@ -29,7 +47,7 @@ type GetForkStatusResponse struct {
 
 // GetBlocksRequest args
 type GetBlocksRequest struct {
-	StartBlockID     types.Multihash
+	HeadBlockID      types.Multihash
 	StartBlockHeight types.BlockHeightType
 	BatchSize        types.UInt64
 }
@@ -55,6 +73,18 @@ func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest,
 	return nil
 }
 
+// GetHeadBlock p2p rpc
+func (s *SyncService) GetHeadBlock(ctx context.Context, request GetHeadBlockRequest, response *GetHeadBlockResponse) error {
+	rpcResult, err := s.RPC.GetHeadBlock()
+	if err != nil {
+		return nil
+	}
+
+	response.ID = rpcResult.ID
+	response.Height = rpcResult.Height
+	return nil
+}
+
 // GetForkStatus p2p rpc
 func (s *SyncService) GetForkStatus(ctx context.Context, request GetForkStatusRequest, response *GetForkStatusResponse) error {
 	response.Status = SameFork
@@ -77,8 +107,8 @@ func (s *SyncService) GetForkStatus(ctx context.Context, request GetForkStatusRe
 
 // GetBlocks p2p rpc
 func (s *SyncService) GetBlocks(ctx context.Context, request GetBlocksRequest, response *GetBlocksResponse) error {
-	blocks, err := s.RPC.GetBlocksByHeight(&request.StartBlockID,
-		request.StartBlockHeight, types.UInt32(min(batchSize, request.BatchSize)))
+	blocks, err := s.RPC.GetBlocksByHeight(&request.HeadBlockID,
+		request.StartBlockHeight, types.UInt32(request.BatchSize))
 	if err != nil {
 		return err
 	}

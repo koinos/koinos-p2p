@@ -22,7 +22,7 @@ import (
 )
 
 type nodeProtocols struct {
-	Sync   protocol.SyncProtocol
+	//Sync   protocol.SyncProtocol
 	Gossip protocol.GossipProtocol
 }
 
