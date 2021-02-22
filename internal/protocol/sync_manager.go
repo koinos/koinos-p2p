@@ -228,6 +228,66 @@ func fetchBlocksFromPeer(peer peer.ID, headBlockID types.Multihash, client *gorp
 	}
 }
 
+func (m *SyncManager) syncFork(targetSyncBlock uint64, headBlock *types.HeadInfo, peers map[peer.ID]void, peerHeads map[peer.ID]types.Multihash, doneChan chan int) {
+	requestQueue := make(chan BatchBlockRequest, len(peers))
+	responseQueue := make(chan BlockBatch, len(peers))
+	syncDone := make(chan int)
+	defer close(requestQueue)
+	defer close(responseQueue)
+	defer close(syncDone)
+
+	log.Printf("target sync block is %v", targetSyncBlock)
+
+	go createBlockRequests(uint64(headBlock.Height), targetSyncBlock, requestQueue)
+	go applyBlocks(uint64(headBlock.Height), targetSyncBlock, m.rpc, requestQueue, responseQueue, doneChan)
+
+	for peer := range peers {
+		go fetchBlocksFromPeer(peer, peerHeads[peer], m.client, requestQueue, responseQueue)
+	}
+
+	<-syncDone
+	doneChan <- 0
+}
+
+func (m *SyncManager) getPeerForks(targetSyncBlock uint64, peers map[peer.ID]void, peerHeads map[peer.ID]types.Multihash) map[string]map[peer.ID]void {
+	peerForks := make(map[string]map[peer.ID]void)
+	for p := range peers {
+		peerForkBlockRequest := GetBlocksRequest{
+			HeadBlockID:      peerHeads[p],
+			StartBlockHeight: types.BlockHeightType(targetSyncBlock),
+			BatchSize:        1,
+		}
+		peerForkBlock := GetBlocksResponse{}
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		err := m.client.CallContext(ctx, p, "SyncService", "GetBlocks", peerForkBlockRequest, &peerForkBlock)
+		if err != nil {
+			log.Printf("%v: error getting peer fork block, %v", p, err)
+			continue
+		}
+
+		_, blocks, err := types.DeserializeVectorBlockItem(&peerForkBlock.VectorBlockItems)
+		if err != nil {
+			log.Printf("%v: error deserializing peer fork block, %v", p, err)
+			continue
+		}
+		if len(*blocks) != 1 {
+			log.Printf("%v: peer did not send only one fork block", p)
+			continue
+		}
+
+		forkPeers, ok := peerForks[string((*blocks)[0].BlockID.Digest)]
+		if !ok {
+			forkPeers = make(map[peer.ID]void, 0)
+		}
+
+		forkPeers[p] = void{}
+		peerForks[string((*blocks)[0].BlockID.Digest)] = forkPeers
+	}
+
+	return peerForks
+}
+
 func (m *SyncManager) run() {
 	for {
 		// Wait for peers
@@ -290,23 +350,21 @@ func (m *SyncManager) run() {
 			blockDelta = maxBlockDelta
 		}
 		targetSyncBlock := uint64(headBlock.Height) + blockDelta
-		requestQueue := make(chan BatchBlockRequest, len(peers))
-		responseQueue := make(chan BlockBatch, len(peers))
-		doneChan := make(chan int)
-		defer close(requestQueue)
-		defer close(responseQueue)
-		defer close(doneChan)
 
-		log.Printf("target sync block is %v", targetSyncBlock)
+		// Get the fork each peer is on
+		peerForks := m.getPeerForks(targetSyncBlock, peers, peerHeads)
 
-		go createBlockRequests(uint64(headBlock.Height), targetSyncBlock, requestQueue)
-		go applyBlocks(uint64(headBlock.Height), targetSyncBlock, m.rpc, requestQueue, responseQueue, doneChan)
+		syncChans := make([]chan int, 0, len(peerForks))
 
-		for peer := range peers {
-			go fetchBlocksFromPeer(peer, peerHeads[peer], m.client, requestQueue, responseQueue)
+		for _, peers := range peerForks {
+			doneChan := make(chan int)
+			go m.syncFork(targetSyncBlock, headBlock, peers, peerHeads, doneChan)
+			syncChans = append(syncChans, doneChan)
 		}
 
-		<-doneChan
+		for _, done := range syncChans {
+			<-done
+		}
 	}
 }
 
