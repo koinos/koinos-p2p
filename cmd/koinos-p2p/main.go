@@ -41,7 +41,7 @@ func (a *appendFlag) String() string {
 
 func main() {
 	var peerFlags appendFlag
-	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8889", "The multiaddress on which the node will listen")
+	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
 	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
 	flag.Var(&peerFlags, "peer", "Address of a peer to which to connect (may specify multiple)")
 	flag.Var(&peerFlags, "p", "Address of a peer to which to connect (may specify multiple) (short)")
@@ -62,14 +62,7 @@ func main() {
 	for _, pid := range peerFlags {
 		if pid != "" {
 			log.Printf("Connecting to peer %s and sending broadcast\n", pid)
-			peer, err := host.ConnectToPeer(pid)
-			if err != nil {
-				panic(err)
-			}
-
-			errs := make(chan error, 1)
-			host.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-			err = getChannelError(errs)
+			_, err := host.ConnectToPeer(pid)
 			if err != nil {
 				panic(err)
 			}
