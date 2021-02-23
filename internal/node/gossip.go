@@ -31,6 +31,10 @@ func (gm *gossipManager) StartGossip(ctx context.Context, ch chan<- types.Variab
 	go gm.readMessages(ctx, ch)
 }
 
+func (gm *gossipManager) PublishMessage(ctx context.Context, vb *types.VariableBlob) {
+	gm.topic.Publish(ctx, *vb)
+}
+
 func (gm *gossipManager) readMessages(ctx context.Context, ch chan<- types.VariableBlob) {
 	for {
 		msg, err := gm.sub.Next(ctx)
@@ -56,12 +60,12 @@ func NewKoinosGossip(ctx context.Context, node *KoinosP2PNode) (*KoinosGossip, e
 		return nil, err
 	}
 
-	block, err := NewGossipManager(ps, "block")
+	block, err := NewGossipManager(ps, "koinos.blocks")
 	if err != nil {
 		return nil, err
 	}
 
-	transaction, err := NewGossipManager(ps, "transaction")
+	transaction, err := NewGossipManager(ps, "koinos.transactions")
 	if err != nil {
 		return nil, err
 	}
