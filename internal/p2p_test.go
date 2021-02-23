@@ -85,12 +85,12 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 }
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
-	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234)
+	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234, *node.NewKoinosP2POptions())
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 
-	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345)
+	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345, *node.NewKoinosP2POptions())
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

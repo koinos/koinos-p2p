@@ -14,15 +14,6 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 )
 
-func getChannelError(errs chan error) error {
-	select {
-	case err := <-errs:
-		return err
-	default:
-		return nil
-	}
-}
-
 /**
  * appendFlag is a helper for the golang flag module (import "flag") that lets you specify a flag multiple times.
  *
@@ -41,10 +32,13 @@ func (a *appendFlag) String() string {
 
 func main() {
 	var peerFlags appendFlag
+	var directFlags appendFlag
 	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
 	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
 	flag.Var(&peerFlags, "peer", "Address of a peer to which to connect (may specify multiple)")
 	flag.Var(&peerFlags, "p", "Address of a peer to which to connect (may specify multiple) (short)")
+	flag.Var(&directFlags, "direct", "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
+	var pexFlag = flag.Bool("pex", true, "Exchange peers with other nodes")
 	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
 
 	flag.Parse()
@@ -52,22 +46,16 @@ func main() {
 	mq := koinosmq.NewKoinosMQ(*amqpFlag)
 	mq.Start()
 
-	host, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(), int64(*seed))
+	opt := node.NewKoinosP2POptions()
+	opt.EnablePeerExchange = *pexFlag
+	opt.InitialPeers = peerFlags
+	opt.DirectPeers = directFlags
+
+	host, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(), int64(*seed), *opt)
 	if err != nil {
 		panic(err)
 	}
 	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
-
-	// Connect to a peer
-	for _, pid := range peerFlags {
-		if pid != "" {
-			log.Printf("Connecting to peer %s and sending broadcast\n", pid)
-			_, err := host.ConnectToPeer(pid)
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
 
 	// Wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
