@@ -43,8 +43,8 @@ func (k *TestRPC) ApplyTransaction(block *types.Block) (bool, error) {
 }
 
 // GetBlocksByHeight rpc call
-func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResp, error) {
-	blocks := types.NewGetBlocksByHeightResp()
+func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
+	blocks := types.NewGetBlocksByHeightResponse()
 	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
 		blockItem := types.NewBlockItem()
 		blockItem.BlockHeight = height + types.BlockHeightType(i)
@@ -61,8 +61,8 @@ func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Block
 }
 
 // GetChainID rpc call
-func (k *TestRPC) GetChainID() (*types.GetChainIDResult, error) {
-	mh := types.NewGetChainIDResult()
+func (k *TestRPC) GetChainID() (*types.GetChainIDResponse, error) {
+	mh := types.NewGetChainIDResponse()
 	mh.ChainID.ID = k.ChainID
 	return mh, nil
 }

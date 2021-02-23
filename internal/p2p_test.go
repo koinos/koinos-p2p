@@ -2,13 +2,14 @@ package protocol
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/multiformats/go-multiaddr"
 )
 
 type TestRPC struct {
@@ -22,7 +23,7 @@ type TestRPC struct {
 // GetHeadBlock rpc call
 func (k *TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
 	hi := types.NewHeadInfo()
-	hi.Height = k.Height
+	hi.Height = k.Height + types.BlockHeightType(len(k.BlocksApplied))
 	hi.ID.ID = types.UInt64(k.Height) + k.HeadBlockIDDelta
 	return hi, nil
 }
@@ -46,8 +47,12 @@ func (k *TestRPC) ApplyTransaction(block *types.Block) (bool, error) {
 }
 
 // GetBlocksByHeight rpc call
-func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResp, error) {
-	blocks := types.NewGetBlocksByHeightResp()
+func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
+	if height+types.BlockHeightType(numBlocks) > k.Height+types.BlockHeightType(len(k.BlocksApplied)) {
+		return nil, fmt.Errorf("Requested block exceeded height")
+	}
+
+	blocks := types.NewGetBlocksByHeightResponse()
 	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
 		blockItem := types.NewBlockItem()
 		blockItem.BlockHeight = height + types.BlockHeightType(i)
@@ -56,8 +61,6 @@ func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Block
 		vb := types.NewVariableBlob()
 		block := types.NewBlock()
 		activeData := types.NewActiveBlockData()
-		activeData.HeaderHashes = *types.NewMultihashVector()
-		activeData.HeaderHashes.Digests = make([]types.VariableBlob, 3)
 		block.ActiveData = *types.NewOpaqueActiveBlockDataFromNative(*activeData)
 		vb = block.Serialize(vb)
 		blockItem.Block = *types.NewOpaqueBlockFromBlob(vb)
@@ -68,8 +71,8 @@ func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Block
 }
 
 // GetChainID rpc call
-func (k *TestRPC) GetChainID() (*types.GetChainIDResult, error) {
-	mh := types.NewGetChainIDResult()
+func (k *TestRPC) GetChainID() (*types.GetChainIDResponse, error) {
+	mh := types.NewGetChainIDResponse()
 	mh.ChainID.ID = k.ChainID
 	return mh, nil
 }
@@ -81,7 +84,7 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	return &rpc
 }
 
-func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, *peer.AddrInfo, error) {
+func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, error) {
 	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234)
 	if err != nil {
 		return nil, nil, nil, err
@@ -92,14 +95,7 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 		return nil, nil, nil, err
 	}
 
-	// Connect to the listener
-	peerAddr := listenNode.GetPeerAddress()
-	peer, err := sendNode.ConnectToPeer(peerAddr.String())
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return listenNode, sendNode, peer, nil
+	return listenNode, sendNode, listenNode.GetPeerAddress(), nil
 }
 
 /*func TestSyncNoError(t *testing.T) {
@@ -113,15 +109,15 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	errs := make(chan error, 1)
-	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-	err = getChannelError(errs)
+	_, err = sendNode.ConnectToPeer(peer.String())
 	if err != nil {
 		t.Error(err)
 	}
 
-	// SendRPC should have applied 123 blocks
-	if len(sendRPC.BlocksApplied) != 123 {
+	time.Sleep(time.Duration(200) * time.Duration(time.Millisecond))
+
+	// SendRPC should have applied 122 blocks
+	if len(sendRPC.BlocksApplied) != 122 {
 		t.Errorf("Incorrect number of blocks applied")
 	}
 }
@@ -138,9 +134,7 @@ func TestSyncChainID(t *testing.T) {
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	errs := make(chan error, 1)
-	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-	err = getChannelError(errs)
+	_, err = sendNode.ConnectToPeer(peer.String())
 	if err == nil {
 		t.Error("Nodes with different chain ids should return an error, but did not")
 	}
@@ -157,9 +151,7 @@ func TestSyncHeadBlock(t *testing.T) {
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	errs := make(chan error, 1)
-	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-	err = getChannelError(errs)
+	_, err = sendNode.ConnectToPeer(peer.String())
 	if err == nil {
 		t.Error("Nodes with same head block should return an error, but did not")
 	}
@@ -179,9 +171,7 @@ func TestDifferentFork(t *testing.T) {
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	errs := make(chan error, 1)
-	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-	err = getChannelError(errs)
+	_, err = sendNode.ConnectToPeer(peer.String())
 	if err == nil {
 		t.Error("Nodes on different forks should return an error, but do not")
 	}
@@ -199,12 +189,9 @@ func TestApplyBlockFailure(t *testing.T) {
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	errs := make(chan error, 1)
-	sendNode.Protocols.Sync.InitiateProtocol(context.Background(), peer.ID, errs)
-	err = getChannelError(errs)
-	if err == nil {
-		t.Error("Apply block failure should have returned an error, but did not")
-	}
+	_, err = sendNode.ConnectToPeer(peer.String())
+
+	time.Sleep(time.Duration(200) * time.Duration(time.Millisecond))
 
 	// SendRPC should have applied 18 blocks
 	if len(sendRPC.BlocksApplied) != 18 {
@@ -222,13 +209,19 @@ func TestGossipNoError(t *testing.T) {
 	defer listenNode.Close()
 	defer sendNode.Close()
 
+<<<<<<< HEAD
 	i := types.Int64(1234)
 	vb := types.NewVariableBlob()
 	i.Serialize(vb)
 	sendNode.Gossip.Block.PublishMessage(context.Background(), vb)
 	time.Sleep(time.Duration(30) * time.Duration(time.Millisecond))
+=======
+	//sendNode.Protocols.Gossip.InitiateProtocol(context.Background(), peer.ID)
 
-	sendNode.Protocols.Gossip.CloseProtocol()
+	//time.Sleep(time.Duration(30) * time.Duration(time.Millisecond))
+>>>>>>> master
+
+	//sendNode.Protocols.Gossip.CloseProtocol()
 }
 
 func getChannelError(errs chan error) error {
