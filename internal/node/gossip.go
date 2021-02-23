@@ -2,9 +2,12 @@ package node
 
 import (
 	"context"
+	"log"
 
 	types "github.com/koinos/koinos-types-golang"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
 type gossipManager struct {
@@ -51,7 +54,31 @@ type KoinosGossip struct {
 }
 
 func NewKoinosGossip(ctx context.Context, node *KoinosP2PNode) (*KoinosGossip, error) {
-	ps, err := pubsub.NewGossipSub(ctx, node.Host)
+	if node.Options.EnablePeerExchange == false {
+		log.Printf("Disable peer exchange by updating global GossipSubPrunePeers")
+		pubsub.GossipSubPrunePeers = 0
+	}
+
+	// Convert DirectPeers from string array to AddrInfo array
+	directPeers := make([]peer.AddrInfo, len(node.Options.DirectPeers))
+	for i, addrString := range node.Options.DirectPeers {
+		maddr, err := multiaddr.NewMultiaddr(addrString)
+		if err != nil {
+			return nil, err
+		}
+		directPeer, err := peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			return nil, err
+		}
+		directPeers[i] = *directPeer
+	}
+
+	ps, err := pubsub.NewGossipSub(
+		ctx,
+		node.Host,
+		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
+		pubsub.WithDirectPeers(directPeers),
+	)
 	if err != nil {
 		return nil, err
 	}
