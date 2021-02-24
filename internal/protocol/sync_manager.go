@@ -23,9 +23,10 @@ import (
 const SyncID = "/koinos/sync/1.0.0"
 
 const (
-	batchSize     = uint64(20)
-	syncDelta     = uint64(1)
-	maxBlockDelta = uint64(10000)
+	batchSize      = uint64(20)
+	syncDelta      = uint64(1)
+	maxBlockDelta  = uint64(10000)
+	timeoutSeconds = uint64(30)
 )
 
 // BatchBlockRequest a batch block request
@@ -73,7 +74,7 @@ func (m *SyncManager) AddPeer(peer peer.ID) error {
 
 	peerChainID := GetChainIDResponse{}
 	{
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
 		defer cancel()
 		err := m.client.CallContext(ctx, peer, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
 		if err != nil {
@@ -100,7 +101,7 @@ func (m *SyncManager) AddPeer(peer peer.ID) error {
 
 	peerForkStatus := GetForkStatusResponse{}
 	{
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
 		defer cancel()
 		err = m.client.CallContext(ctx, peer, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
 		if err != nil {
@@ -211,7 +212,7 @@ func fetchBlocksFromPeer(peer peer.ID, headBlockID types.Multihash, client *gorp
 		request.BatchSize = batch.BatchSize
 		response := GetBlocksResponse{}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
 		defer cancel()
 		err := client.CallContext(ctx, peer, "SyncService", "GetBlocks", request, &response)
 		if err != nil {
@@ -257,7 +258,7 @@ func (m *SyncManager) getPeerForks(targetSyncBlock uint64, peers map[peer.ID]voi
 			BatchSize:        1,
 		}
 		peerForkBlock := GetBlocksResponse{}
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
 		defer cancel()
 		err := m.client.CallContext(ctx, p, "SyncService", "GetBlocks", peerForkBlockRequest, &peerForkBlock)
 		if err != nil {
@@ -308,7 +309,7 @@ func (m *SyncManager) run() {
 
 		for peer := range peers {
 			peerHeadBlock := GetHeadBlockResponse{}
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
 			defer cancel()
 			err := m.client.CallContext(ctx, peer, "SyncService", "GetHeadBlock", GetHeadBlockRequest{}, &peerHeadBlock)
 			if err != nil {

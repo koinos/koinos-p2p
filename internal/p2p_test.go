@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
@@ -42,7 +43,7 @@ func (k *TestRPC) ApplyBlock(block *types.Block, topology ...*types.BlockTopolog
 	return true, nil
 }
 
-func (k *TestRPC) ApplyTransaction(block *types.Block) (bool, error) {
+func (k *TestRPC) ApplyTransaction(txn *types.Transaction) (bool, error) {
 	return true, nil
 }
 
@@ -200,28 +201,34 @@ func TestApplyBlockFailure(t *testing.T) {
 }*/
 
 func TestGossipNoError(t *testing.T) {
+	koinosmq.NewKoinosMQ("")
 	listenRPC := NewTestRPC(128)
-	sendRPC := NewTestRPC(5)
-	listenNode, sendNode, _, err := createTestClients(listenRPC, sendRPC)
+	sendRPC := NewTestRPC(120)
+	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-<<<<<<< HEAD
-	i := types.Int64(1234)
+	listenNode.Gossip.StartGossip(context.Background())
+	sendNode.Gossip.StartGossip(context.Background())
+
+	_, err = sendNode.ConnectToPeer(peer.String())
+	if err != nil {
+		t.Error(err)
+	}
+
+	//_, err = sendNode.ConnectToPeer()
+
+	b := types.NewBlock()
 	vb := types.NewVariableBlob()
-	i.Serialize(vb)
+	vb = b.Serialize(vb)
 	sendNode.Gossip.Block.PublishMessage(context.Background(), vb)
 	time.Sleep(time.Duration(30) * time.Duration(time.Millisecond))
-=======
-	//sendNode.Protocols.Gossip.InitiateProtocol(context.Background(), peer.ID)
-
-	//time.Sleep(time.Duration(30) * time.Duration(time.Millisecond))
->>>>>>> master
-
-	//sendNode.Protocols.Gossip.CloseProtocol()
+	if len(listenRPC.BlocksApplied) != 1 {
+		t.Errorf("Listen node did not receive block via gossip")
+	}
 }
 
 func getChannelError(errs chan error) error {

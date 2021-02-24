@@ -38,7 +38,7 @@ func (k *TestRPC) ApplyBlock(block *types.Block, topology ...*types.BlockTopolog
 	return true, nil
 }
 
-func (k *TestRPC) ApplyTransaction(block *types.Block) (bool, error) {
+func (k *TestRPC) ApplyTransaction(txn *types.Transaction) (bool, error) {
 	return true, nil
 }
 

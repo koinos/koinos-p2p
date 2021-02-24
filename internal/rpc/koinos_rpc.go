@@ -110,7 +110,7 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_typ
 }
 
 // ApplyTransaction rpc call
-func (k KoinosRPC) ApplyTransaction(block *koinos_types.Block) (bool, error) {
+func (k KoinosRPC) ApplyTransaction(block *koinos_types.Transaction) (bool, error) {
 	return true, nil
 }
 

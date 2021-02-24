@@ -8,9 +8,11 @@ import (
 	mrand "math/rand"
 	"time"
 
+	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/inventory"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	types "github.com/koinos/koinos-types-golang"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -98,7 +100,23 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 		return nil, err
 	}
 
+	// Setup handler for RabbitMQ messages
+	mq := koinosmq.GetKoinosMQ()
+	mq.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
+	mq.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
+
 	return node, nil
+}
+
+func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
+	vb := types.VariableBlob(data)
+	switch topic {
+	case "koinos.block.accept":
+		n.Gossip.Block.PublishMessage(context.Background(), &vb)
+
+	case "koinos.transaction.accept":
+		n.Gossip.Transaction.PublishMessage(context.Background(), &vb)
+	}
 }
 
 func (n *KoinosP2PNode) registerProtocol(p protocol.Protocol) {
@@ -128,6 +146,8 @@ func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	//n.Host.Peerstore().
 
 	return peer, nil
 }

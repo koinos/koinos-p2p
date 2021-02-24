@@ -113,13 +113,13 @@ func (kg *KoinosGossip) readTransactions(ctx context.Context) {
 			return
 		}
 
-		_, _, err := types.DeserializeTransaction(&vb)
+		_, transaction, err := types.DeserializeTransaction(&vb)
 		if err != nil { // TODO: Bad message, assign naughty points
 			continue
 		}
 
-		//if ok, err := kg.node.RPC.ApplyTransaction(transaction); !ok || err != nil {
-		//	continue
-		//}
+		if ok, err := kg.node.RPC.ApplyTransaction(transaction); !ok || err != nil {
+			continue
+		}
 	}
 }
