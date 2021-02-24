@@ -10,6 +10,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
+	peerstore "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -85,18 +86,18 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	return &rpc
 }
 
-func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, error) {
+func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
 	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	return listenNode, sendNode, listenNode.GetPeerAddress(), nil
+	return listenNode, sendNode, listenNode.GetPeerAddress(), listenNode.GetPeerAddress(), nil
 }
 
 /*func TestSyncNoError(t *testing.T) {
@@ -203,8 +204,8 @@ func TestApplyBlockFailure(t *testing.T) {
 func TestGossipNoError(t *testing.T) {
 	koinosmq.NewKoinosMQ("")
 	listenRPC := NewTestRPC(128)
-	sendRPC := NewTestRPC(120)
-	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	sendRPC := NewTestRPC(128)
+	listenNode, sendNode, listenPeer, sendPeer, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -214,7 +215,21 @@ func TestGossipNoError(t *testing.T) {
 	listenNode.Gossip.StartGossip(context.Background())
 	sendNode.Gossip.StartGossip(context.Background())
 
-	_, err = sendNode.ConnectToPeer(peer.String())
+	//_, err = sendNode.ConnectToPeer(peer.String())
+	listenAddr, err := peerstore.AddrInfoFromP2pAddr(listenPeer)
+	if err != nil {
+		t.Error(err)
+	}
+	sendNode.Host.Connect(context.Background(), *listenAddr)
+	if err != nil {
+		t.Error(err)
+	}
+
+	sendAddr, err := peerstore.AddrInfoFromP2pAddr(sendPeer)
+	if err != nil {
+		t.Error(err)
+	}
+	listenNode.Host.Connect(context.Background(), *sendAddr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -224,9 +239,9 @@ func TestGossipNoError(t *testing.T) {
 	b := types.NewBlock()
 	vb := types.NewVariableBlob()
 	vb = b.Serialize(vb)
-	sendNode.Gossip.Block.PublishMessage(context.Background(), vb)
-	time.Sleep(time.Duration(30) * time.Duration(time.Millisecond))
-	if len(listenRPC.BlocksApplied) != 1 {
+	listenNode.Gossip.Block.PublishMessage(context.Background(), vb)
+	time.Sleep(time.Duration(3) * time.Duration(time.Second))
+	if len(sendRPC.BlocksApplied) != 1 {
 		t.Errorf("Listen node did not receive block via gossip")
 	}
 }

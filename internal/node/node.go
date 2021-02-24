@@ -147,8 +147,6 @@ func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
 		return nil, err
 	}
 
-	//n.Host.Peerstore().
-
 	return peer, nil
 }
 
