@@ -8,35 +8,68 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
-type gossipManager struct {
-	topic *pubsub.Topic
-	sub   *pubsub.Subscription
+// GossipManager manages gossip on a given topic
+type GossipManager struct {
+	ps        *pubsub.PubSub
+	topic     *pubsub.Topic
+	sub       *pubsub.Subscription
+	topicName string
+	enabled   bool
 }
 
-func NewGossipManager(ps *pubsub.PubSub, topicName string) (*gossipManager, error) {
-	topic, err := ps.Join(topicName)
-	if err != nil {
-		return nil, err
+// NewGossipManager creates and returns a new instance of gossipManager
+func NewGossipManager(ps *pubsub.PubSub, topicName string) *GossipManager {
+	gm := GossipManager{ps: ps, topicName: topicName, enabled: false}
+	return &gm
+}
+
+// StartGossip starts
+func (gm *GossipManager) StartGossip(ctx context.Context, ch chan<- types.VariableBlob) error {
+	if gm.enabled {
+		return nil
 	}
-	//ps.RegisterTopicValidator()
+
+	topic, err := gm.ps.Join(gm.topicName)
+	if err != nil {
+		return err
+	}
+	gm.topic = topic
+
 	sub, err := topic.Subscribe()
 	if err != nil {
-		return nil, err
+		return err
+	}
+	gm.sub = sub
+
+	go gm.readMessages(ctx, ch)
+
+	return nil
+}
+
+// StopGossip stops all gossiping on this topic
+func (gm *GossipManager) StopGossip() {
+	if !gm.enabled {
+		return
 	}
 
-	gm := gossipManager{topic: topic, sub: sub}
-	return &gm, nil
+	gm.sub.Cancel()
+	gm.sub = nil
+	gm.topic = nil
+	gm.enabled = false
 }
 
-func (gm *gossipManager) StartGossip(ctx context.Context, ch chan<- types.VariableBlob) {
-	go gm.readMessages(ctx, ch)
-}
+// PublishMessage publishes the given object to this manager's topic
+func (gm *GossipManager) PublishMessage(ctx context.Context, vb *types.VariableBlob) bool {
+	if !gm.enabled {
+		return false
+	}
 
-func (gm *gossipManager) PublishMessage(ctx context.Context, vb *types.VariableBlob) {
 	gm.topic.Publish(ctx, *vb)
+
+	return true
 }
 
-func (gm *gossipManager) readMessages(ctx context.Context, ch chan<- types.VariableBlob) {
+func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.VariableBlob) {
 	for {
 		msg, err := gm.sub.Next(ctx)
 		if err != nil {
@@ -48,32 +81,33 @@ func (gm *gossipManager) readMessages(ctx context.Context, ch chan<- types.Varia
 	}
 }
 
+// KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
 	rpc         rpc.RPC
-	Block       *gossipManager
-	Transaction *gossipManager
+	Block       *GossipManager
+	Transaction *GossipManager
 	PubSub      *pubsub.PubSub
 }
 
-func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub) (*KoinosGossip, error) {
-	block, err := NewGossipManager(ps, "koinos.blocks")
-	if err != nil {
-		return nil, err
-	}
-
-	transaction, err := NewGossipManager(ps, "koinos.transactions")
-	if err != nil {
-		return nil, err
-	}
-
+// NewKoinosGossip constructs a new koinosGossip instance
+func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub) *KoinosGossip {
+	block := NewGossipManager(ps, "koinos.blocks")
+	transaction := NewGossipManager(ps, "koinos.transactions")
 	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, PubSub: ps}
 
-	return &kg, nil
+	return &kg
 }
 
+// StartGossip enables gossip of blocks and transactions
 func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 	go kg.readBlocks(ctx)
 	go kg.readTransactions(ctx)
+}
+
+// StopGossip stops gossiping on both block and transaction topics
+func (kg *KoinosGossip) StopGossip() {
+	kg.Block.StopGossip()
+	kg.Transaction.StopGossip()
 }
 
 func (kg *KoinosGossip) readBlocks(ctx context.Context) {

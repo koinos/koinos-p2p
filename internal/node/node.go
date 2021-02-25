@@ -76,10 +76,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	if err != nil {
 		return nil, err
 	}
-	node.Gossip, err = protocol.NewKoinosGossip(ctx, rpc, ps)
-	if err != nil {
-		return nil, err
-	}
+	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps)
 
 	// Setup handler for RabbitMQ messages
 	mq := koinosmq.GetKoinosMQ()
