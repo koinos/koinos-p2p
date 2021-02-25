@@ -19,6 +19,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	peerstore "github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
@@ -26,7 +27,7 @@ import (
 type KoinosP2PNode struct {
 	Host        host.Host
 	RPC         rpc.RPC
-	Gossip      *KoinosGossip
+	Gossip      *protocol.KoinosGossip
 	SyncServer  *gorpc.Server
 	SyncManager *protocol.SyncManager
 }
@@ -70,7 +71,12 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.SyncManager = protocol.NewSyncManager(node.Host, node.RPC)
 	node.SyncManager.Start()
 
-	node.Gossip, err = NewKoinosGossip(ctx, node)
+	// Create the pubsub gossip
+	ps, err := pubsub.NewGossipSub(ctx, node.Host)
+	if err != nil {
+		return nil, err
+	}
+	node.Gossip, err = protocol.NewKoinosGossip(ctx, rpc, ps)
 	if err != nil {
 		return nil, err
 	}

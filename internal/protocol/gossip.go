@@ -1,8 +1,9 @@
-package node
+package protocol
 
 import (
 	"context"
 
+	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
@@ -48,18 +49,13 @@ func (gm *gossipManager) readMessages(ctx context.Context, ch chan<- types.Varia
 }
 
 type KoinosGossip struct {
-	node        *KoinosP2PNode
+	rpc         rpc.RPC
 	Block       *gossipManager
 	Transaction *gossipManager
 	PubSub      *pubsub.PubSub
 }
 
-func NewKoinosGossip(ctx context.Context, node *KoinosP2PNode) (*KoinosGossip, error) {
-	ps, err := pubsub.NewGossipSub(ctx, node.Host)
-	if err != nil {
-		return nil, err
-	}
-
+func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub) (*KoinosGossip, error) {
 	block, err := NewGossipManager(ps, "koinos.blocks")
 	if err != nil {
 		return nil, err
@@ -70,7 +66,7 @@ func NewKoinosGossip(ctx context.Context, node *KoinosP2PNode) (*KoinosGossip, e
 		return nil, err
 	}
 
-	kg := KoinosGossip{node: node, Block: block, Transaction: transaction, PubSub: ps}
+	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, PubSub: ps}
 
 	return &kg, nil
 }
@@ -96,7 +92,7 @@ func (kg *KoinosGossip) readBlocks(ctx context.Context) {
 			continue
 		}
 
-		if ok, err := kg.node.RPC.ApplyBlock(block); !ok || err != nil {
+		if ok, err := kg.rpc.ApplyBlock(block); !ok || err != nil {
 			continue
 		}
 	}
@@ -118,7 +114,7 @@ func (kg *KoinosGossip) readTransactions(ctx context.Context) {
 			continue
 		}
 
-		if ok, err := kg.node.RPC.ApplyTransaction(transaction); !ok || err != nil {
+		if ok, err := kg.rpc.ApplyTransaction(transaction); !ok || err != nil {
 			continue
 		}
 	}
