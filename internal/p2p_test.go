@@ -6,11 +6,9 @@ import (
 	"testing"
 	"time"
 
-	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
-	peerstore "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -100,11 +98,11 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 	return listenNode, sendNode, listenNode.GetPeerAddress(), listenNode.GetPeerAddress(), nil
 }
 
-/*func TestSyncNoError(t *testing.T) {
+func TestSyncNoError(t *testing.T) {
 	// Test no error sync
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
-	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -129,7 +127,7 @@ func TestSyncChainID(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
 	sendRPC.ChainID = 2
-	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -146,7 +144,7 @@ func TestSyncChainID(t *testing.T) {
 func TestSyncHeadBlock(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(128)
-	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -166,7 +164,7 @@ func TestDifferentFork(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	listenRPC.HeadBlockIDDelta = 1
 	sendRPC := NewTestRPC(15)
-	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -184,7 +182,7 @@ func TestApplyBlockFailure(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
 	sendRPC.ApplyBlocks = 18
-	listenNode, sendNode, peer, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
 	if err != nil {
 		t.Error(err)
 	}
@@ -198,51 +196,6 @@ func TestApplyBlockFailure(t *testing.T) {
 	// SendRPC should have applied 18 blocks
 	if len(sendRPC.BlocksApplied) != 18 {
 		t.Errorf("Incorrect number of blocks applied")
-	}
-}*/
-
-func TestGossipNoError(t *testing.T) {
-	koinosmq.NewKoinosMQ("")
-	listenRPC := NewTestRPC(128)
-	sendRPC := NewTestRPC(128)
-	listenNode, sendNode, listenPeer, sendPeer, err := createTestClients(listenRPC, sendRPC)
-	if err != nil {
-		t.Error(err)
-	}
-	defer listenNode.Close()
-	defer sendNode.Close()
-
-	listenNode.Gossip.StartGossip(context.Background())
-	sendNode.Gossip.StartGossip(context.Background())
-
-	//_, err = sendNode.ConnectToPeer(peer.String())
-	listenAddr, err := peerstore.AddrInfoFromP2pAddr(listenPeer)
-	if err != nil {
-		t.Error(err)
-	}
-	sendNode.Host.Connect(context.Background(), *listenAddr)
-	if err != nil {
-		t.Error(err)
-	}
-
-	sendAddr, err := peerstore.AddrInfoFromP2pAddr(sendPeer)
-	if err != nil {
-		t.Error(err)
-	}
-	listenNode.Host.Connect(context.Background(), *sendAddr)
-	if err != nil {
-		t.Error(err)
-	}
-
-	//_, err = sendNode.ConnectToPeer()
-
-	b := types.NewBlock()
-	vb := types.NewVariableBlob()
-	vb = b.Serialize(vb)
-	listenNode.Gossip.Block.PublishMessage(context.Background(), vb)
-	time.Sleep(time.Duration(3) * time.Duration(time.Second))
-	if len(sendRPC.BlocksApplied) != 1 {
-		t.Errorf("Listen node did not receive block via gossip")
 	}
 }
 
