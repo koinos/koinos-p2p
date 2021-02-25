@@ -9,7 +9,6 @@ import (
 	"time"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
-	"github.com/koinos/koinos-p2p/internal/inventory"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
@@ -23,31 +22,9 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
-type nodeProtocols struct {
-	//Sync   protocol.SyncProtocol
-	Gossip protocol.GossipProtocol
-}
-
-// create new node protocol object
-func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
-	np := new(nodeProtocols)
-
-	data := protocol.Data{Inventory: &node.Inventory, RPC: node.RPC, Host: node.Host}
-
-	//np.Sync = *protocol.NewSyncProtocol(&data)
-	//node.registerProtocol(np.Sync)
-
-	np.Gossip = *protocol.NewGossipProtocol(&data)
-	node.registerProtocol(&np.Gossip)
-
-	return np
-}
-
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
 	Host        host.Host
-	Inventory   inventory.Inventory
-	Protocols   nodeProtocols
 	RPC         rpc.RPC
 	Gossip      *KoinosGossip
 	SyncServer  *gorpc.Server
@@ -84,8 +61,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node := new(KoinosP2PNode)
 	node.Host = host
 	node.RPC = rpc
-	node.Protocols = *newNodeProtocols(node)
-	node.Inventory = *inventory.NewInventory(time.Minute * time.Duration(30))
 	node.SyncServer = gorpc.NewServer(host, protocol.SyncID)
 	err = node.SyncServer.Register(&protocol.SyncService{})
 	if err != nil {
@@ -117,11 +92,6 @@ func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
 	case "koinos.transaction.accept":
 		n.Gossip.Transaction.PublishMessage(context.Background(), &vb)
 	}
-}
-
-func (n *KoinosP2PNode) registerProtocol(p protocol.Protocol) {
-	pid, handler := p.GetProtocolRegistration()
-	n.Host.SetStreamHandler(pid, handler)
 }
 
 // ConnectToPeer connects the node to the given peer
