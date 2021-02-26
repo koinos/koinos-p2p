@@ -21,7 +21,7 @@ func NewKoinosRPC() *KoinosRPC {
 }
 
 // GetHeadBlock rpc call
-func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
+func (k *KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 	args := koinos_types.ChainRPCRequest{
 		Value: koinos_types.NewGetHeadInfoRequest(),
 	}
@@ -59,7 +59,7 @@ func (k KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 }
 
 // ApplyBlock rpc call
-func (k KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_types.BlockTopology) (bool, error) {
+func (k *KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_types.BlockTopology) (bool, error) {
 	blockSub := koinos_types.NewSubmitBlockRequest()
 	blockSub.Block = *block
 
@@ -110,12 +110,12 @@ func (k KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_typ
 }
 
 // ApplyTransaction rpc call
-func (k KoinosRPC) ApplyTransaction(block *koinos_types.Transaction) (bool, error) {
+func (k *KoinosRPC) ApplyTransaction(block *koinos_types.Transaction) (bool, error) {
 	return true, nil
 }
 
 // GetBlocksByHeight rpc call
-func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.BlockHeightType, numBlocks koinos_types.UInt32) (*koinos_types.GetBlocksByHeightResponse, error) {
+func (k *KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.BlockHeightType, numBlocks koinos_types.UInt32) (*koinos_types.GetBlocksByHeightResponse, error) {
 	args := koinos_types.BlockStoreRequest{
 		Value: &koinos_types.GetBlocksByHeightRequest{
 			HeadBlockID:         *blockID,
@@ -159,7 +159,7 @@ func (k KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koi
 }
 
 // GetChainID rpc call
-func (k KoinosRPC) GetChainID() (*koinos_types.GetChainIDResponse, error) {
+func (k *KoinosRPC) GetChainID() (*koinos_types.GetChainIDResponse, error) {
 	args := koinos_types.ChainRPCRequest{
 		Value: koinos_types.NewGetChainIDRequest(),
 	}
