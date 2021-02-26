@@ -19,6 +19,13 @@ import (
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 )
 
+//
+// The sync protocol works like this:
+//
+// - When we connect to a peer, we can enable / disable fork notification for the peer.
+// - When fork notification is enabled, the peer sends a LIB notification followed by a block notification for each block.
+//
+
 // SyncID Identifies the koinos sync protocol
 const SyncID = "/koinos/sync/1.0.0"
 
@@ -41,9 +48,10 @@ type SyncManager struct {
 	client *gorpc.Client
 	rpc    rpc.RPC
 
-	peers      map[peer.ID]void
-	peerLock   sync.Locker
-	peerSignal *sync.Cond
+	/**
+	 * Only handled internally by the sync manager.
+	 */
+	peers map[peer.ID]PeerState
 }
 
 type void struct{}
@@ -68,62 +76,70 @@ func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 	return &manager
 }
 
-// AddPeer to manager to begin requesting blocks from
-func (m *SyncManager) AddPeer(peer peer.ID) error {
-	log.Printf("connecting to peer for sync: %v", peer)
+// Add a peer to the SyncManager.
+// Will connect to the peer in the background
+func (m *SyncManager) AddPeer(ctx context.Context, peer peer.ID) {
 
-	peerChainID := GetChainIDResponse{}
-	{
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-		defer cancel()
-		err := m.client.CallContext(ctx, peer, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
-		if err != nil {
-			log.Printf("%v: error getting peer chain id, %v", peer, err)
-			return err
+	// Currently this method is fire-and-forget.
+	// Should we add channels to allow caller to see return and error?
+
+	go func() {
+		log.Printf("connecting to peer for sync: %v", peer)
+
+		peerChainID := GetChainIDResponse{}
+		{
+			ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+			defer cancel()
+			err := m.client.CallContext(ctx, peer, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
+			if err != nil {
+				log.Printf("%v: error getting peer chain id, %v", peer, err)
+				return
+			}
 		}
-	}
 
-	chainID, err := m.rpc.GetChainID()
-	if err != nil {
-		log.Printf("%v: error getting chain id, %v", peer, err)
-	}
-
-	if !chainID.ChainID.Equals(&peerChainID.ChainID) {
-		log.Printf("%v: peer's chain id does not match", peer)
-		return fmt.Errorf("%v: peer's chain id does not match", peer)
-	}
-
-	headBlock, err := m.rpc.GetHeadBlock()
-	if err != nil {
-		log.Printf("%v: error getting head block, %v", peer, err)
-		return err
-	}
-
-	peerForkStatus := GetForkStatusResponse{}
-	{
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-		defer cancel()
-		err = m.client.CallContext(ctx, peer, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
+		chainID, err := m.rpc.GetChainID()
 		if err != nil {
-			log.Printf("%v: error getting peer fork status, %v", peer, err)
-			return err
+			log.Printf("%v: error getting chain id, %v", peer, err)
+			return
 		}
-	}
 
-	if peerForkStatus.Status == DifferentFork {
-		log.Printf("%v: peer is on a different fork", peer)
-		return fmt.Errorf("%v: peer is on a different fork", peer)
-	}
+		if !chainID.ChainID.Equals(&peerChainID.ChainID) {
+			log.Printf("%v: peer's chain id does not match", peer)
+			return
+		}
 
-	m.peerLock.Lock()
-	defer m.peerLock.Unlock()
+		headBlock, err := m.rpc.GetHeadBlock()
+		if err != nil {
+			log.Printf("%v: error getting head block, %v", peer, err)
+			return
+		}
 
-	m.peers[peer] = void{}
-	m.peerSignal.Signal()
+		peerForkStatus := GetForkStatusResponse{}
+		{
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+			defer cancel()
+			err = m.client.CallContext(ctx, peer, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
+			if err != nil {
+				log.Printf("%v: error getting peer fork status, %v", peer, err)
+				return
+			}
+		}
 
-	log.Printf("%v: connected!", peer)
+		if peerForkStatus.Status == DifferentFork {
+			log.Printf("%v: peer is on a different fork", peer)
+			return
+		}
 
-	return nil
+		m.peerLock.Lock()
+		defer m.peerLock.Unlock()
+
+		m.peers[peer] = void{}
+		m.peerSignal.Signal()
+
+		log.Printf("%v: connected!", peer)
+	}()
+
+	return
 }
 
 func createBlockRequests(headBlock uint64, targetSyncBlock uint64, requestQueue chan BatchBlockRequest) {
