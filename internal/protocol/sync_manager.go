@@ -30,10 +30,12 @@ import (
 const SyncID = "/koinos/sync/1.0.0"
 
 const (
-	batchSize      = uint64(20)
-	syncDelta      = uint64(1)
-	maxBlockDelta  = uint64(10000)
-	timeoutSeconds = uint64(30)
+	batchSize        = uint64(20)
+	syncDelta        = uint64(1)
+	maxBlockDelta    = uint64(10000)
+	timeoutSeconds   = uint64(30)
+	blacklistSeconds = uint64(60)
+	syncCycleSeconds = uint64(10)
 )
 
 // BatchBlockRequest a batch block request
@@ -42,16 +44,42 @@ type BatchBlockRequest struct {
 	BatchSize        types.UInt64
 }
 
+type PeerError struct {
+	Peer  peer.ID
+	Error error
+}
+
+type PeerBlockRequest struct {
+	Topology types.BlockTopology
+	Peer     peer.ID
+}
+
 // SyncManager syncs blocks using multiple peers
 type SyncManager struct {
 	server *gorpc.Server
 	client *gorpc.Client
 	rpc    rpc.RPC
 
-	/**
-	 * Only handled internally by the sync manager.
-	 */
-	peers map[peer.ID]PeerState
+	// Channel for new peer ID's we want to connect to
+	newPeers chan peer.ID
+
+	// Channel for peer to notify when handshake is done
+	handshakeDonePeers chan peer.ID
+
+	// Channel for peer to notify when error occurs
+	errPeers chan PeerError
+
+	// Channel for peer ID's coming off a blacklist
+	unblacklistPeers chan peer.ID
+
+	// Channel for block requests
+	blockRequests chan PeerBlockRequest
+
+	// Peer ID map.  Only updated in the internal SyncManager thread
+	peers map[peer.ID]void
+
+	// Blacklisted peers.
+	blacklist map[peer.ID]void
 }
 
 type void struct{}
@@ -60,12 +88,18 @@ type void struct{}
 func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 
 	manager := SyncManager{
-		server:     gorpc.NewServer(h, SyncID),
-		client:     gorpc.NewClient(h, SyncID),
-		rpc:        rpc,
-		peers:      make(map[peer.ID]void),
-		peerLock:   &sync.Mutex{},
-		peerSignal: sync.NewCond(&sync.Mutex{}),
+		server: gorpc.NewServer(h, SyncID),
+		client: gorpc.NewClient(h, SyncID),
+		rpc:    rpc,
+
+		newPeers:           make(chan peer.ID),
+		handshakeDonePeers: make(chan peer.ID),
+		errPeers:           make(chan peerError),
+		unblacklistPeers:   make(chan peer.ID),
+		blockRequests:      make(chan PeerBlockRequest),
+
+		peers:     make(map[peer.ID]void),
+		blacklist: make(map[peer.ID]void),
 	}
 
 	err := manager.server.Register(NewSyncService(&rpc))
@@ -77,69 +111,249 @@ func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 }
 
 // Add a peer to the SyncManager.
-// Will connect to the peer in the background
-func (m *SyncManager) AddPeer(ctx context.Context, peer peer.ID) {
-
-	// Currently this method is fire-and-forget.
-	// Should we add channels to allow caller to see return and error?
+// Will connect to the peer in the background.
+func (m *SyncManager) AddPeer(ctx context.Context, pid peer.ID) {
 
 	go func() {
-		log.Printf("connecting to peer for sync: %v", peer)
+		select {
+		case m.newPeers <- pid:
+		case <-ctx.Done():
+		}
+	}()
+
+	return
+}
+
+func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) error {
+
+	err := func() error {
+		log.Printf("connecting to peer for sync: %v", pid)
 
 		peerChainID := GetChainIDResponse{}
 		{
-			ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+			subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 			defer cancel()
-			err := m.client.CallContext(ctx, peer, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
+			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", GetChainIDRequest{}, &peerChainID)
 			if err != nil {
-				log.Printf("%v: error getting peer chain id, %v", peer, err)
-				return
+				log.Printf("%v: error getting peer chain id, %v", pid, err)
+				return err
 			}
 		}
 
 		chainID, err := m.rpc.GetChainID()
 		if err != nil {
-			log.Printf("%v: error getting chain id, %v", peer, err)
-			return
+			log.Printf("%v: error getting chain id, %v", pid, err)
+			return err
 		}
 
 		if !chainID.ChainID.Equals(&peerChainID.ChainID) {
-			log.Printf("%v: peer's chain id does not match", peer)
-			return
+			log.Printf("%v: peer's chain id does not match", pid)
+			return fmt.Errorf("%v: peer's chain id does not match", pid)
 		}
 
 		headBlock, err := m.rpc.GetHeadBlock()
 		if err != nil {
-			log.Printf("%v: error getting head block, %v", peer, err)
-			return
+			log.Printf("%v: error getting head block, %v", pid, err)
+			return err
 		}
 
 		peerForkStatus := GetForkStatusResponse{}
 		{
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+			subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 			defer cancel()
-			err = m.client.CallContext(ctx, peer, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
+			err = m.client.CallContext(subctx, pid, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
 			if err != nil {
-				log.Printf("%v: error getting peer fork status, %v", peer, err)
-				return
+				log.Printf("%v: error getting peer fork status, %v", pid, err)
+				return err
 			}
 		}
 
 		if peerForkStatus.Status == DifferentFork {
-			log.Printf("%v: peer is on a different fork", peer)
+			log.Printf("%v: peer is on a different fork", pid)
+			return fmt.Errorf("%v: peer is on a different fork", pid)
+		}
+
+		select {
+		case m.handshakeDonePeers <- pid:
+		case <-ctx.Done():
+		}
+
+		log.Printf("%v: connected!", pid)
+	}()
+
+	if err != nil {
+		select {
+		case m.errPeers <- pid:
+		case <-ctx.Done():
+		}
+	}
+}
+
+// Blacklist a peer.  Runs in the main thread.
+func (m *SyncManager) blacklistPeer(ctx context.Context, pid peer.ID, blacklistTime time.Duration) {
+	// Add to the blacklist now
+	m.blacklist[pid] = void{}
+
+	// Un-blacklist it after some time has passed
+	go func() {
+		select {
+		case <-time.After(blacklistTime):
+		case <-ctx.Done():
 			return
 		}
 
-		m.peerLock.Lock()
-		defer m.peerLock.Unlock()
-
-		m.peers[peer] = void{}
-		m.peerSignal.Signal()
-
-		log.Printf("%v: connected!", peer)
+		select {
+		case m.unblacklistPeers <- PeerError{pid, err}:
+		case <-ctx.Done():
+		}
 	}()
+}
 
-	return
+func (m *SyncManager) syncLoop(ctx context.Context, pid peer.ID) {
+	for {
+		err := syncCycle(ctx, pid)
+
+		if err != nil {
+			select {
+			case m.errPeers <- pid:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		select {
+		case <-time.After(time.Duration(syncCycleSeconds) * time.Second):
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// Get the heights that we want to query.
+func GetInitialQueryHeights(myHeight uint64, yourHeight uint64, myIrrHeight uint64, numResults uint64, batchDelta uint64, batchSink uint64) []uint64 {
+	// TODO:  Refactor to prefer getting critical heights to help cache hits
+	lib := myIrrHeight
+	result := make([]uint64, 0)
+
+	h := myHeight
+	if yourHeight < h {
+		h = yourHeight
+	}
+	if h <= lib {
+		return result
+	}
+
+	delta := yourHeight - lib
+	if delta <= numResults {
+		for i = 0; i < delta; i++ {
+			result = append(result, lib+i)
+		}
+		return result
+	}
+
+	start := yourHeight - 1
+	if start > myHeight {
+		start = myHeight + 1
+		hi2 = myHeight + batchDelta - batchSink
+		hi1 = lib + batchDelta
+		if hi2 > yourHeight {
+			hi2 = yourHeight
+		}
+		if hi1 > hi2 {
+			hi1 = (start + hi2) / 2
+		}
+
+		if hi2 > start {
+			result = append(result, hi2)
+		}
+
+		if hi1 > start {
+			result = append(result, hi1)
+		}
+	}
+
+	x := start
+	for i = 0; i < numResults-4; i++ {
+		if x <= lib {
+			return result
+		}
+		result = append(result, x)
+		x -= 1
+	}
+
+	m := (x + lib) / 2
+	result = append(result, m)
+	result = append(result, lib)
+	return result
+}
+
+func (m *SyncManager) syncCycle(ctx context.Context, pid peer.ID) error {
+	// Do a single cycle of sync mode
+
+	// What fork heads do you have available?  What's your LIB?
+	yourForkHeads := GetForkHeadsResponse{}
+	subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+	err := m.client.CallContext(subctx, pid, "SyncService", "GetForkHeads", GetForkHeadsRequest{}, &forkHeadsResponse)
+	if err != nil {
+		log.Printf("%v: error getting peer head block, error was %v\n", pid, err)
+		return err
+	}
+
+	// What fork heads do I have available?  What's my LIB?
+	myForkHeads, err := m.rpc.GetForkHeads()
+	if err != nil {
+		// TODO:  We lose all peers when there's an error return due to this purely local condition
+		// Perhaps we should have some failure-retry for local errors like this?
+		log.Printf("error getting head block, %v", err)
+		return err
+	}
+
+	rand.Shuffle(len(yourForkHeads), func(i, j int) {
+		yourForkHeads[i], yourForkHeads[j] = yourForkHeads[j], yourForkHeads[i]
+	})
+
+	// TODO:  Put myForkHeads in a dictionary to make this comparison not O(n^2)
+	// TODO:  Check cases in order of expense.  E.g. we can do extension checks for everybody really fast.
+	// TODO:  Cache your topological assertions instead of asking you every time.
+	for _, yourHead := range yourForkHeads.ForkHeads {
+		for _, myHead := range myForkHeads.ForkHeads {
+
+			// Are we both at the same head on this fork?
+			if yourHead.ID.Equals(myHead.ID) {
+				continue
+			}
+
+			// Are you 1 block ahead of me on this fork?
+			if yourHead.Previous.Equals(myHead.ID) {
+				select {
+				case m.blockRequests <- PeerBlockRequest{yourHead, pid}:
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
+
+			// Are you behind my LIB height on this fork?
+			lih := uint64(myForkHeads.LastIrr.Height)
+			if uint64(yourHead.Height) <= lih {
+				continue
+			}
+
+			// You're multiple blocks ahead of me on this fork.
+			// I need to find the MRCA of your fork and my fork.
+			// Query your topology for some heights on your fork.
+
+			// Query heights
+			// GetInitialQueryHeights(myHeight, yourHeight, myIrrHeight, numResults, batchDelta, batchSink)
+			heights := GetInitialQueryHeights(uint64(myHead.Height), uint64(yourHead.Height), lib, 8, 20, 6)
+
+			ancestorTopology := GetAncestorTopologyAtHeights(yourHead.ID, heights)
+
+			for _, atopo := range ancestorTopology {
+			}
+		}
+	}
 }
 
 func createBlockRequests(headBlock uint64, targetSyncBlock uint64, requestQueue chan BatchBlockRequest) {
@@ -304,84 +518,92 @@ func (m *SyncManager) getPeerForks(targetSyncBlock uint64, peers map[peer.ID]voi
 	return peerForks
 }
 
-func (m *SyncManager) run() {
+func (m *SyncManager) run(ctx context.Context) {
 	for {
-		// Wait for peers
-		m.peerSignal.L.Lock()
-		for len(m.peers) == 0 {
-			m.peerSignal.Wait()
-		}
-		peers := m.peers
-		m.peerSignal.L.Unlock()
+		var peer peer.ID
 
-		headBlock, err := m.rpc.GetHeadBlock()
-		if err != nil {
-			log.Printf("error getting head block, %v", err)
-		}
-		smallestHeadBlock := ^uint64(0)
-		peerHeads := make(map[peer.ID]types.Multihash)
-		peersToDisconnect := make(map[peer.ID]void)
-		peersToGossip := make(map[peer.ID]void)
-
-		for peer := range peers {
-			peerHeadBlock := GetHeadBlockResponse{}
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-			defer cancel()
-			err := m.client.CallContext(ctx, peer, "SyncService", "GetHeadBlock", GetHeadBlockRequest{}, &peerHeadBlock)
-			if err != nil {
-				log.Printf("%v: error getting peer head block, disconnecting from peer", peer)
-				peersToDisconnect[peer] = void{}
-			} else {
-				log.Print(peerHeadBlock.Height)
-				if peerHeadBlock.Height <= headBlock.Height+types.BlockHeightType(syncDelta) {
-					peersToGossip[peer] = void{}
-				} else if uint64(peerHeadBlock.Height) < smallestHeadBlock {
-					smallestHeadBlock = uint64(peerHeadBlock.Height)
-				}
-
-				peerHeads[peer] = peerHeadBlock.ID
+		select {
+		case pid <- m.newPeers:
+			_, isBlacklisted := m.blacklist[pid]
+			if !isBlacklisted {
+				go doPeerHandshake(ctx, pid)
 			}
+		case pid <- m.handshakeDonePeers:
+			m.peers[pid] = void{}
+		case perr <- m.errPeers:
+			// If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
+			m.blacklistPeer(perr.PeerID, time.Duration(blacklistSeconds)*time.Second)
+			delete(m.peers, perr.PeerID)
+		case pid <- m.unblacklistPeers:
+			delete(m.blacklist, pid)
+		case <-ctx.Done():
+			return
 		}
+	}
 
-		m.peerLock.Lock()
-		for peer := range peersToGossip {
-			log.Printf("synced with peer %v, moving to gossip", peer)
-			// TODO: Send to gossip
-			delete(m.peers, peer)
-			delete(peers, peer)
+	smallestHeadBlock := ^uint64(0)
+	peerHeads := make(map[peer.ID]types.Multihash)
+	peersToDisconnect := make(map[peer.ID]void)
+	peersToGossip := make(map[peer.ID]void)
+
+	for peer := range peers {
+		peerHeadBlock := GetHeadBlockResponse{}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
+		defer cancel()
+		err := m.client.CallContext(ctx, peer, "SyncService", "GetHeadBlock", GetHeadBlockRequest{}, &peerHeadBlock)
+		if err != nil {
+			log.Printf("%v: error getting peer head block, disconnecting from peer", peer)
+			peersToDisconnect[peer] = void{}
+		} else {
+			log.Print(peerHeadBlock.Height)
+			if peerHeadBlock.Height <= headBlock.Height+types.BlockHeightType(syncDelta) {
+				peersToGossip[peer] = void{}
+			} else if uint64(peerHeadBlock.Height) < smallestHeadBlock {
+				smallestHeadBlock = uint64(peerHeadBlock.Height)
+			}
+
+			peerHeads[peer] = peerHeadBlock.ID
 		}
-		for peer := range peersToDisconnect {
-			log.Printf("disconnecting from peer %v", peer)
-			// TODO: Trigger disconnect?
-			delete(m.peers, peer)
-			delete(peers, peer)
-		}
-		m.peerLock.Unlock()
+	}
 
-		if len(peers) == 0 {
-			continue
-		}
+	m.peerLock.Lock()
+	for peer := range peersToGossip {
+		log.Printf("synced with peer %v, moving to gossip", peer)
+		// TODO: Send to gossip
+		delete(m.peers, peer)
+		delete(peers, peer)
+	}
+	for peer := range peersToDisconnect {
+		log.Printf("disconnecting from peer %v", peer)
+		// TODO: Trigger disconnect?
+		delete(m.peers, peer)
+		delete(peers, peer)
+	}
+	m.peerLock.Unlock()
 
-		blockDelta := (smallestHeadBlock - uint64(headBlock.Height)) / 2
-		if blockDelta > maxBlockDelta {
-			blockDelta = maxBlockDelta
-		}
-		targetSyncBlock := uint64(headBlock.Height) + blockDelta
+	if len(peers) == 0 {
+		continue
+	}
 
-		// Get the fork each peer is on
-		peerForks := m.getPeerForks(targetSyncBlock, peers, peerHeads)
+	blockDelta := (smallestHeadBlock - uint64(headBlock.Height)) / 2
+	if blockDelta > maxBlockDelta {
+		blockDelta = maxBlockDelta
+	}
+	targetSyncBlock := uint64(headBlock.Height) + blockDelta
 
-		syncChans := make([]chan int, 0, len(peerForks))
+	// Get the fork each peer is on
+	peerForks := m.getPeerForks(targetSyncBlock, peers, peerHeads)
 
-		for _, peers := range peerForks {
-			doneChan := make(chan int)
-			go m.syncFork(targetSyncBlock, headBlock, peers, peerHeads, doneChan)
-			syncChans = append(syncChans, doneChan)
-		}
+	syncChans := make([]chan int, 0, len(peerForks))
 
-		for _, done := range syncChans {
-			<-done
-		}
+	for _, peers := range peerForks {
+		doneChan := make(chan int)
+		go m.syncFork(targetSyncBlock, headBlock, peers, peerHeads, doneChan)
+		syncChans = append(syncChans, doneChan)
+	}
+
+	for _, done := range syncChans {
+		<-done
 	}
 }
 

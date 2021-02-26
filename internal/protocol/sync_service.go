@@ -25,6 +25,15 @@ type GetHeadBlockResponse struct {
 	Height types.BlockHeightType
 }
 
+// GetForkHeadsRequest args
+type GetForkHeadsRequest struct{}
+
+// GetForkHeadsResponse return
+type GetForkHeadsResponse struct {
+	ForkHeads []types.BlockTopology
+	LastIrr   types.BlockTopology
+}
+
 // BroadcastPeerStatus is an enum which represent peer's response
 type forkStatus int
 
@@ -58,6 +67,7 @@ type GetBlocksResponse struct {
 }
 
 // SyncService handles broadcasting inventory to peers
+// TODO: Rename RPC -> KoinosdRPC
 type SyncService struct {
 	RPC rpc.RPC
 }
@@ -66,7 +76,7 @@ type SyncService struct {
 func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest, response *GetChainIDResponse) error {
 	rpcResult, err := s.RPC.GetChainID()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	response.ChainID = rpcResult.ChainID
@@ -77,12 +87,35 @@ func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest,
 func (s *SyncService) GetHeadBlock(ctx context.Context, request GetHeadBlockRequest, response *GetHeadBlockResponse) error {
 	rpcResult, err := s.RPC.GetHeadBlock()
 	if err != nil {
-		return nil
+		return err
 	}
 
 	response.ID = rpcResult.ID
 	response.Height = rpcResult.Height
 	return nil
+}
+
+// GetForkHeads p2p rpc
+func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequest, response *GetForkStatusResponse) error {
+	rpcResult, err := s.RPC.GetForkHeads()
+	if err != nil {
+		return err
+	}
+
+	response.ForkHeads = rpcResult.ForkHeads
+	response.LastIrr = rpcResult.LastIrr
+}
+
+func (s *SyncService) GetAncestorTopologyAtHeights(blockID *koinos_types.Multihash, heights []koinos_types.BlockHeightType) ([]koinos_types.BlockTopology, error) {
+	//
+}
+
+// GetForkHeads p2p rpc
+func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequest, response *GetForkStatusResponse) error {
+	rpcResult, err := s.RPC.GetForkHeads()
+
+	response.ForkHeads = rpcResult.ForkHeads
+	response.LastIrr = rpcResult.LastIrr
 }
 
 // GetForkStatus p2p rpc

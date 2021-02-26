@@ -201,3 +201,40 @@ func (k *KoinosRPC) SetBroadcastHandler(topic string, handler func(topic string,
 	mq := koinosmq.GetKoinosMQ()
 	mq.SetBroadcastHandler(topic, handler)
 }
+
+// GetForkHeads rpc call
+func (k *KoinosRPC) GetForkHeads() (*koinos_types.GetForkHeadsResponse, error) {
+	args := koinos_types.GetForkHeadsRequest{}
+
+	data, err := json.Marshal(args)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var responseBytes []byte
+	responseBytes, err = k.mq.SendRPC("application/json", "chain", data)
+
+	if err != nil {
+		return nil, err
+	}
+
+	responseVariant := koinos_types.NewChainRPCResponse()
+	err = json.Unmarshal(responseBytes, responseVariant)
+	if err != nil {
+		return nil, err
+	}
+
+	var response *koinos_types.GetForkHeadsResponse
+
+	switch t := responseVariant.Value.(type) {
+	case *koinos_types.GetForkHeadsResponse:
+		response = (*koinos_types.GetForkHeadsResponse)(t)
+	case *koinos_types.ChainErrorResponse:
+		err = errors.New(string(t.ErrorText))
+	default:
+		err = errors.New("Unexpected return type")
+	}
+
+	return response, err
+}
