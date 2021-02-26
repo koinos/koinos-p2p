@@ -19,13 +19,6 @@ import (
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 )
 
-//
-// The sync protocol works like this:
-//
-// - When we connect to a peer, we can enable / disable fork notification for the peer.
-// - When fork notification is enabled, the peer sends a LIB notification followed by a block notification for each block.
-//
-
 // SyncID Identifies the koinos sync protocol
 const SyncID = "/koinos/sync/1.0.0"
 
@@ -50,8 +43,30 @@ type PeerError struct {
 }
 
 type PeerBlockRequest struct {
-	Topology types.BlockTopology
-	Peer     peer.ID
+	Topology  types.BlockTopology
+	Requester peer.ID
+	// Populated by SyncManager, so should have a size of 1 to avoid blocking
+	DoneChan chan PeerBlockResponse
+	// Populated by SyncManager, so should have a size of 1 to avoid blocking
+	ErrChan chan PeerBlockResponseError
+}
+
+type PeerBlockResponse struct {
+	Topology  types.BlockTopology
+	Responder peer.ID
+	Block     *types.OpaqueBlock
+}
+
+type PeerBlockResponseError struct {
+	Topology  types.BlockTopology
+	Responder peer.ID
+	Error     error
+}
+
+type InFlightBlockRequest struct {
+	Request         PeerBlockRequest
+	DownloadingPeer peer.ID
+	WaitingPeers    map[peer.ID]void
 }
 
 // SyncManager syncs blocks using multiple peers
@@ -75,11 +90,23 @@ type SyncManager struct {
 	// Channel for block requests
 	blockRequests chan PeerBlockRequest
 
+	// Channel for completed block downloads
+	blockRequestDone chan PeerBlockResponse
+
+	// Channel for block downloads that had error
+	blockRequestErr chan PeerBlockResponseError
+
+	// Channel for block downloads that didn't apply
+	blockRequestApplyErr chan PeerBlockResponseError
+
 	// Peer ID map.  Only updated in the internal SyncManager thread
 	peers map[peer.ID]void
 
 	// Blacklisted peers.
 	blacklist map[peer.ID]void
+
+	// Currently downloading blocks
+	blockDownloads map[string]InFlightBlockRequest
 }
 
 type void struct{}
@@ -347,10 +374,32 @@ func (m *SyncManager) syncCycle(ctx context.Context, pid peer.ID) error {
 			// Query heights
 			// GetInitialQueryHeights(myHeight, yourHeight, myIrrHeight, numResults, batchDelta, batchSink)
 			heights := GetInitialQueryHeights(uint64(myHead.Height), uint64(yourHead.Height), lib, 8, 20, 6)
+			log.Printf("%v: Querying heights %v (my=%d, your=%d, lib=%d)", pid, heights, myHead.Height, yourHead.Height, lib)
 
 			ancestorTopology := GetAncestorTopologyAtHeights(yourHead.ID, heights)
 
-			for _, atopo := range ancestorTopology {
+			for _, yourTopo := range ancestorTopology {
+				if (yourTopo.Height == myHead.Height+1) && (yourTopo.Previous.Equals(myHead.ID)) {
+					doneChan := make(chan PeerBlockResponse, 1)
+					errChan := make(chan PeerBlockResponseError, 1)
+					select {
+					case m.blockRequests <- PeerBlockRequest{yourTopo, pid, doneChan, errChan}:
+					case <-ctx.Done():
+						return
+					}
+
+					select {
+					case resp := <-doneChan:
+						// TODO does the peer need to do anything with the response?
+					case errResp := <-errChan:
+						log.Printf("error getting head block, %v\n", errResp.Error)
+						return err
+					case <-ctx.Done():
+					}
+					break
+				}
+				// TODO:  Handle pushing fork blocks if we're on a fork
+				// TODO:  Batch requests
 			}
 		}
 	}
@@ -518,6 +567,15 @@ func (m *SyncManager) getPeerForks(targetSyncBlock uint64, peers map[peer.ID]voi
 	return peerForks
 }
 
+func doBlockRequest(req PeerBlockRequest) {
+	// Download the block from req.Requester
+	// Attempt to apply the block
+	// Send to blockRequestDone, blockRequestErr, or blockRequestApplyErr as appropriate
+
+	// Note:  We don't want to send to the peer's DoneChan or ErrChan in this method,
+	// since SyncManager needs to update its state in the main thread.
+}
+
 func (m *SyncManager) run(ctx context.Context) {
 	for {
 		var peer peer.ID
@@ -536,6 +594,57 @@ func (m *SyncManager) run(ctx context.Context) {
 			delete(m.peers, perr.PeerID)
 		case pid <- m.unblacklistPeers:
 			delete(m.blacklist, pid)
+
+		case req := <-m.blockRequests:
+			k := req.Topology.Serialize(NewVariableBlob())
+			currentReq, hasReq := m.blockDownloads[k]
+			if hasReq {
+				// TODO check that this doesn't overwrite an existing entry and also isn't the current downloader
+				currentReq.WaitingReq[req.Requester] = req
+			} else {
+				m.blockDownloads[k] = InFlightBlockRequest{
+					DownloadingReq: req,
+					WaitingReq:     make(map[peer.ID]void),
+				}
+				go doBlockRequest(req)
+			}
+
+		case resp := <-m.blockRequestDone:
+			k := resp.Topology.Serialize(NewVariableBlob())
+			currentReq, hasReq := m.blockDownloads[k]
+			if !hasReq {
+				panic("Illegal state, blockDownloads entry was not found")
+			}
+			currentReq.DownloadingReq.DoneChan <- resp
+			for _, waiter := range currentReq.WaitingReq {
+				waiter.DoneChan <- resp
+			}
+			delete(m.BlockDownloads, k)
+
+		case peerDone := <-m.blockRequestErr:
+			// We only send the error code to the peer that couldn't download it
+			k := resp.Topology.Serialize(NewVariableBlob())
+			currentReq, hasReq := m.blockDownloads[k]
+			if !hasReq {
+				panic("Illegal state, blockDownloads entry was not found")
+			}
+			currentReq.DownloadingReq.ErrChan <- resp
+
+			if len(currentReq.WaitingReq) == 0 {
+				delete(m.BlockDownloads, k)
+			} else {
+				// TODO we just pick the first key in the Golang map key traversal order, do we want to pick randomly instead?
+				for newDownloaderID, newDownloader := range currentReq.WaitingReq {
+					break
+				}
+				delete(currentReq.WaitingReq, newDownloaderID)
+				currentReq.DownloadingReq = newDownloader
+				go doBlockRequest(newDownloader)
+			}
+
+		case applyErr := <-m.blockRequestApplyErr:
+			// TODO write this code
+
 		case <-ctx.Done():
 			return
 		}

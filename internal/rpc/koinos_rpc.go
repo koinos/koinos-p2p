@@ -152,10 +152,36 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height ko
 	case *koinos_types.BlockStoreErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:
-		err = errors.New("Unexptected return type")
+		err = errors.New("Unexpected return type")
 	}
 
 	return response, err
+}
+
+// GetAncestorTopologyAtHeight rpc call
+func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *koinos_types.Multihash, heights []koinos_types.BlockHeightType) ([]koinos_types.BlockTopology, error) {
+
+	// TODO:  Implement this properly in the block store.
+	// This implementation is an inefficient, abstraction-breaking hack that unboxes stuff in the p2p code (where it definitely shouldn't be unboxed).
+
+	result := make([]koinos_types.BlockTopology, len(heights))
+
+	for i, h := range heights {
+		resp := k.GetBlocksByHeight(blockID, h, 1)
+		if len(resp.BlockItems) != 1 {
+			return nil, errors.New("Unexpected multiple blocks returned")
+		}
+		resp.BlockItems[0].Block.ActiveData.Unbox()
+		activeData, err := resp.BlockItems[0].Block.ActiveData.GetNative()
+		if err != nil {
+			return nil, err
+		}
+		result[i].ID = resp.BlockItems[0].BlockID
+		result[i].Height = resp.BlockItems[0].BlockHeight
+		result[i].Previous = activeData.PreviousBlock
+	}
+
+	return result, nil
 }
 
 // GetChainID rpc call
