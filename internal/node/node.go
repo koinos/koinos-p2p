@@ -9,7 +9,6 @@ import (
 	mrand "math/rand"
 	"time"
 
-	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
@@ -101,10 +100,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	}
 	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps)
 
-	// Setup handler for RabbitMQ messages
-	mq := koinosmq.GetKoinosMQ()
-	mq.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
-	mq.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
+	node.RPC.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
+	node.RPC.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
 
 	err = node.connectInitialPeers()
 	if err != nil {
