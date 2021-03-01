@@ -22,6 +22,9 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
+// KoinosP2POptions is a list of options that affect how a node is created
+//
+// Mostly used to implement p2p tests and command line flags
 type KoinosP2POptions struct {
 	// Set to true if peer exchange enabled
 	EnablePeerExchange bool

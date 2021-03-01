@@ -196,6 +196,7 @@ func (k *KoinosRPC) GetChainID() (*koinos_types.GetChainIDResponse, error) {
 	return response, err
 }
 
+// SetBroadcastHandler allows a function to be called for every broadcast block
 func (k *KoinosRPC) SetBroadcastHandler(topic string, handler func(topic string, data []byte)) {
 	mq := koinosmq.GetKoinosMQ()
 	mq.SetBroadcastHandler(topic, handler)
