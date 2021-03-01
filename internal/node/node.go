@@ -97,7 +97,10 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.Options = koptions
 
 	// Create the pubsub gossip
-	ps, err := pubsub.NewGossipSub(ctx, node.Host)
+	ps, err := pubsub.NewGossipSub(
+		ctx, node.Host,
+		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +147,7 @@ func (n *KoinosP2PNode) connectInitialPeers() error {
 	// Connect to a peer
 	for _, pid := range n.Options.InitialPeers {
 		if pid != "" {
-			log.Printf("Connecting to peer %s and sending broadcast\n", pid)
+			log.Printf("Connecting to initial peer %s and sending broadcast\n", pid)
 			_, err := n.ConnectToPeer(pid)
 			if err != nil {
 				return err
