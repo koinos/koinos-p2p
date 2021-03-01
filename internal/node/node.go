@@ -179,12 +179,6 @@ func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
 	return peer, nil
 }
 
-// MakeContext creates and returns the canonical context which should be used for peer connections
-// TODO: create this from configuration
-func (n *KoinosP2PNode) MakeContext() (ctx context.Context, cancel context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 30*time.Second)
-}
-
 // GetListenAddress returns the multiaddress on which the node is listening
 func (n *KoinosP2PNode) GetListenAddress() multiaddr.Multiaddr {
 	return n.Host.Addrs()[0]
