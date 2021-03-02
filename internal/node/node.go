@@ -198,11 +198,6 @@ func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
 		return nil, err
 	}
 
-	err = n.SyncManager.AddPeer(peer.ID)
-	if err != nil {
-		return nil, err
-	}
-
 	return peer, nil
 }
 

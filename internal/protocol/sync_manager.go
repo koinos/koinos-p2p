@@ -134,6 +134,9 @@ func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 		panic(err)
 	}
 
+	// TODO: What is context?
+	h.Network().Notify(NewSyncManagerPeerAddr(ctx, h, &manager))
+
 	return &manager
 }
 
