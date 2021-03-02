@@ -2,16 +2,15 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	flag "github.com/spf13/pflag"
 )
 
 func getChannelError(errs chan error) error {
@@ -23,29 +22,11 @@ func getChannelError(errs chan error) error {
 	}
 }
 
-/**
- * appendFlag is a helper for the golang flag module (import "flag") that lets you specify a flag multiple times.
- *
- * Golint doesn't like it when we export appendFlag, so we don't export it.
- */
-type appendFlag []string
-
-func (a *appendFlag) Set(value string) error {
-	*a = append(*a, value)
-	return nil
-}
-
-func (a *appendFlag) String() string {
-	return strings.Join(*a, ",")
-}
-
 func main() {
-	var peerFlags appendFlag
-	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
-	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
-	flag.Var(&peerFlags, "peer", "Address of a peer to which to connect (may specify multiple)")
-	flag.Var(&peerFlags, "p", "Address of a peer to which to connect (may specify multiple) (short)")
-	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
+	var addr = flag.StringP("listen", "l", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
+	var seed = flag.IntP("seed", "s", 0, "Random seed with which the node will generate an ID")
+	var peerFlags = flag.StringSliceP("peer", "p", []string{}, "")
+	var amqpFlag = flag.StringP("ampq", "a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
 
 	flag.Parse()
 
@@ -59,7 +40,7 @@ func main() {
 	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
 
 	// Connect to a peer
-	for _, pid := range peerFlags {
+	for _, pid := range *peerFlags {
 		if pid != "" {
 			log.Printf("Connecting to peer %s and sending broadcast\n", pid)
 			_, err := host.ConnectToPeer(pid)
