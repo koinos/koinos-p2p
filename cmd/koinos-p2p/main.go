@@ -2,44 +2,24 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	flag "github.com/spf13/pflag"
 )
 
-/**
- * appendFlag is a helper for the golang flag module (import "flag") that lets you specify a flag multiple times.
- *
- * Golint doesn't like it when we export appendFlag, so we don't export it.
- */
-type appendFlag []string
-
-func (a *appendFlag) Set(value string) error {
-	*a = append(*a, value)
-	return nil
-}
-
-func (a *appendFlag) String() string {
-	return strings.Join(*a, ",")
-}
-
 func main() {
-	var peerFlags appendFlag
-	var directFlags appendFlag
-	var addr = flag.String("listen", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
-	var seed = flag.Int("seed", 0, "Random seed with which the node will generate an ID")
-	flag.Var(&peerFlags, "peer", "Address of a peer to which to connect (may specify multiple)")
-	flag.Var(&peerFlags, "p", "Address of a peer to which to connect (may specify multiple) (short)")
-	flag.Var(&directFlags, "direct", "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
-	var pexFlag = flag.Bool("pex", true, "Exchange peers with other nodes")
-	var amqpFlag = flag.String("a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
+	var addr = flag.StringP("listen", "l", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
+	var seed = flag.IntP("seed", "s", 0, "Random seed with which the node will generate an ID")
+	var amqpFlag = flag.StringP("amqp", "a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
+	var peerFlags = flag.StringSliceP("peer", "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
+	var directFlags = flag.StringSliceP("direct", "d", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
+	var pexFlag = flag.BoolP("pex", "x", true, "Exchange peers with other nodes")
 
 	flag.Parse()
 
@@ -48,8 +28,8 @@ func main() {
 
 	opt := node.NewKoinosP2POptions()
 	opt.EnablePeerExchange = *pexFlag
-	opt.InitialPeers = peerFlags
-	opt.DirectPeers = directFlags
+	opt.InitialPeers = *peerFlags
+	opt.DirectPeers = *directFlags
 
 	host, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(), int64(*seed), *opt)
 	if err != nil {
