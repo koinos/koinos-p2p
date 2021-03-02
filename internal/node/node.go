@@ -26,8 +26,11 @@ import (
 //
 // Mostly used to implement p2p tests and command line flags
 type KoinosP2POptions struct {
-	// Set to true if peer exchange enabled
+	// Set to true to enable peer exchange, where peers are given to / accepted from other nodes
 	EnablePeerExchange bool
+
+	// Set to true to enable bootstrap mode, where incoming connections are referred to other nodes
+	EnableBootstrap bool
 
 	// Peers to initially connect
 	InitialPeers []string
@@ -51,6 +54,7 @@ type KoinosP2PNode struct {
 func NewKoinosP2POptions() *KoinosP2POptions {
 	return &KoinosP2POptions{
 		EnablePeerExchange: true,
+		EnableBootstrap:    false,
 		InitialPeers:       make([]string, 0),
 		DirectPeers:        make([]string, 0),
 	}
@@ -97,6 +101,26 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.Options = koptions
 
 	// Create the pubsub gossip
+	if node.Options.EnableBootstrap {
+		// TODO:  When https://github.com/libp2p/go-libp2p-pubsub/issues/364 is fixed, don't monkey-patch global variables like this
+		log.Printf("Bootstrap node enabled\n")
+		pubsub.GossipSubD = 0
+		pubsub.GossipSubDlo = 0
+		pubsub.GossipSubDhi = 0
+		pubsub.GossipSubDscore = 0
+	} else {
+		pubsub.GossipSubD = 6
+		pubsub.GossipSubDlo = 5
+		pubsub.GossipSubDhi = 12
+		pubsub.GossipSubDscore = 4
+	}
+
+	if !node.Options.EnablePeerExchange {
+		pubsub.GossipSubPrunePeers = 0
+	} else {
+		pubsub.GossipSubPrunePeers = 16
+	}
+
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
 		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
