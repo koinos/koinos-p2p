@@ -15,4 +15,6 @@ type RPC interface {
 	SetBroadcastHandler(topic string, handler func(topic string, data []byte))
 	GetForkHeads() (*koinos_types.GetForkHeadsResponse, error)
 	GetAncestorTopologyAtHeights(blockID *koinos_types.Multihash, heights []koinos_types.BlockHeightType) ([]koinos_types.BlockTopology, error)
+
+	GetTopologyAtHeightRange(minHeight koinos_types.BlockHeightType, maxHeight koinos_types.BlockHeightType) (*koinos_types.GetForkHeadsResponse, []koinos_types.BlockTopology, error)
 }

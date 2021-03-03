@@ -264,3 +264,14 @@ func (k *KoinosRPC) GetForkHeads() (*koinos_types.GetForkHeadsResponse, error) {
 
 	return response, err
 }
+
+// GetTopologyAtHeightRange() finds the blocks at the given height range.
+//
+// Three steps:
+// - (1) Call GetForkHeads() to get the fork heads and LIB from koinosd
+// - (2) For each fork, call GetBlocksByHeight() with the given height bounds to get the blocks in that height range on that fork.
+// - (3) Finally, do some purely computational cleanup:  Extract the BlockTopology and de-duplicate multiple instances of the same block.
+//
+func (k *KoinosRPC) GetTopologyAtHeightRange(minHeight koinos_types.BlockHeightType, maxHeight koinos_types.BlockHeightType) (*koinos_types.GetForkHeadsResponse, []koinos_types.BlockTopology, error) {
+	// TODO
+}
