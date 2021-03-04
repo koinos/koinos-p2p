@@ -1,5 +1,15 @@
 package protocol
 
+import (
+	"context"
+	"log"
+	"math/rand"
+
+	"github.com/libp2p/go-libp2p-core/peer"
+
+	types "github.com/koinos/koinos-types-golang"
+)
+
 const (
 	defaultMaxDownloadsInFlight int = 8
 	defaultMaxDownloadDepth     int = 3
@@ -22,7 +32,7 @@ type BlockDownloadResponse struct {
 	Topology    types.BlockTopology
 	PeerID      peer.ID
 
-	Block OpaqueBlock
+	Block types.OpaqueBlock
 	Err   error
 }
 
@@ -38,14 +48,16 @@ type BlockDownloadManagerInterface interface {
 	// RequestDownload is called by the BlockDownloadManager to request a download to begin.
 	//
 	// The implementation should use a goroutine to handle any blocking operations.
+	// Any goroutines launched should respect the passed-in context.
 	// When the download result is available, the implementation should send it to DownloadResponseChan().
-	RequestDownload(BlockDownloadRequest)
+	RequestDownload(context.Context, BlockDownloadRequest)
 
 	// ApplyBlock is called by the BlockDownloadManager to request a block to be applied.
 	//
 	// The implementation should use a goroutine to handle any blocking operations.
+	// Any goroutines launched should respect the passed-in context.
 	// When the block succeeds or fails to apply, the implementation should send it to ApplyBlockResultChan().
-	ApplyBlock(BlockDownloadResponse)
+	ApplyBlock(context.Context, BlockDownloadResponse)
 
 	// MyBlockTopologyChan values are supplied by the user to inform the BlockDownloadManager of
 	// blocks that have been successfully applied to the local node.
@@ -90,7 +102,7 @@ type BlockDownloadManagerInterface interface {
 	//   claimed block ID.  The BlockDownloadManager will attempt to download the block from other peers.
 	// - If the block failed with any other error, the block was valid but failed for semantic reasons.
 	//   The BlockDownloadManager will add the block to its blacklist (TODO).
-	ApplyBlockResultChan() <-chan BlockDownloadApply
+	ApplyBlockResultChan() <-chan BlockDownloadApplyResult
 
 	// RescanChan values are supplied to cause a rescan to initiate new download requests.
 	//
@@ -113,14 +125,14 @@ type BlockDownloadManager struct {
 	MaxDownloadDepth     int
 
 	needRescan bool
-	rng        rand.Rand
+	rng        *rand.Rand
 	iface      BlockDownloadManagerInterface
 }
 
-func (*BlockDownloadManager) NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface) {
+func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface) *BlockDownloadManager {
 	man := BlockDownloadManager{
-		MyTopoCache:    NewMyTopologyCache(),
-		TopoCache:      NewTopologyCache(),
+		MyTopoCache:    *NewMyTopologyCache(),
+		TopoCache:      *NewTopologyCache(),
 		Downloading:    make(map[string]BlockDownloadRequest),
 		Applying:       make(map[string]BlockDownloadResponse),
 		WaitingToApply: make(map[string]BlockDownloadResponse),
@@ -128,17 +140,17 @@ func (*BlockDownloadManager) NewBlockDownloadManager(rng *rand.Rand, iface Block
 		MaxDownloadsInFlight: defaultMaxDownloadsInFlight,
 		MaxDownloadDepth:     defaultMaxDownloadDepth,
 		needRescan:           false,
-		rng:                  rand.Rand,
+		rng:                  rng,
 		iface:                iface,
 	}
 	return &man
 }
 
-func (*BlockDownloadManager) Start(ctx context.Context) {
-	go man.downloadManagerLoop(ctx)
+func (m *BlockDownloadManager) Start(ctx context.Context) {
+	go m.downloadManagerLoop(ctx)
 }
 
-func (m *BlockDownloadManager) handleDownloadResponse(resp BlockDownloadResponse) {
+func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp BlockDownloadResponse) {
 	_, hasDownloading := m.Downloading[resp.SerTopology]
 	if !hasDownloading {
 		log.Printf("Got BlockDownloadResponse for block %v from peer %v, but it was unexpectedly not tracked in the Downloading map\n",
@@ -153,7 +165,7 @@ func (m *BlockDownloadManager) handleDownloadResponse(resp BlockDownloadResponse
 			resp.Topology.ID, resp.PeerID, alreadyApplying.PeerID)
 		return
 	}
-	alreadyWaiting, hasAlreadyWaiting := m.WaitingToApply
+	alreadyWaiting, hasAlreadyWaiting := m.WaitingToApply[resp.SerTopology]
 	if hasAlreadyWaiting {
 		log.Printf("Discarded block response for block %v from peer %v:  Already waiting to apply from peer %v\n",
 			resp.Topology.ID, resp.PeerID, alreadyWaiting.PeerID)
@@ -163,13 +175,13 @@ func (m *BlockDownloadManager) handleDownloadResponse(resp BlockDownloadResponse
 	_, hasPrev := m.MyTopoCache.ByID[resp.Topology.Previous]
 	if hasPrev {
 		m.Applying[resp.SerTopology] = resp
-		m.iface.ApplyBlock(resp)
+		m.iface.ApplyBlock(ctx, resp)
 	} else {
 		m.WaitingToApply[resp.SerTopology] = resp
 	}
 }
 
-func (m *BlockDownloadManager) handleApplyBlockResult(applyResult ApplyBlockResult) {
+func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadApplyResult) {
 	if applyResult.Err == nil {
 		// Success.
 		// Do nothing, subsequent waiting blocks will be activated by MyBlockTopologyChan message.
@@ -180,7 +192,7 @@ func (m *BlockDownloadManager) handleApplyBlockResult(applyResult ApplyBlockResu
 	// TODO:  Handle block that fails to apply.
 }
 
-func (m *BlockDownloadManager) startDownload(download string) {
+func (m *BlockDownloadManager) startDownload(ctx context.Context, download string) {
 	// If the download's already gotten in, no-op
 	_, isDownloading := m.Downloading[download]
 	if isDownloading {
@@ -202,8 +214,9 @@ func (m *BlockDownloadManager) startDownload(download string) {
 	}
 
 	// Pick a peer that has the download
+	// TODO:  Add constraint to bound the number of in-flight downloads sent to a single peer
 	peer, err := m.TopoCache.PickPeer(download, m.rng)
-	if err {
+	if err != nil {
 		log.Printf("Got an error trying to pick a peer to download block %v\n", topo.ID)
 		return
 	}
@@ -215,10 +228,10 @@ func (m *BlockDownloadManager) startDownload(download string) {
 	}
 
 	m.Downloading[download] = req
-	iface.RequestDownload(req)
+	m.iface.RequestDownload(ctx, req)
 }
 
-func (m *BlockDownloadManager) rescan() {
+func (m *BlockDownloadManager) rescan(ctx context.Context) {
 	// Figure out the blocks we'd ideally be downloading
 	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.MaxDownloadsInFlight, m.MaxDownloadDepth)
 
@@ -228,7 +241,7 @@ func (m *BlockDownloadManager) rescan() {
 			break
 		}
 
-		m.startDownload(download)
+		m.startDownload(ctx, download)
 	}
 
 	// TODO:  Expire obsolete entries (behind LIB)
@@ -240,7 +253,7 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 		select {
 		case forcedRescan := <-m.iface.RescanChan():
 			if forcedRescan || m.needRescan {
-				m.rescan()
+				m.rescan(ctx)
 				m.needRescan = false
 			}
 		case newMyTopo := <-m.iface.MyBlockTopologyChan():
@@ -251,10 +264,10 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 			m.TopoCache.SetLastIrr(newMyLastIrr)
 			m.needRescan = true
 		case peerHasBlock := <-m.iface.PeerHasBlockChan():
-			m.TopoCache.Add(peerHasBlock.PeerID)
+			m.TopoCache.Add(peerHasBlock.PeerID, peerHasBlock.Block)
 			m.needRescan = true
 		case downloadResponse := <-m.iface.DownloadResponseChan():
-			m.handleDownloadResponse(downloadResponse)
+			m.handleDownloadResponse(ctx, downloadResponse)
 		case applyBlockResult := <-m.iface.ApplyBlockResultChan():
 			m.handleApplyBlockResult(applyBlockResult)
 		case <-ctx.Done():

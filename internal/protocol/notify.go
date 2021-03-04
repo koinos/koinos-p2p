@@ -37,7 +37,7 @@ func (peerAdder *SyncManagerPeerAdder) ClosedStream(n network.Network, s network
 // Connected is part of the libp2p network.Notifiee interface
 func (peerAdder *SyncManagerPeerAdder) Connected(n network.Network, c network.Conn) {
 	log.Printf("Connected to peer %s\n", c.RemotePeer())
-	peerAdder.syncManager.AddPeer(c.RemotePeer())
+	peerAdder.syncManager.AddPeer(peerAdder.ctx, c.RemotePeer())
 }
 
 // Disconnected is part of the libp2p network.Notifiee interface
@@ -56,6 +56,6 @@ func (peerAdder *SyncManagerPeerAdder) ListenClose(n network.Network, _ ma.Multi
 // Listen is part of the libp2p network.Notifiee interface
 func (peerAdder *SyncManagerPeerAdder) addCurrentPeers() {
 	for _, peer := range peerAdder.host.Network().Peers() {
-		peerAdder.syncManager.AddPeer(peer)
+		peerAdder.syncManager.AddPeer(peerAdder.ctx, peer)
 	}
 }

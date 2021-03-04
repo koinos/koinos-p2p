@@ -63,7 +63,7 @@ type GetBlocksRequest struct {
 
 // GetBlocksResponse return
 type GetBlocksResponse struct {
-	VectorBlockItems types.VariableBlob
+	BlockItems VectorBlockItem
 }
 
 // GetBlocksByIDRequest args
@@ -73,7 +73,7 @@ type GetBlocksByIDRequest struct {
 
 // GetBlocksByIDResponse return
 type GetBlocksByIDResponse struct {
-	VectorBlockItems types.VariableBlob
+	BlockItems VectorBlockItem
 }
 
 // SyncService handles broadcasting inventory to peers
@@ -167,7 +167,7 @@ func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRe
 		return err
 	}
 
-	response.VectorBlockItems = *blocks.BlockItems.Serialize(&response.VectorBlockItems)
+	response.BlockItems = blocks.BlockItems
 	return nil
 }
 

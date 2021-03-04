@@ -1,11 +1,26 @@
 package protocol
 
+import (
+	"github.com/libp2p/go-libp2p-core/peer"
+
+	types "github.com/koinos/koinos-types-golang"
+)
+
 // MyTopologyCache holds my topology (i.e. the topology of a single node).
 type MyTopologyCache struct {
 	DeserCache map[string]types.BlockTopology
 	ByID       map[types.Multihash]map[string]void
 	ByPrevious map[types.Multihash]map[string]void
 	ByHeight   map[types.BlockHeightType]map[string]void
+}
+
+func NewMyTopologyCache() *MyTopologyCache {
+	return MyTopologyCache{
+		DeserCache: make(map[string]types.BlockTopology),
+		ByID:       make(map[types.Multihash]map[string]void),
+		ByPrevious: make(map[types.Multihash]map[string]void),
+		ByHeight:   make(map[types.BlockHeightType]map[string]void),
+	}
 }
 
 func (c *MyTopologyCache) Add(block types.BlockTopology) {
@@ -40,13 +55,28 @@ func (c *MyTopologyCache) Add(block types.BlockTopology) {
 	}
 }
 
+func (c *MyTopologyCache) SetLastIrr(newMyLastIrr types.BlockTopology) {
+	// TODO: Implement this
+}
+
 // TopologyCache holds the topology of all peers.
+// TODO rename to NetTopologyCache?
 type TopologyCache struct {
 	DeserCache map[string]types.BlockTopology
 	ByTopology map[string]map[peer.ID]void
 	ByPrevious map[types.Multihash]map[string]void
 	ByHeight   map[types.BlockHeightType]map[string]void
 	ByPeer     map[peer.ID]map[string]void
+}
+
+func NewTopologyCache() *TopologyCache {
+	return TopologyCache{
+		DeserCache: make(map[string]types.BlockTopology),
+		ByTopology: make(map[string]map[peer.ID]void),
+		ByPrevious: make(map[types.Multihash]map[string]void),
+		ByHeight:   make(map[types.BlockHeightType]map[string]void),
+		ByPeer:     make(map[peer.ID]map[string]void),
+	}
 }
 
 func (c *TopologyCache) Add(peerID peer.ID, block types.BlockTopology) {
@@ -109,6 +139,10 @@ func (c *TopologyCache) PickPeer(topo string, rng *rand.Rand) (peer.ID, error) {
 		i += 1
 	}
 	return nil, errors.New("Could not pick the %dth element of map of length %d", pickIndex, len(peers))
+}
+
+func (c *TopologyCache) SetLastIrr(newMyLastIrr types.BlockTopology) {
+	// TODO: Implement this
 }
 
 // GetInitialDownload returns the initial download from a topology.
