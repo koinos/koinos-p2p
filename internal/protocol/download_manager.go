@@ -15,10 +15,13 @@ const (
 	defaultMaxDownloadDepth     int = 3
 )
 
-// BlockDownloadRequest represents a block download request that has been issued to a peer.
+// BlockDownloadRequest represents a block download request.
+//
+// It contains a list of peers that are known to have the request, and a single peer to download from.
 type BlockDownloadRequest struct {
-	Topology BlockTopologyCmp
-	PeerID   peer.ID
+	Topology     BlockTopologyCmp
+	Peers        []peer.ID
+	SelectedPeer peer.ID
 }
 
 // BlockDownloadResponse represents a peer's response to a BlockDownloadRequest.
@@ -189,6 +192,20 @@ func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadA
 	// TODO:  Handle block that fails to apply.
 }
 
+// ConvertPeerSetToSlice converts a set (a map from PeerCmp to void) to a slice.
+//
+// Only the first n elements are converted.
+func ConvertPeerSetToSlice(m map[peer.ID]void) []peer.ID {
+	result := make([]peer.ID, len(m))
+
+	i := 0
+	for k, _ := range m {
+		result[i] = k
+		i += 1
+	}
+	return result
+}
+
 func (m *BlockDownloadManager) startDownload(ctx context.Context, download BlockTopologyCmp) {
 	// If the download's already gotten in, no-op
 	_, isDownloading := m.Downloading[download]
@@ -204,23 +221,15 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download Block
 		return
 	}
 
-	_, hasTopo := m.TopoCache.ByTopology[download]
-	if !hasTopo {
+	peers, hasPeers := m.TopoCache.ByTopology[download]
+	if (!hasPeers) || (len(peers) < 1) {
 		log.Printf("Could not find download %v in TopoCache\n", download)
-		return
-	}
-
-	// Pick a peer that has the download
-	// TODO:  Add constraint to bound the number of in-flight downloads sent to a single peer
-	peer, err := m.TopoCache.PickPeer(download, m.rng)
-	if err != nil {
-		log.Printf("Got an error trying to pick a peer to download block %v\n", download.ID)
 		return
 	}
 
 	req := BlockDownloadRequest{
 		Topology: download,
-		PeerID:   peer,
+		Peers:    ConvertPeerSetToSlice(peers),
 	}
 
 	m.Downloading[download] = req

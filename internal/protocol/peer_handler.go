@@ -22,8 +22,7 @@ type PeerError struct {
 	Error error
 }
 
-// PeerHandler is a struct that implements the BlockDownloadManagerInterface
-// and supplies the necessary channels using an actual peer.
+// PeerHandler is created by BdmiProvider to handle communications with a single peer.
 type PeerHandler struct {
 	// ID of the current peer
 	peerID peer.ID
@@ -34,16 +33,26 @@ type PeerHandler struct {
 	// RPC client
 	client *gorpc.Client
 
-	// Channel for sending if peer has an error
+	// Channel for sending if peer has an error.
+	// All PeerHandlers send their errors to a common channel.
 	errChan chan<- PeerError
 
-	// Channel for receiving height range updates
-	heightRangeChan <-chan HeightRange
+	// Channel for receiving height range updates.
+	// Each PeerHandler has its own heightRangeChan.
+	// It is filled by BdmiProvider and drained by PeerHandler.
+	heightRangeChan chan HeightRange
 
-	// Channel for sending your topology updates
+	// Channel for sending your topology updates.
+	// All PeerHandlers send PeerHasBlock messages to a common channel.
 	peerHasBlockChan <-chan PeerHasBlock
 
-	// Channel for requesting downloads
+	// Channel for requesting downloads.
+	// Each PeerHandler has its own downloadRequestChan.
+	// It is filled by BdmiProvider and drained by PeerHandler.
+	downloadRequestChan chan BlockDownloadRequest
+
+	// Channel for download responses.
+	// All PeerHandlers send BlockDownloadResponse messages to a common channel.
 	downloadResponseChan chan<- BlockDownloadResponse
 }
 
@@ -61,7 +70,7 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetBlocksByID", rpcReq, &rpcResp)
 		resp := BlockDownloadResponse{
 			Topology: req.Topology,
-			PeerID:   req.PeerID,
+			PeerID:   h.peerID,
 		}
 		if err != nil {
 			log.Printf("Error getting block %v from peer %v: error was %v", req.Topology.ID, h.peerID, err)
@@ -84,6 +93,8 @@ func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 			case <-nextPollTime:
 				break
 			case h.heightRange = <-h.heightRangeChan:
+			case req := <-h.downloadRequestChan:
+				h.requestDownload(ctx, req)
 			case <-ctx.Done():
 				return
 			}

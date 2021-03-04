@@ -201,10 +201,10 @@ func GetNextDownload(myTopo *MyTopologyCache, netTopo *TopologyCache, currentDow
 	return result
 }
 
-// ConvertSetToSlice converts a set (a map from BlockTopologyCmp to void) to a slice.
+// ConvertBlockTopologySetToSlice converts a set (a map from BlockTopologyCmp to void) to a slice.
 //
 // Only the first n elements are converted.
-func ConvertSetToSlice(m map[BlockTopologyCmp]void) []BlockTopologyCmp {
+func ConvertBlockTopologySetToSlice(m map[BlockTopologyCmp]void) []BlockTopologyCmp {
 	result := make([]BlockTopologyCmp, len(m))
 
 	i := 0
@@ -225,29 +225,29 @@ func GetDownloads(myTopo *MyTopologyCache, netTopo *TopologyCache, maxCount int,
 	// Set resultSet to the union of resultSet and nextSet
 	for k, _ := range nextSet {
 		if len(resultSet) >= maxCount {
-			return ConvertSetToSlice(resultSet)
+			return ConvertBlockTopologySetToSlice(resultSet)
 		}
 		resultSet[k] = void{}
 	}
 
 	for depth := 1; depth <= maxDepth; depth++ {
 		if len(resultSet) >= maxCount {
-			return ConvertSetToSlice(resultSet)
+			return ConvertBlockTopologySetToSlice(resultSet)
 		}
 
 		// Set resultSet to the union of resultSet and nextSet
 		for k, _ := range nextSet {
 			if len(resultSet) >= maxCount {
-				return ConvertSetToSlice(resultSet)
+				return ConvertBlockTopologySetToSlice(resultSet)
 			}
 			resultSet[k] = void{}
 		}
 
 		nextSet = GetNextDownload(myTopo, netTopo, resultSet)
 		if len(nextSet) == 0 {
-			return ConvertSetToSlice(resultSet)
+			return ConvertBlockTopologySetToSlice(resultSet)
 		}
 	}
 
-	return ConvertSetToSlice(resultSet)
+	return ConvertBlockTopologySetToSlice(resultSet)
 }
