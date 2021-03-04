@@ -8,6 +8,7 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 
+	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 )
 
@@ -54,7 +55,7 @@ const (
 
 func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequest) {
 	go func() {
-		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{MultihashFromCmp(req.Topology.ID)}}
+		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{util.MultihashFromCmp(req.Topology.ID)}}
 		rpcResp := GetBlocksByIDResponse{}
 		subctx, cancel := context.WithTimeout(ctx, time.Duration(downloadTimeoutSeconds)*time.Second)
 		defer cancel()

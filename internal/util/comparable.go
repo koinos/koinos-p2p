@@ -1,4 +1,4 @@
-package protocol
+package util
 
 import (
 	types "github.com/koinos/koinos-types-golang"

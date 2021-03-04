@@ -17,5 +17,5 @@ type RPC interface {
 	GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error)
 	GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error)
 
-	GetTopologyAtHeightRange(minHeight types.BlockHeightType, maxHeight types.BlockHeightType) (*types.GetForkHeadsResponse, []types.BlockTopology, error)
+	GetTopologyAtHeight(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error)
 }

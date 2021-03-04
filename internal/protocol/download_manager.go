@@ -7,6 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
+	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 )
 
@@ -17,7 +18,7 @@ const (
 
 // BlockDownloadRequest represents a block download request that has been issued to a peer.
 type BlockDownloadRequest struct {
-	Topology BlockTopologyCmp
+	Topology util.BlockTopologyCmp
 	PeerID   peer.ID
 }
 
@@ -27,7 +28,7 @@ type BlockDownloadRequest struct {
 // The response is not yet applied.
 //
 type BlockDownloadResponse struct {
-	Topology BlockTopologyCmp
+	Topology util.BlockTopologyCmp
 	PeerID   peer.ID
 
 	Block types.OpaqueBlock
@@ -35,7 +36,7 @@ type BlockDownloadResponse struct {
 }
 
 type BlockDownloadApplyResult struct {
-	Topology BlockTopologyCmp
+	Topology util.BlockTopologyCmp
 	PeerID   peer.ID
 
 	Err error
@@ -114,9 +115,9 @@ type BlockDownloadManagerInterface interface {
 type BlockDownloadManager struct {
 	MyTopoCache    MyTopologyCache
 	TopoCache      TopologyCache
-	Downloading    map[BlockTopologyCmp]BlockDownloadRequest
-	Applying       map[BlockTopologyCmp]BlockDownloadResponse
-	WaitingToApply map[BlockTopologyCmp]BlockDownloadResponse
+	Downloading    map[util.BlockTopologyCmp]BlockDownloadRequest
+	Applying       map[util.BlockTopologyCmp]BlockDownloadResponse
+	WaitingToApply map[util.BlockTopologyCmp]BlockDownloadResponse
 
 	MaxDownloadsInFlight int
 	MaxDownloadDepth     int
@@ -130,9 +131,9 @@ func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface
 	man := BlockDownloadManager{
 		MyTopoCache:    *NewMyTopologyCache(),
 		TopoCache:      *NewTopologyCache(),
-		Downloading:    make(map[BlockTopologyCmp]BlockDownloadRequest),
-		Applying:       make(map[BlockTopologyCmp]BlockDownloadResponse),
-		WaitingToApply: make(map[BlockTopologyCmp]BlockDownloadResponse),
+		Downloading:    make(map[util.BlockTopologyCmp]BlockDownloadRequest),
+		Applying:       make(map[util.BlockTopologyCmp]BlockDownloadResponse),
+		WaitingToApply: make(map[util.BlockTopologyCmp]BlockDownloadResponse),
 
 		MaxDownloadsInFlight: defaultMaxDownloadsInFlight,
 		MaxDownloadDepth:     defaultMaxDownloadDepth,
@@ -189,7 +190,7 @@ func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadA
 	// TODO:  Handle block that fails to apply.
 }
 
-func (m *BlockDownloadManager) startDownload(ctx context.Context, download BlockTopologyCmp) {
+func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.BlockTopologyCmp) {
 	// If the download's already gotten in, no-op
 	_, isDownloading := m.Downloading[download]
 	if isDownloading {
@@ -253,10 +254,10 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 				m.needRescan = false
 			}
 		case newMyTopo := <-m.iface.MyBlockTopologyChan():
-			m.MyTopoCache.Add(BlockTopologyToCmp(newMyTopo))
+			m.MyTopoCache.Add(util.BlockTopologyToCmp(newMyTopo))
 			m.needRescan = true
 		case newMyLastIrr := <-m.iface.MyLastIrrChan():
-			c := BlockTopologyToCmp(newMyLastIrr)
+			c := util.BlockTopologyToCmp(newMyLastIrr)
 			m.MyTopoCache.SetLastIrr(c)
 			m.TopoCache.SetLastIrr(c)
 			m.needRescan = true

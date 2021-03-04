@@ -66,6 +66,18 @@ type GetBlocksResponse struct {
 	BlockItems types.VectorBlockItem
 }
 
+// GetTopologyAtHeightRequest args
+type GetTopologyAtHeightRequest struct {
+	BlockHeight types.BlockHeightType
+	NumBlocks   types.UInt32
+}
+
+// GetTopologyAtHeightResponse return
+type GetTopologyAtHeightResponse struct {
+	ForkHeads     *types.GetForkHeadsResponse
+	BlockTopology []types.BlockTopology
+}
+
 // GetBlocksByIDRequest args
 type GetBlocksByIDRequest struct {
 	BlockID types.VectorMultihash
@@ -113,10 +125,11 @@ func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequ
 	}
 
 	response.ForkHeads = rpcResult.ForkHeads
-	response.LastIrr = rpcResult.LastIrr
+	response.LastIrr = rpcResult.LastIrreversibleBlock
 	return nil
 }
 
+// GetAncestorTopologyAtHeights p2p rpc
 func (s *SyncService) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
 	// TODO: Implement this
 	return nil, nil
@@ -165,6 +178,18 @@ func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRe
 	}
 
 	response.BlockItems = blocks.BlockItems
+	return nil
+}
+
+// GetTopologyAtHeight p2p rpc
+func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopologyAtHeightRequest, response *GetTopologyAtHeightResponse) error {
+	forkHeads, blockTopology, err := s.RPC.GetTopologyAtHeight(request.BlockHeight, request.NumBlocks)
+	if err != nil {
+		return err
+	}
+
+	response.ForkHeads = forkHeads
+	response.BlockTopology = blockTopology
 	return nil
 }
 

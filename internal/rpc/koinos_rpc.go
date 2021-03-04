@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
-	"github.com/koinos/koinos-p2p/internal/protocol"
+	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 )
 
@@ -313,20 +313,20 @@ func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
 	return response, err
 }
 
-// GetTopologyAtHeightRange() finds the blocks at the given height range.
+// GetTopologyAtHeight finds the blocks at the given height range.
 //
 // Three steps:
 // - (1) Call GetForkHeads() to get the fork heads and LIB from koinosd
 // - (2) For each fork, call GetBlocksByHeight() with the given height bounds to get the blocks in that height range on that fork.
 // - (3) Finally, do some purely computational cleanup:  Extract the BlockTopology and de-duplicate multiple instances of the same block.
 //
-func (k *KoinosRPC) GetTopologyAtHeightRange(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
+func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
 	forkHeads, err := k.GetForkHeads()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	topologySet := make(map[protocol.BlockTopologyCmp]types.BlockTopology)
+	topologySet := make(map[util.BlockTopologyCmp]types.BlockTopology)
 
 	for _, head := range forkHeads.ForkHeads {
 		//var t types.BlockTopology
@@ -356,7 +356,7 @@ func (k *KoinosRPC) GetTopologyAtHeightRange(height types.BlockHeightType, numBl
 				Height: blockItem.BlockHeight, Previous: active.PreviousBlock}
 
 			// Add the topology to the set
-			topologySet[protocol.BlockTopologyToCmp(topology)] = topology
+			topologySet[util.BlockTopologyToCmp(topology)] = topology
 		}
 	}
 

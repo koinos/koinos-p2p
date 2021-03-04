@@ -87,6 +87,18 @@ func (k *TestRPC) SetBroadcastHandler(topic string, handler func(topic string, d
 	// but it has to be defined anyway to satisfy the RPC interface
 }
 
+func (k *TestRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
+	return nil, nil
+}
+
+func (k *TestRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
+	return nil, nil
+}
+
+func (k *TestRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
+	return nil, nil, nil
+}
+
 func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	rpc := TestRPC{ChainID: 1, Height: height, HeadBlockIDDelta: 0, ApplyBlocks: -1}
 	rpc.BlocksApplied = make([]*types.Block, 0)

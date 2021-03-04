@@ -30,12 +30,14 @@ type BatchBlockRequest struct {
 	BatchSize        types.UInt64
 }
 
+// PeerBlockResponse is a peer block response
 type PeerBlockResponse struct {
 	Topology  types.BlockTopology
 	Responder peer.ID
 	Block     *types.OpaqueBlock
 }
 
+// PeerBlockResponseError is a peer block response error
 type PeerBlockResponseError struct {
 	Topology  types.BlockTopology
 	Responder peer.ID
@@ -109,7 +111,7 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager 
 	return &manager
 }
 
-// Add a peer to the SyncManager.
+// AddPeer ass a peer to the SyncManager.
 // Will connect to the peer in the background.
 func (m *SyncManager) AddPeer(ctx context.Context, pid peer.ID) {
 

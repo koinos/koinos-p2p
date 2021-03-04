@@ -7,6 +7,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
+	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 )
 
@@ -14,33 +15,33 @@ import (
 //
 type PeerHasBlock struct {
 	PeerID peer.ID
-	Block  BlockTopologyCmp
+	Block  util.BlockTopologyCmp
 }
 
 // MyTopologyCache holds my topology (i.e. the topology of a single node).
 type MyTopologyCache struct {
-	ByTopology map[BlockTopologyCmp]void
-	ByID       map[MultihashCmp]map[BlockTopologyCmp]void
-	ByPrevious map[MultihashCmp]map[BlockTopologyCmp]void
-	ByHeight   map[types.BlockHeightType]map[BlockTopologyCmp]void
+	ByTopology map[util.BlockTopologyCmp]void
+	ByID       map[util.MultihashCmp]map[util.BlockTopologyCmp]void
+	ByPrevious map[util.MultihashCmp]map[util.BlockTopologyCmp]void
+	ByHeight   map[types.BlockHeightType]map[util.BlockTopologyCmp]void
 }
 
 func NewMyTopologyCache() *MyTopologyCache {
 	return &MyTopologyCache{
-		ByTopology: make(map[BlockTopologyCmp]void),
-		ByID:       make(map[MultihashCmp]map[BlockTopologyCmp]void),
-		ByPrevious: make(map[MultihashCmp]map[BlockTopologyCmp]void),
-		ByHeight:   make(map[types.BlockHeightType]map[BlockTopologyCmp]void),
+		ByTopology: make(map[util.BlockTopologyCmp]void),
+		ByID:       make(map[util.MultihashCmp]map[util.BlockTopologyCmp]void),
+		ByPrevious: make(map[util.MultihashCmp]map[util.BlockTopologyCmp]void),
+		ByHeight:   make(map[types.BlockHeightType]map[util.BlockTopologyCmp]void),
 	}
 }
 
-func (c *MyTopologyCache) Add(block BlockTopologyCmp) {
+func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) {
 	c.ByTopology[block] = void{}
 
 	{
 		m, hasM := c.ByID[block.ID]
 		if !hasM {
-			m = make(map[BlockTopologyCmp]void)
+			m = make(map[util.BlockTopologyCmp]void)
 			c.ByID[block.ID] = m
 		}
 		m[block] = void{}
@@ -49,7 +50,7 @@ func (c *MyTopologyCache) Add(block BlockTopologyCmp) {
 	{
 		m, hasM := c.ByPrevious[block.Previous]
 		if !hasM {
-			m = make(map[BlockTopologyCmp]void)
+			m = make(map[util.BlockTopologyCmp]void)
 			c.ByPrevious[block.Previous] = m
 		}
 		m[block] = void{}
@@ -58,14 +59,14 @@ func (c *MyTopologyCache) Add(block BlockTopologyCmp) {
 	{
 		m, hasM := c.ByHeight[block.Height]
 		if !hasM {
-			m = make(map[BlockTopologyCmp]void)
+			m = make(map[util.BlockTopologyCmp]void)
 			c.ByHeight[block.Height] = m
 		}
 		m[block] = void{}
 	}
 }
 
-func (c *MyTopologyCache) SetLastIrr(newMyLastIrr BlockTopologyCmp) {
+func (c *MyTopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
 	// TODO: Implement this
 }
 
@@ -73,8 +74,8 @@ func (c *MyTopologyCache) SetLastIrr(newMyLastIrr BlockTopologyCmp) {
 // TODO rename to NetTopologyCache?
 type TopologyCache struct {
 	Set        map[PeerHasBlock]void
-	ByTopology map[BlockTopologyCmp]map[peer.ID]void
-	ByPrevious map[MultihashCmp]map[BlockTopologyCmp]map[peer.ID]void
+	ByTopology map[util.BlockTopologyCmp]map[peer.ID]void
+	ByPrevious map[util.MultihashCmp]map[util.BlockTopologyCmp]map[peer.ID]void
 	ByHeight   map[types.BlockHeightType]map[PeerHasBlock]void
 	ByPeer     map[peer.ID]map[PeerHasBlock]void
 }
@@ -82,8 +83,8 @@ type TopologyCache struct {
 func NewTopologyCache() *TopologyCache {
 	return &TopologyCache{
 		Set:        make(map[PeerHasBlock]void),
-		ByTopology: make(map[BlockTopologyCmp]map[peer.ID]void),
-		ByPrevious: make(map[MultihashCmp]map[BlockTopologyCmp]map[peer.ID]void),
+		ByTopology: make(map[util.BlockTopologyCmp]map[peer.ID]void),
+		ByPrevious: make(map[util.MultihashCmp]map[util.BlockTopologyCmp]map[peer.ID]void),
 		ByHeight:   make(map[types.BlockHeightType]map[PeerHasBlock]void),
 		ByPeer:     make(map[peer.ID]map[PeerHasBlock]void),
 	}
@@ -104,7 +105,7 @@ func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) {
 	{
 		m, hasM := c.ByPrevious[peerHasBlock.Block.Previous]
 		if !hasM {
-			m = make(map[BlockTopologyCmp]map[peer.ID]void)
+			m = make(map[util.BlockTopologyCmp]map[peer.ID]void)
 			c.ByPrevious[peerHasBlock.Block.Previous] = m
 		}
 		m2, hasM2 := m[peerHasBlock.Block]
@@ -134,7 +135,7 @@ func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) {
 	}
 }
 
-func (c *TopologyCache) PickPeer(topo BlockTopologyCmp, rng *rand.Rand) (peer.ID, error) {
+func (c *TopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (peer.ID, error) {
 	var emptyPeerID peer.ID
 
 	peers, hasPeers := c.ByTopology[topo]
@@ -157,7 +158,7 @@ func (c *TopologyCache) PickPeer(topo BlockTopologyCmp, rng *rand.Rand) (peer.ID
 	return emptyPeerID, fmt.Errorf("Could not pick the %dth element of map of length %d", pickIndex, len(peers))
 }
 
-func (c *TopologyCache) SetLastIrr(newMyLastIrr BlockTopologyCmp) {
+func (c *TopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
 	// TODO: Implement this
 }
 
@@ -165,8 +166,8 @@ func (c *TopologyCache) SetLastIrr(newMyLastIrr BlockTopologyCmp) {
 //
 // The initial download is the set of blocks in netTopo that directly connect to myTopo but are
 // not themselves in myTopo.
-func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[BlockTopologyCmp]void {
-	result := make(map[BlockTopologyCmp]void)
+func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[util.BlockTopologyCmp]void {
+	result := make(map[util.BlockTopologyCmp]void)
 	for block, _ := range myTopo.ByTopology {
 		netNextBlocks, ok := netTopo.ByPrevious[block.ID]
 		if !ok {
@@ -187,8 +188,8 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[Blo
 // GetNextDownload returns the next download from a topology.
 //
 // The next download is the set of blocks in netTopo that directly connect to currentDownload.
-func GetNextDownload(myTopo *MyTopologyCache, netTopo *TopologyCache, currentDownload map[BlockTopologyCmp]void) map[BlockTopologyCmp]void {
-	result := make(map[BlockTopologyCmp]void)
+func GetNextDownload(myTopo *MyTopologyCache, netTopo *TopologyCache, currentDownload map[util.BlockTopologyCmp]void) map[util.BlockTopologyCmp]void {
+	result := make(map[util.BlockTopologyCmp]void)
 	for block, _ := range currentDownload {
 		netNextBlocks, ok := netTopo.ByPrevious[block.ID]
 		if !ok {
@@ -204,8 +205,8 @@ func GetNextDownload(myTopo *MyTopologyCache, netTopo *TopologyCache, currentDow
 // ConvertSetToSlice converts a set (a map from BlockTopologyCmp to void) to a slice.
 //
 // Only the first n elements are converted.
-func ConvertSetToSlice(m map[BlockTopologyCmp]void) []BlockTopologyCmp {
-	result := make([]BlockTopologyCmp, len(m))
+func ConvertSetToSlice(m map[util.BlockTopologyCmp]void) []util.BlockTopologyCmp {
+	result := make([]util.BlockTopologyCmp, len(m))
 
 	i := 0
 	for k, _ := range m {
@@ -218,9 +219,9 @@ func ConvertSetToSlice(m map[BlockTopologyCmp]void) []BlockTopologyCmp {
 // GetDownloads() scans for a set of downloads that makes progress from the current topology.
 //
 // This function could likely be optimized by adding additional indexing.
-func GetDownloads(myTopo *MyTopologyCache, netTopo *TopologyCache, maxCount int, maxDepth int) []BlockTopologyCmp {
+func GetDownloads(myTopo *MyTopologyCache, netTopo *TopologyCache, maxCount int, maxDepth int) []util.BlockTopologyCmp {
 	nextSet := GetInitialDownload(myTopo, netTopo)
-	resultSet := make(map[BlockTopologyCmp]void)
+	resultSet := make(map[util.BlockTopologyCmp]void)
 
 	// Set resultSet to the union of resultSet and nextSet
 	for k, _ := range nextSet {

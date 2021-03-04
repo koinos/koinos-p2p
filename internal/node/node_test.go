@@ -42,6 +42,22 @@ func (k *TestRPC) ApplyTransaction(txn *types.Transaction) (bool, error) {
 	return true, nil
 }
 
+func (k *TestRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
+	return nil, nil
+}
+
+func (k *TestRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
+	return nil, nil
+}
+
+func (k *TestRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
+	return nil, nil, nil
+}
+
+func (k *TestRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
+	return nil, nil
+}
+
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
 	blocks := types.NewGetBlocksByHeightResponse()
