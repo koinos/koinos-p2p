@@ -110,21 +110,43 @@ func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
 }
 
 func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context) error {
-	// TODO:  Copy code from PeerHandler when GetTopologyAtHeightRange is done
-	select {
-	case <-ctx.Done():
-		return nil
-	}
-
-	// TODO:  Create loop to write heightRange, myBlockTopologyChan, myLastIrrChan
-	for _, b := range resp.Blocks {
-		select {
-		case hasBlockChan <- PeerHasBlock{h.peerID, b}:
-		case <-ctx.Done():
-			return nil
-		}
-	}
+	return nil
 }
+
+/*
+func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context) error {
+   // TODO:  Copy code from PeerHandler when GetTopologyAtHeightRange is done
+   select {
+   case <-ctx.Done():
+      return nil
+   }
+
+   // TODO:  Create loop to write heightRange, myBlockTopologyChan, myLastIrrChan
+   for _, b := range resp.Blocks {
+      select {
+      case hasBlockChan <- PeerHasBlock{h.peerID, b}:
+      case <-ctx.Done():
+         return nil
+      }
+   }
+}
+*/
+
+func (p *BdmiProvider) handleDownloadResponse(ctx context.Context, resp BlockDownloadResponse) {
+	go func() {
+		//
+	}()
+}
+
+/*
+type BlockDownloadResponse struct {
+   Topology BlockTopologyCmp
+   PeerID   peer.ID
+
+   Block types.OpaqueBlock
+   Err   error
+}
+*/
 
 // TODO:  Create loop to service downloadResponseChan and applyBlockResultChan
 // TODO:  Create loop to write downloadFailedChan
@@ -136,31 +158,12 @@ func (p *BdmiProvider) providerLoop(ctx context.Context) {
 			p.handleNewPeer(ctx, newPeer)
 		case heightRange := <-p.heightRangeChan:
 			p.handleHeightRange(ctx, heightRange)
+		case resp := <-p.downloadResponseChan:
+			p.handleDownloadResponse(ctx, resp)
 		case <-ctx.Done():
 			return
 		}
 	}
-}
-
-func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
-	for {
-		err := p.pollMyTopologyCycle(ctx)
-
-		if err != nil {
-			log.Printf("Error polling my topology: %v\n", err)
-		}
-
-		select {
-		case <-time.After(time.Duration(pollMyTopologySeconds) * time.Second):
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context) error {
-	// TODO: Implement this
-	return nil
 }
 
 func (p *BdmiProvider) dispatchDownloadLoop(ctx context.Context) {

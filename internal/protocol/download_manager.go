@@ -20,9 +20,8 @@ const (
 //
 // It contains a list of peers that are known to have the request, and a single peer to download from.
 type BlockDownloadRequest struct {
-	Topology     util.BlockTopologyCmp
-	Peers        []peer.ID
-	SelectedPeer peer.ID
+	Topology BlockTopologyCmp
+	PeerID   peer.ID
 }
 
 // BlockDownloadResponse represents a peer's response to a BlockDownloadRequest.
@@ -228,9 +227,17 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 		return
 	}
 
+	// Pick a peer that has the download
+	// TODO:  Add constraint to bound the number of in-flight downloads sent to a single peer
+	peer, err := m.TopoCache.PickPeer(download, m.rng)
+	if err != nil {
+		log.Printf("Got an error trying to pick a peer to download block %v\n", download.ID)
+		return
+	}
+
 	req := BlockDownloadRequest{
 		Topology: download,
-		Peers:    ConvertPeerSetToSlice(peers),
+		PeerID:   peer,
 	}
 
 	m.Downloading[download] = req

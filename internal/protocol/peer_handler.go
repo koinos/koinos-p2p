@@ -87,25 +87,28 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 }
 
 func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
-	for {
-		nextPollTime := time.After(time.Duration(heightRangePollTime) * time.Second)
-		for {
-			select {
-			case <-nextPollTime:
-				break
-			case h.heightRange = <-h.heightRangeChan:
-			case req := <-h.downloadRequestChan:
-				h.requestDownload(ctx, req)
-			case <-ctx.Done():
-				return
-			}
-		}
+	// Helper function to call peerHandlerCycle() and send any error to errChan
+	doPeerCycle := func() {
 		err := h.peerHandlerCycle(ctx)
 		if err != nil {
 			select {
 			case h.errChan <- PeerError{h.peerID, err}:
 			case <-ctx.Done():
 			}
+			return
+		}
+	}
+
+	nextPollTime := time.After(time.Duration(heightRangePollTime) * time.Second)
+	for {
+		select {
+		case <-nextPollTime:
+			doPeerCycle()
+			nextPollTime = time.After(time.Duration(heightRangePollTime) * time.Second)
+		case h.heightRange = <-h.heightRangeChan:
+		case req := <-h.downloadRequestChan:
+			h.requestDownload(ctx, req)
+		case <-ctx.Done():
 			return
 		}
 	}
