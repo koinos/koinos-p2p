@@ -198,7 +198,7 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Blo
 	return response, err
 }
 
-// GetAncestorTopologyAtHeight rpc call
+// GetAncestorTopologyAtHeights rpc call
 func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
 
 	// TODO:  Implement this properly in the block store.
@@ -207,12 +207,19 @@ func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heigh
 	result := make([]types.BlockTopology, len(heights))
 
 	for i, h := range heights {
-		resp := k.GetBlocksByHeight(blockID, h, 1)
+		resp, err := k.GetBlocksByHeight(blockID, h, 1)
+		if err != nil {
+			return nil, err
+		}
 		if len(resp.BlockItems) != 1 {
 			return nil, errors.New("Unexpected multiple blocks returned")
 		}
-		resp.BlockItems[0].Block.ActiveData.Unbox()
-		activeData, err := resp.BlockItems[0].Block.ActiveData.GetNative()
+		resp.BlockItems[0].Block.Unbox()
+		block, err := resp.BlockItems[0].Block.GetNative()
+		if err != nil {
+			return nil, err
+		}
+		activeData, err := block.ActiveData.GetNative()
 		if err != nil {
 			return nil, err
 		}
@@ -314,4 +321,5 @@ func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
 //
 func (k *KoinosRPC) GetTopologyAtHeightRange(minHeight types.BlockHeightType, maxHeight types.BlockHeightType) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
 	// TODO
+	return nil, nil, errors.New("Not implemented")
 }

@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	peer "github.com/libp2p/go-libp2p-core/peer"
+
 	types "github.com/koinos/koinos-types-golang"
 )
 
@@ -19,11 +21,15 @@ const (
 // - Create and fill channels as specified in BlockDownloadManagerInterface
 // - Start a polling loop (TODO: replace polling with event-driven) for updates to send via myBlockTopologyChan / myLastIrrChan
 // - Create, start, and (TODO: cancel) PeerHandler for each peer
+// - Directly connect each PeerHandler to the peerHasBlockChan loop
+// - Create, start, and (TODO: cancel) handleNewPeersLoop to create a PeerHandler for each new peer
+// - Create, start, and (TODO: cancel) sendHeightRangeLoop to multiplex my topology updates to peer handlers as height range updates
 // - Create, start, and (TODO: cancel) dispatchDownloadLoop to distribute download requests submitted by RequestDownload() to the correct peer handler
 // - Create, start, and (TODO: cancel) applyBlockLoop to service ApplyBlock() calls by submitting the blocks to koinosd
 // - Create, start, and (TODO: cancel) a loop to regularly submit rescan requests to rescanChan
 //
 type BdmiProvider struct {
+	newPeerChan          chan peer.ID
 	myBlockTopologyChan  chan types.BlockTopology
 	myLastIrrChan        chan types.BlockTopology
 	peerHasBlockChan     chan PeerHasBlock
@@ -54,6 +60,10 @@ func (p *BdmiProvider) ApplyBlockResultChan() <-chan BlockDownloadApplyResult {
 
 func (p *BdmiProvider) RescanChan() <-chan bool {
 	return p.rescanChan
+}
+
+func (p *BdmiProvider) handleNewPeersLoop() {
+	// TODO: Implement this
 }
 
 func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {

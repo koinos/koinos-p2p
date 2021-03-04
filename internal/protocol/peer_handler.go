@@ -11,13 +11,6 @@ import (
 	types "github.com/koinos/koinos-types-golang"
 )
 
-// PeerHasBlock is a message that specifies a peer has a block with the given topology.
-//
-type PeerHasBlock struct {
-	PeerID peer.ID
-	Block  types.BlockTopology
-}
-
 // HeightRange is a message that specifies a peer should send topology updates for the given height range.
 type HeightRange struct {
 	MinHeight types.BlockHeightType
@@ -35,27 +28,23 @@ type PeerHandler struct {
 	// ID of the current peer
 	peerID peer.ID
 
+	// Current height range
+	heightRange HeightRange
+
 	// RPC client
 	client *gorpc.Client
 
-	// My current fork state
-	heightRange HeightRange
-
 	// Channel for sending if peer has an error
-	errChan chan PeerError
-
-	// Channel for sending topology updates
-	hasBlockChan chan PeerHasBlock
+	errChan chan<- PeerError
 
 	// Channel for receiving height range updates
-	heightRangeChan chan HeightRange
+	heightRangeChan <-chan HeightRange
 
-	myBlockTopologyChan  chan types.BlockTopology
-	myLastIrrChan        chan types.BlockTopology
-	peerHasBlockChan     chan PeerHasBlock
-	downloadResponseChan chan BlockDownloadResponse
-	applyBlockResultChan chan BlockDownloadApplyResult
-	rescanChan           chan bool
+	// Channel for sending your topology updates
+	peerHasBlockChan <-chan PeerHasBlock
+
+	// Channel for requesting downloads
+	downloadResponseChan chan<- BlockDownloadResponse
 }
 
 const (
@@ -63,41 +52,16 @@ const (
 	downloadTimeoutSeconds = 50
 )
 
-func (h *PeerHandler) MyBlockTopologyChan() <-chan types.BlockTopology {
-	return h.myBlockTopologyChan
-}
-
-func (h *PeerHandler) MyLastIrrChan() <-chan types.BlockTopology {
-	return h.myLastIrrChan
-}
-
-func (h *PeerHandler) PeerHasBlockChan() <-chan PeerHasBlock {
-	return h.peerHasBlockChan
-}
-
-func (h *PeerHandler) DownloadResponseChan() <-chan BlockDownloadResponse {
-	return h.downloadResponseChan
-}
-
-func (h *PeerHandler) ApplyBlockResultChan() <-chan BlockDownloadApplyResult {
-	return h.applyBlockResultChan
-}
-
-func (h *PeerHandler) RescanChan() <-chan bool {
-	return h.rescanChan
-}
-
-func (h *PeerHandler) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
+func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequest) {
 	go func() {
-		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{req.Topology.ID}}
+		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{MultihashFromCmp(req.Topology.ID)}}
 		rpcResp := GetBlocksByIDResponse{}
 		subctx, cancel := context.WithTimeout(ctx, time.Duration(downloadTimeoutSeconds)*time.Second)
 		defer cancel()
 		err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetBlocksByID", rpcReq, &rpcResp)
 		resp := BlockDownloadResponse{
-			SerTopology: req.SerTopology,
-			Topology:    req.Topology,
-			PeerID:      req.PeerID,
+			Topology: req.Topology,
+			PeerID:   req.PeerID,
 		}
 		if err != nil {
 			log.Printf("Error getting block %v from peer %v: error was %v", req.Topology.ID, h.peerID, err)
@@ -119,7 +83,7 @@ func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 			select {
 			case <-nextPollTime:
 				break
-			case h.heightRange <- heightRangeChan:
+			case h.heightRange = <-h.heightRangeChan:
 			case <-ctx.Done():
 				return
 			}
@@ -146,25 +110,27 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
-	req := GetTopologyAtHeightRangeRequest{
-		MinHeight: h.heightRange.MinHeight,
-		MaxHeight: h.heightRange.MaxHeight,
-	}
-	resp := GetTopologyAtHeightRangeResponse{}
-	subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
-	defer cancel()
-	err := m.client.CallContext(subctx, pid, "SyncService", "GetTopologyAtHeightRangeReponse", req, &resp)
-	if err != nil {
-		log.Printf("%v: error calling GetTopologyAtHeightRange, error was %v\n", pid, err)
-		return err
-	}
+	/*
+	   req := GetTopologyAtHeightRangeRequest{
+	      MinHeight: h.heightRange.MinHeight,
+	      MaxHeight: h.heightRange.MaxHeight,
+	   }
+	   resp := GetTopologyAtHeightRangeResponse{}
+	   subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	   defer cancel()
+	   err := m.client.CallContext(subctx, pid, "SyncService", "GetTopologyAtHeightRangeReponse", req, &resp)
+	   if err != nil {
+	      log.Printf("%v: error calling GetTopologyAtHeightRange, error was %v\n", pid, err)
+	      return err
+	   }
 
-	for _, b := range resp.Blocks {
-		select {
-		case hasBlockChan <- PeerHasBlock{h.peerID, b}:
-		case <-ctx.Done():
-			return nil
-		}
-	}
+	   for _, b := range resp.Blocks {
+	      select {
+	      case hasBlockChan <- PeerHasBlock{h.peerID, b}:
+	      case <-ctx.Done():
+	         return nil
+	      }
+	   }
+	*/
 	return nil
 }

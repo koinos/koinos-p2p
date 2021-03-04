@@ -96,8 +96,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 		return nil, err
 	}
 
-	node.SyncManager = protocol.NewSyncManager(node.Host, node.RPC)
-	node.SyncManager.Start()
+	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC)
+	node.SyncManager.Start(ctx)
 	node.Options = koptions
 
 	// Create the pubsub gossip

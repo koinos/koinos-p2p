@@ -63,7 +63,7 @@ type GetBlocksRequest struct {
 
 // GetBlocksResponse return
 type GetBlocksResponse struct {
-	BlockItems VectorBlockItem
+	BlockItems types.VectorBlockItem
 }
 
 // GetBlocksByIDRequest args
@@ -73,7 +73,7 @@ type GetBlocksByIDRequest struct {
 
 // GetBlocksByIDResponse return
 type GetBlocksByIDResponse struct {
-	BlockItems VectorBlockItem
+	BlockItems types.VectorBlockItem
 }
 
 // SyncService handles broadcasting inventory to peers
@@ -106,7 +106,7 @@ func (s *SyncService) GetHeadBlock(ctx context.Context, request GetHeadBlockRequ
 }
 
 // GetForkHeads p2p rpc
-func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequest, response *GetForkStatusResponse) error {
+func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequest, response *GetForkHeadsResponse) error {
 	rpcResult, err := s.RPC.GetForkHeads()
 	if err != nil {
 		return err
@@ -114,18 +114,12 @@ func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequ
 
 	response.ForkHeads = rpcResult.ForkHeads
 	response.LastIrr = rpcResult.LastIrr
+	return nil
 }
 
-func (s *SyncService) GetAncestorTopologyAtHeights(blockID *koinos_types.Multihash, heights []koinos_types.BlockHeightType) ([]koinos_types.BlockTopology, error) {
-	//
-}
-
-// GetForkHeads p2p rpc
-func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequest, response *GetForkStatusResponse) error {
-	rpcResult, err := s.RPC.GetForkHeads()
-
-	response.ForkHeads = rpcResult.ForkHeads
-	response.LastIrr = rpcResult.LastIrr
+func (s *SyncService) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
+	// TODO: Implement this
+	return nil, nil
 }
 
 // GetForkStatus p2p rpc
@@ -150,13 +144,16 @@ func (s *SyncService) GetForkStatus(ctx context.Context, request GetForkStatusRe
 
 // GetBlocks p2p rpc
 func (s *SyncService) GetBlocks(ctx context.Context, request GetBlocksRequest, response *GetBlocksResponse) error {
-	blocks, err := s.RPC.GetBlocksByHeight(&request.HeadBlockID,
-		request.StartBlockHeight, types.UInt32(request.BatchSize))
-	if err != nil {
-		return err
-	}
+	// TODO: Re-implement this
+	/*
+	   blocks, err := s.RPC.GetBlocksByHeight(&request.HeadBlockID,
+	      request.StartBlockHeight, types.UInt32(request.BatchSize))
+	   if err != nil {
+	      return err
+	   }
 
-	response.VectorBlockItems = *blocks.BlockItems.Serialize(&response.VectorBlockItems)
+	   response.VectorBlockItems = *blocks.BlockItems.Serialize(&response.VectorBlockItems)
+	*/
 	return nil
 }
 

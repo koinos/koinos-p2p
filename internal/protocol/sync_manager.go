@@ -1,11 +1,9 @@
 package protocol
 
 import (
-	"container/heap"
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -24,7 +22,6 @@ const SyncID = "/koinos/sync/1.0.0"
 const (
 	timeoutSeconds   = uint64(30)
 	blacklistSeconds = uint64(60)
-	syncCycleSeconds = uint64(10)
 )
 
 // BatchBlockRequest a batch block request
@@ -45,7 +42,18 @@ type PeerBlockResponseError struct {
 	Error     error
 }
 
-// SyncManager syncs blocks using multiple peers
+// SyncManager syncs blocks using multiple peers.
+//
+// SyncManager is responsible for:
+//
+// - Creating BlockDownloadManager
+// - Creating BdmiProvider
+// - Informing BdmiProvider when new peers join (TODO: canceling peers that left)
+// - Hooking together the above components
+// - Starting (and TODO: canceling) all loops
+//
+// TODO: Move blacklist to separate struct
+//
 type SyncManager struct {
 	server *gorpc.Server
 	client *gorpc.Client
@@ -63,32 +71,17 @@ type SyncManager struct {
 	// Channel for peer ID's coming off a blacklist
 	unblacklistPeers chan peer.ID
 
-	// Channel for block requests
-	blockRequests chan PeerBlockRequest
-
-	// Channel for completed block downloads
-	blockRequestDone chan PeerBlockResponse
-
-	// Channel for block downloads that had error
-	blockRequestErr chan PeerBlockResponseError
-
-	// Channel for block downloads that didn't apply
-	blockRequestApplyErr chan PeerBlockResponseError
-
 	// Peer ID map.  Only updated in the internal SyncManager thread
 	peers map[peer.ID]void
 
 	// Blacklisted peers.
 	blacklist map[peer.ID]void
-
-	// Currently downloading blocks
-	blockDownloads map[string]InFlightBlockRequest
 }
 
 type void struct{}
 
 // NewSyncManager factory
-func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
+func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager {
 
 	manager := SyncManager{
 		server: gorpc.NewServer(h, SyncID),
@@ -97,9 +90,8 @@ func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 
 		newPeers:           make(chan peer.ID),
 		handshakeDonePeers: make(chan peer.ID),
-		errPeers:           make(chan peerError),
+		errPeers:           make(chan PeerError),
 		unblacklistPeers:   make(chan peer.ID),
-		blockRequests:      make(chan PeerBlockRequest),
 
 		peers:     make(map[peer.ID]void),
 		blacklist: make(map[peer.ID]void),
@@ -111,7 +103,8 @@ func NewSyncManager(h host.Host, rpc rpc.RPC) *SyncManager {
 	}
 
 	// TODO: What is context?
-	h.Network().Notify(NewSyncManagerPeerAddr(ctx, h, &manager))
+	peerAdder := NewSyncManagerPeerAddr(ctx, h, &manager)
+	h.Network().Notify(&peerAdder)
 
 	return &manager
 }
@@ -130,7 +123,7 @@ func (m *SyncManager) AddPeer(ctx context.Context, pid peer.ID) {
 	return
 }
 
-func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) error {
+func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 
 	err := func() error {
 		log.Printf("connecting to peer for sync: %v", pid)
@@ -185,11 +178,12 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) error {
 		}
 
 		log.Printf("%v: connected!", pid)
+		return nil
 	}()
 
 	if err != nil {
 		select {
-		case m.errPeers <- pid:
+		case m.errPeers <- PeerError{pid, err}:
 		case <-ctx.Done():
 		}
 	}
@@ -209,180 +203,10 @@ func (m *SyncManager) blacklistPeer(ctx context.Context, pid peer.ID, blacklistT
 		}
 
 		select {
-		case m.unblacklistPeers <- PeerError{pid, err}:
+		case m.unblacklistPeers <- pid:
 		case <-ctx.Done():
 		}
 	}()
-}
-
-func (m *SyncManager) syncLoop(ctx context.Context, pid peer.ID) {
-	for {
-		err := syncCycle(ctx, pid)
-
-		if err != nil {
-			select {
-			case m.errPeers <- pid:
-			case <-ctx.Done():
-			}
-			return
-		}
-
-		select {
-		case <-time.After(time.Duration(syncCycleSeconds) * time.Second):
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-func applyBlocks(headBlock uint64, targetSyncBlock uint64, rpc rpc.RPC, requestQueue chan BatchBlockRequest, responseQueue chan BlockBatch, doneChan chan int) {
-	blockHeap := &BlockBatchHeap{}
-	heap.Init(blockHeap)
-
-	for resp := range responseQueue {
-		// Add the response to the heap
-		heap.Push(blockHeap, resp)
-
-		// While the heap's head is <= head block + 1, pop and apply.
-		for len(*blockHeap) > 0 && uint64((*blockHeap)[0].StartBlockHeight) <= headBlock+1 {
-			batch := heap.Pop(blockHeap).(BlockBatch)
-			_, blocks, err := types.DeserializeVectorBlockItem(batch.VectorBlockItems)
-			if err != nil {
-				requestQueue <- BatchBlockRequest{
-					StartBlockHeight: batch.StartBlockHeight,
-					BatchSize:        batch.BatchSize,
-				}
-			}
-
-			for _, blockItem := range *blocks {
-				blockItem.Block.Unbox()
-				topology := types.NewBlockTopology()
-				topology.Height = blockItem.BlockHeight
-				topology.ID = blockItem.BlockID
-
-				block, _ := blockItem.Block.GetNative()
-				block.ActiveData.Unbox()
-				active, _ := block.ActiveData.GetNative()
-				topology.Previous = active.PreviousBlock
-
-				ok, err := rpc.ApplyBlock(block, topology)
-
-				// If application fails, send a new request and break
-				if err != nil || !ok {
-					requestQueue <- BatchBlockRequest{
-						StartBlockHeight: topology.Height - 1,
-						BatchSize:        batch.BatchSize - types.UInt64(topology.Height-batch.StartBlockHeight),
-					}
-					break
-				}
-
-				if uint64(topology.Height) > headBlock {
-					headBlock = uint64(topology.Height)
-				}
-			}
-		}
-
-		if headBlock >= targetSyncBlock {
-			doneChan <- 0
-			return
-		}
-	}
-}
-
-func fetchBlocksFromPeer(peer peer.ID, headBlockID types.Multihash, client *gorpc.Client, requestQueue chan BatchBlockRequest, responseQueue chan BlockBatch) {
-	request := GetBlocksRequest{
-		HeadBlockID: headBlockID,
-	}
-
-	for batch := range requestQueue {
-		log.Printf("request blocks %v-%v from peer %v", batch.StartBlockHeight, batch.StartBlockHeight+types.BlockHeightType(batch.BatchSize-1), peer)
-		request.StartBlockHeight = batch.StartBlockHeight
-		request.BatchSize = batch.BatchSize
-		response := GetBlocksResponse{}
-
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-		defer cancel()
-		err := client.CallContext(ctx, peer, "SyncService", "GetBlocks", request, &response)
-		if err != nil {
-			requestQueue <- batch
-			time.Sleep(time.Duration(1000000000 + rand.Int31()%1000000000))
-		} else {
-			responseQueue <- BlockBatch{
-				StartBlockHeight: request.StartBlockHeight,
-				BatchSize:        request.BatchSize,
-				VectorBlockItems: &response.VectorBlockItems,
-			}
-		}
-	}
-}
-
-func (m *SyncManager) syncFork(targetSyncBlock uint64, headBlock *types.HeadInfo, peers map[peer.ID]void, peerHeads map[peer.ID]types.Multihash, doneChan chan int) {
-	requestQueue := make(chan BatchBlockRequest, len(peers))
-	responseQueue := make(chan BlockBatch, len(peers))
-	syncDone := make(chan int)
-	defer close(requestQueue)
-	defer close(responseQueue)
-	defer close(syncDone)
-
-	log.Printf("target sync block is %v", targetSyncBlock)
-
-	go createBlockRequests(uint64(headBlock.Height), targetSyncBlock, requestQueue)
-	go applyBlocks(uint64(headBlock.Height), targetSyncBlock, m.rpc, requestQueue, responseQueue, doneChan)
-
-	for peer := range peers {
-		go fetchBlocksFromPeer(peer, peerHeads[peer], m.client, requestQueue, responseQueue)
-	}
-
-	<-syncDone
-	doneChan <- 0
-}
-
-func (m *SyncManager) getPeerForks(targetSyncBlock uint64, peers map[peer.ID]void, peerHeads map[peer.ID]types.Multihash) map[string]map[peer.ID]void {
-	peerForks := make(map[string]map[peer.ID]void)
-	for p := range peers {
-		peerForkBlockRequest := GetBlocksRequest{
-			HeadBlockID:      peerHeads[p],
-			StartBlockHeight: types.BlockHeightType(targetSyncBlock),
-			BatchSize:        1,
-		}
-		peerForkBlock := GetBlocksResponse{}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-		defer cancel()
-		err := m.client.CallContext(ctx, p, "SyncService", "GetBlocks", peerForkBlockRequest, &peerForkBlock)
-		if err != nil {
-			log.Printf("%v: error getting peer fork block, %v", p, err)
-			continue
-		}
-
-		_, blocks, err := types.DeserializeVectorBlockItem(&peerForkBlock.VectorBlockItems)
-		if err != nil {
-			log.Printf("%v: error deserializing peer fork block, %v", p, err)
-			continue
-		}
-		if len(*blocks) != 1 {
-			log.Printf("%v: peer did not send only one fork block", p)
-			continue
-		}
-
-		forkPeers, ok := peerForks[string((*blocks)[0].BlockID.Digest)]
-		if !ok {
-			forkPeers = make(map[peer.ID]void, 0)
-		}
-
-		forkPeers[p] = void{}
-		peerForks[string((*blocks)[0].BlockID.Digest)] = forkPeers
-	}
-
-	return peerForks
-}
-
-func doBlockRequest(req PeerBlockRequest) {
-	// Download the block from req.Requester
-	// Attempt to apply the block
-	// Send to blockRequestDone, blockRequestErr, or blockRequestApplyErr as appropriate
-
-	// Note:  We don't want to send to the peer's DoneChan or ErrChan in this method,
-	// since SyncManager needs to update its state in the main thread.
 }
 
 func (m *SyncManager) run(ctx context.Context) {
@@ -404,57 +228,6 @@ func (m *SyncManager) run(ctx context.Context) {
 	         delete(m.peers, perr.PeerID)
 	      case pid <- m.unblacklistPeers:
 	         delete(m.blacklist, pid)
-
-	      case req := <-m.blockRequests:
-	         k := req.Topology.Serialize(NewVariableBlob())
-	         currentReq, hasReq := m.blockDownloads[k]
-	         if hasReq {
-	            // TODO check that this doesn't overwrite an existing entry and also isn't the current downloader
-	            currentReq.WaitingReq[req.Requester] = req
-	         } else {
-	            m.blockDownloads[k] = InFlightBlockRequest{
-	               DownloadingReq: req,
-	               WaitingReq:     make(map[peer.ID]void),
-	            }
-	            go doBlockRequest(req)
-	         }
-
-	      case resp := <-m.blockRequestDone:
-	         k := resp.Topology.Serialize(NewVariableBlob())
-	         currentReq, hasReq := m.blockDownloads[k]
-	         if !hasReq {
-	            panic("Illegal state, blockDownloads entry was not found")
-	         }
-	         currentReq.DownloadingReq.DoneChan <- resp
-	         for _, waiter := range currentReq.WaitingReq {
-	            waiter.DoneChan <- resp
-	         }
-	         delete(m.BlockDownloads, k)
-
-	      case peerDone := <-m.blockRequestErr:
-	         // We only send the error code to the peer that couldn't download it
-	         k := resp.Topology.Serialize(NewVariableBlob())
-	         currentReq, hasReq := m.blockDownloads[k]
-	         if !hasReq {
-	            panic("Illegal state, blockDownloads entry was not found")
-	         }
-	         currentReq.DownloadingReq.ErrChan <- resp
-
-	         if len(currentReq.WaitingReq) == 0 {
-	            delete(m.BlockDownloads, k)
-	         } else {
-	            // TODO we just pick the first key in the Golang map key traversal order, do we want to pick randomly instead?
-	            for newDownloaderID, newDownloader := range currentReq.WaitingReq {
-	               break
-	            }
-	            delete(currentReq.WaitingReq, newDownloaderID)
-	            currentReq.DownloadingReq = newDownloader
-	            go doBlockRequest(newDownloader)
-	         }
-
-	      case applyErr := <-m.blockRequestApplyErr:
-	         // TODO write this code
-
 	      case <-ctx.Done():
 	         return
 	      }
@@ -528,6 +301,6 @@ func (m *SyncManager) run(ctx context.Context) {
 }
 
 // Start syncing blocks from peers
-func (m *SyncManager) Start() {
-	go m.run()
+func (m *SyncManager) Start(ctx context.Context) {
+	go m.run(ctx)
 }
