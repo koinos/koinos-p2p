@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
+	"github.com/koinos/koinos-p2p/internal/protocol"
 	types "github.com/koinos/koinos-types-golang"
 )
 
@@ -319,7 +320,53 @@ func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
 // - (2) For each fork, call GetBlocksByHeight() with the given height bounds to get the blocks in that height range on that fork.
 // - (3) Finally, do some purely computational cleanup:  Extract the BlockTopology and de-duplicate multiple instances of the same block.
 //
-func (k *KoinosRPC) GetTopologyAtHeightRange(minHeight types.BlockHeightType, maxHeight types.BlockHeightType) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
-	// TODO
-	return nil, nil, errors.New("Not implemented")
+func (k *KoinosRPC) GetTopologyAtHeightRange(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
+	forkHeads, err := k.GetForkHeads()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	topologySet := make(map[protocol.BlockTopologyCmp]types.BlockTopology)
+
+	for _, head := range forkHeads.ForkHeads {
+		//var t types.BlockTopology
+		//t.
+		blocks, err := k.GetBlocksByHeight(&head.ID, height, numBlocks)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Go through each block and extract its topology
+		for _, blockItem := range blocks.BlockItems {
+			opaqueBlock := blockItem.Block
+			opaqueBlock.Unbox()
+			block, err := opaqueBlock.GetNative()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			opaqueActive := block.ActiveData
+			opaqueActive.Unbox()
+			active, err := opaqueActive.GetNative()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			topology := types.BlockTopology{ID: blockItem.BlockID,
+				Height: blockItem.BlockHeight, Previous: active.PreviousBlock}
+
+			// Add the topology to the set
+			topologySet[protocol.BlockTopologyToCmp(topology)] = topology
+		}
+	}
+
+	// Create a slice of the topology objects
+	topologySlice := make([]types.BlockTopology, len(topologySet))
+	i := 0
+	for _, value := range topologySet {
+		topologySlice[i] = value
+		i++
+	}
+
+	return forkHeads, topologySlice, nil
 }
