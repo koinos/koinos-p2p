@@ -29,7 +29,13 @@ const (
 // - Create, start, and (TODO: cancel) a loop to regularly submit rescan requests to rescanChan
 //
 type BdmiProvider struct {
+	peerHandlers map[peer.ID]*PeerHandler
+
+	heightRange HeightRange
+
+	heightRangeChan      chan HeightRange
 	newPeerChan          chan peer.ID
+	peerErrChan          chan PeerError
 	myBlockTopologyChan  chan types.BlockTopology
 	myLastIrrChan        chan types.BlockTopology
 	peerHasBlockChan     chan PeerHasBlock
@@ -62,8 +68,46 @@ func (p *BdmiProvider) RescanChan() <-chan bool {
 	return p.rescanChan
 }
 
-func (p *BdmiProvider) handleNewPeersLoop() {
-	// TODO: Implement this
+func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
+	// TODO handle case where peer already exists
+	p.peerHandlers[newPeer] = &PeerHandler{
+		peerID:               newPeer,
+		heightRange:          p.heightRange,
+		errChan:              p.peerErrChan,
+		heightRangeChan:      make(chan HeightRange),
+		peerHasBlockChan:     p.peerHasBlockChan,
+		downloadRequestChan:  make(chan BlockDownloadRequest),
+		downloadResponseChan: p.downloadResponseChan,
+	}
+}
+
+func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange HeightRange) {
+	p.heightRange = heightRange
+	for _, peerHandler := range p.peerHandlers {
+		go func() {
+			select {
+			case peerHandler.heightRangeChan <- heightRange:
+			case <-ctx.Done():
+			}
+		}()
+	}
+}
+
+// TODO:  Create loop to write heightRange, myBlockTopologyChan, myLastIrrChan
+// TODO:  Create loop to service downloadResponseChan and applyBlockResultChan
+// TODO:  Create loop to write downloadFailedChan
+
+func (p *BdmiProvider) providerLoop(ctx context.Context) {
+	for {
+		select {
+		case newPeer := <-p.newPeerChan:
+			p.handleNewPeer(ctx, newPeer)
+		case heightRange := <-p.heightRangeChan:
+			p.handleHeightRange(ctx, heightRange)
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
