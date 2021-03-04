@@ -44,6 +44,8 @@ type BdmiProvider struct {
 	rescanChan           chan bool
 }
 
+var _ BlockDownloadManagerInterface = (*BdmiProvider)(nil)
+
 func (p *BdmiProvider) MyBlockTopologyChan() <-chan types.BlockTopology {
 	return p.myBlockTopologyChan
 }
