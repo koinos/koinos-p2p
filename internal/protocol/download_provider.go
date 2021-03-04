@@ -93,7 +93,39 @@ func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange Height
 	}
 }
 
-// TODO:  Create loop to write heightRange, myBlockTopologyChan, myLastIrrChan
+func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
+	for {
+		err := p.pollMyTopologyCycle(ctx)
+
+		if err != nil {
+			log.Printf("Error polling my topology: %v\n", err)
+		}
+
+		select {
+		case <-time.After(time.Duration(pollMyTopologySeconds) * time.Second):
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context) error {
+	// TODO:  Copy code from PeerHandler when GetTopologyAtHeightRange is done
+	select {
+	case <-ctx.Done():
+		return nil
+	}
+
+	// TODO:  Create loop to write heightRange, myBlockTopologyChan, myLastIrrChan
+	for _, b := range resp.Blocks {
+		select {
+		case hasBlockChan <- PeerHasBlock{h.peerID, b}:
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
 // TODO:  Create loop to service downloadResponseChan and applyBlockResultChan
 // TODO:  Create loop to write downloadFailedChan
 
