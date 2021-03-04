@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
-	koinos_types "github.com/koinos/koinos-types-golang"
+	types "github.com/koinos/koinos-types-golang"
 )
 
 // KoinosRPC Implementation of RPC Interface
@@ -21,9 +21,9 @@ func NewKoinosRPC() *KoinosRPC {
 }
 
 // GetHeadBlock rpc call
-func (k *KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
-	args := koinos_types.ChainRPCRequest{
-		Value: koinos_types.NewGetHeadInfoRequest(),
+func (k *KoinosRPC) GetHeadBlock() (*types.HeadInfo, error) {
+	args := types.ChainRPCRequest{
+		Value: types.NewGetHeadInfoRequest(),
 	}
 	data, err := json.Marshal(args)
 
@@ -38,18 +38,18 @@ func (k *KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 		return nil, err
 	}
 
-	responseVariant := koinos_types.NewChainRPCResponse()
+	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *koinos_types.HeadInfo
+	var response *types.HeadInfo
 
 	switch t := responseVariant.Value.(type) {
-	case *koinos_types.GetHeadInfoResponse:
-		response = (*koinos_types.HeadInfo)(t)
-	case *koinos_types.ChainErrorResponse:
+	case *types.GetHeadInfoResponse:
+		response = (*types.HeadInfo)(t)
+	case *types.ChainErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:
 		err = errors.New("Unexptected return type")
@@ -59,8 +59,8 @@ func (k *KoinosRPC) GetHeadBlock() (*koinos_types.HeadInfo, error) {
 }
 
 // ApplyBlock rpc call
-func (k *KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_types.BlockTopology) (bool, error) {
-	blockSub := koinos_types.NewSubmitBlockRequest()
+func (k *KoinosRPC) ApplyBlock(block *types.Block, topology ...*types.BlockTopology) (bool, error) {
+	blockSub := types.NewSubmitBlockRequest()
 	blockSub.Block = *block
 
 	if len(topology) == 0 {
@@ -73,7 +73,7 @@ func (k *KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_ty
 	blockSub.VerifyBlockSignature = true
 	blockSub.VerifyTransactionSignatures = true
 
-	args := koinos_types.ChainRPCRequest{
+	args := types.ChainRPCRequest{
 		Value: blockSub,
 	}
 	data, err := json.Marshal(args)
@@ -89,7 +89,7 @@ func (k *KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_ty
 		return false, err
 	}
 
-	responseVariant := koinos_types.NewChainRPCResponse()
+	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return false, nil
@@ -98,9 +98,9 @@ func (k *KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_ty
 	response := false
 
 	switch t := responseVariant.Value.(type) {
-	case *koinos_types.SubmitBlockResponse:
+	case *types.SubmitBlockResponse:
 		response = true
-	case *koinos_types.ChainErrorResponse:
+	case *types.ChainErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:
 		response = false
@@ -110,14 +110,54 @@ func (k *KoinosRPC) ApplyBlock(block *koinos_types.Block, topology ...*koinos_ty
 }
 
 // ApplyTransaction rpc call
-func (k *KoinosRPC) ApplyTransaction(block *koinos_types.Transaction) (bool, error) {
+func (k *KoinosRPC) ApplyTransaction(block *types.Transaction) (bool, error) {
 	return true, nil
 }
 
+// GetBlocksByID rpc call
+func (k *KoinosRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
+	args := types.BlockStoreRequest{
+		Value: &types.GetBlocksByIDRequest{
+			BlockID:           *blockID,
+			ReturnBlockBlob:   true,
+			ReturnReceiptBlob: false,
+		},
+	}
+	data, err := json.Marshal(args)
+	if err != nil {
+		return nil, err
+	}
+
+	var responseBytes []byte
+	responseBytes, err = k.mq.SendRPC("application/json", "koinos_block", data)
+	if err != nil {
+		return nil, err
+	}
+
+	responseVariant := types.NewBlockStoreResponse()
+	err = json.Unmarshal(responseBytes, responseVariant)
+	if err != nil {
+		return nil, nil
+	}
+
+	var response *types.GetBlocksByIDResponse
+
+	switch t := responseVariant.Value.(type) {
+	case *types.GetBlocksByIDResponse:
+		response = (*types.GetBlocksByIDResponse)(t)
+	case *types.BlockStoreErrorResponse:
+		err = errors.New(string(t.ErrorText))
+	default:
+		err = errors.New("Unexpected return type")
+	}
+
+	return response, err
+}
+
 // GetBlocksByHeight rpc call
-func (k *KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.BlockHeightType, numBlocks koinos_types.UInt32) (*koinos_types.GetBlocksByHeightResponse, error) {
-	args := koinos_types.BlockStoreRequest{
-		Value: &koinos_types.GetBlocksByHeightRequest{
+func (k *KoinosRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
+	args := types.BlockStoreRequest{
+		Value: &types.GetBlocksByHeightRequest{
 			HeadBlockID:         *blockID,
 			AncestorStartHeight: height,
 			NumBlocks:           numBlocks,
@@ -138,18 +178,18 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height ko
 		return nil, err
 	}
 
-	responseVariant := koinos_types.NewBlockStoreResponse()
+	responseVariant := types.NewBlockStoreResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, nil
 	}
 
-	var response *koinos_types.GetBlocksByHeightResponse
+	var response *types.GetBlocksByHeightResponse
 
 	switch t := responseVariant.Value.(type) {
-	case *koinos_types.GetBlocksByHeightResponse:
-		response = (*koinos_types.GetBlocksByHeightResponse)(t)
-	case *koinos_types.BlockStoreErrorResponse:
+	case *types.GetBlocksByHeightResponse:
+		response = (*types.GetBlocksByHeightResponse)(t)
+	case *types.BlockStoreErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:
 		err = errors.New("Unexpected return type")
@@ -159,12 +199,12 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *koinos_types.Multihash, height ko
 }
 
 // GetAncestorTopologyAtHeight rpc call
-func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *koinos_types.Multihash, heights []koinos_types.BlockHeightType) ([]koinos_types.BlockTopology, error) {
+func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
 
 	// TODO:  Implement this properly in the block store.
 	// This implementation is an inefficient, abstraction-breaking hack that unboxes stuff in the p2p code (where it definitely shouldn't be unboxed).
 
-	result := make([]koinos_types.BlockTopology, len(heights))
+	result := make([]types.BlockTopology, len(heights))
 
 	for i, h := range heights {
 		resp := k.GetBlocksByHeight(blockID, h, 1)
@@ -185,9 +225,9 @@ func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *koinos_types.Multihash
 }
 
 // GetChainID rpc call
-func (k *KoinosRPC) GetChainID() (*koinos_types.GetChainIDResponse, error) {
-	args := koinos_types.ChainRPCRequest{
-		Value: koinos_types.NewGetChainIDRequest(),
+func (k *KoinosRPC) GetChainID() (*types.GetChainIDResponse, error) {
+	args := types.ChainRPCRequest{
+		Value: types.NewGetChainIDRequest(),
 	}
 	data, err := json.Marshal(args)
 
@@ -202,18 +242,18 @@ func (k *KoinosRPC) GetChainID() (*koinos_types.GetChainIDResponse, error) {
 		return nil, err
 	}
 
-	responseVariant := koinos_types.NewChainRPCResponse()
+	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, nil
 	}
 
-	var response *koinos_types.GetChainIDResponse
+	var response *types.GetChainIDResponse
 
 	switch t := responseVariant.Value.(type) {
-	case *koinos_types.GetChainIDResponse:
-		response = (*koinos_types.GetChainIDResponse)(t)
-	case *koinos_types.ChainErrorResponse:
+	case *types.GetChainIDResponse:
+		response = (*types.GetChainIDResponse)(t)
+	case *types.ChainErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:
 		err = errors.New("Unexptected return type")
@@ -229,8 +269,8 @@ func (k *KoinosRPC) SetBroadcastHandler(topic string, handler func(topic string,
 }
 
 // GetForkHeads rpc call
-func (k *KoinosRPC) GetForkHeads() (*koinos_types.GetForkHeadsResponse, error) {
-	args := koinos_types.GetForkHeadsRequest{}
+func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
+	args := types.GetForkHeadsRequest{}
 
 	data, err := json.Marshal(args)
 
@@ -245,18 +285,18 @@ func (k *KoinosRPC) GetForkHeads() (*koinos_types.GetForkHeadsResponse, error) {
 		return nil, err
 	}
 
-	responseVariant := koinos_types.NewChainRPCResponse()
+	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *koinos_types.GetForkHeadsResponse
+	var response *types.GetForkHeadsResponse
 
 	switch t := responseVariant.Value.(type) {
-	case *koinos_types.GetForkHeadsResponse:
-		response = (*koinos_types.GetForkHeadsResponse)(t)
-	case *koinos_types.ChainErrorResponse:
+	case *types.GetForkHeadsResponse:
+		response = (*types.GetForkHeadsResponse)(t)
+	case *types.ChainErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:
 		err = errors.New("Unexpected return type")
@@ -272,6 +312,6 @@ func (k *KoinosRPC) GetForkHeads() (*koinos_types.GetForkHeadsResponse, error) {
 // - (2) For each fork, call GetBlocksByHeight() with the given height bounds to get the blocks in that height range on that fork.
 // - (3) Finally, do some purely computational cleanup:  Extract the BlockTopology and de-duplicate multiple instances of the same block.
 //
-func (k *KoinosRPC) GetTopologyAtHeightRange(minHeight koinos_types.BlockHeightType, maxHeight koinos_types.BlockHeightType) (*koinos_types.GetForkHeadsResponse, []koinos_types.BlockTopology, error) {
+func (k *KoinosRPC) GetTopologyAtHeightRange(minHeight types.BlockHeightType, maxHeight types.BlockHeightType) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
 	// TODO
 }

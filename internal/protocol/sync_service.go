@@ -66,6 +66,16 @@ type GetBlocksResponse struct {
 	VectorBlockItems types.VariableBlob
 }
 
+// GetBlocksByIDRequest args
+type GetBlocksByIDRequest struct {
+	BlockID types.VectorMultihash
+}
+
+// GetBlocksByIDResponse return
+type GetBlocksByIDResponse struct {
+	VectorBlockItems types.VariableBlob
+}
+
 // SyncService handles broadcasting inventory to peers
 // TODO: Rename RPC -> KoinosdRPC
 type SyncService struct {
@@ -142,6 +152,17 @@ func (s *SyncService) GetForkStatus(ctx context.Context, request GetForkStatusRe
 func (s *SyncService) GetBlocks(ctx context.Context, request GetBlocksRequest, response *GetBlocksResponse) error {
 	blocks, err := s.RPC.GetBlocksByHeight(&request.HeadBlockID,
 		request.StartBlockHeight, types.UInt32(request.BatchSize))
+	if err != nil {
+		return err
+	}
+
+	response.VectorBlockItems = *blocks.BlockItems.Serialize(&response.VectorBlockItems)
+	return nil
+}
+
+// GetBlocksByID p2p rpc
+func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRequest, response *GetBlocksByIDResponse) error {
+	blocks, err := s.RPC.GetBlocksByID(&request.BlockID)
 	if err != nil {
 		return err
 	}

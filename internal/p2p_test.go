@@ -46,6 +46,10 @@ func (k *TestRPC) ApplyTransaction(txn *types.Transaction) (bool, error) {
 	return true, nil
 }
 
+func (k *TestRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
+	return nil, nil
+}
+
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
 	if height+types.BlockHeightType(numBlocks) > k.Height+types.BlockHeightType(len(k.BlocksApplied)) {
