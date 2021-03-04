@@ -36,20 +36,6 @@ type BatchBlockRequest struct {
 	BatchSize        types.UInt64
 }
 
-type PeerError struct {
-	Peer  peer.ID
-	Error error
-}
-
-type PeerBlockRequest struct {
-	Topology  types.BlockTopology
-	Requester peer.ID
-	// Populated by SyncManager, so should have a size of 1 to avoid blocking
-	DoneChan chan PeerBlockResponse
-	// Populated by SyncManager, so should have a size of 1 to avoid blocking
-	ErrChan chan PeerBlockResponseError
-}
-
 type PeerBlockResponse struct {
 	Topology  types.BlockTopology
 	Responder peer.ID

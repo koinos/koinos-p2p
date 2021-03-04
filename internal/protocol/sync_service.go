@@ -77,7 +77,7 @@ type GetBlocksByIDResponse struct {
 }
 
 // SyncService handles broadcasting inventory to peers
-// TODO: Rename RPC -> KoinosdRPC
+// TODO: Rename RPC (to what?)
 type SyncService struct {
 	RPC rpc.RPC
 }
