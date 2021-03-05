@@ -326,7 +326,8 @@ func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks 
 		return nil, nil, err
 	}
 
-	topologySet := make(map[util.BlockTopologyCmp]types.BlockTopology)
+	topologySet := make(map[util.BlockTopologyCmp]util.Void)
+	topologySlice := make([]types.BlockTopology, 0, len(forkHeads.ForkHeads))
 
 	for _, head := range forkHeads.ForkHeads {
 		//var t types.BlockTopology
@@ -355,17 +356,13 @@ func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks 
 			topology := types.BlockTopology{ID: blockItem.BlockID,
 				Height: blockItem.BlockHeight, Previous: active.PreviousBlock}
 
-			// Add the topology to the set
-			topologySet[util.BlockTopologyToCmp(topology)] = topology
+			// Add the topology to the set / slice if it's not already there
+			cmp := util.BlockTopologyToCmp(topology)
+			if _, ok := topologySet[cmp]; !ok {
+				topologySet[cmp] = util.Void{}
+				topologySlice = append(topologySlice, topology)
+			}
 		}
-	}
-
-	// Create a slice of the topology objects
-	topologySlice := make([]types.BlockTopology, len(topologySet))
-	i := 0
-	for _, value := range topologySet {
-		topologySlice[i] = value
-		i++
 	}
 
 	return forkHeads, topologySlice, nil
