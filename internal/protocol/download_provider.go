@@ -2,17 +2,23 @@ package protocol
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
 
+	rpc "github.com/koinos/koinos-p2p/internal/rpc"
+	util "github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 )
 
 const (
 	pollMyTopologySeconds = uint64(2)
+	// TODO:  This should be configurable, and probably ~100 for mainnet
+	heightInterestReach = uint64(5)
+	rescanIntervalMs    = uint64(200)
 )
 
 // BdmiProvider is the implementation of Block Download Manager Interface.
@@ -32,11 +38,16 @@ const (
 type BdmiProvider struct {
 	peerHandlers map[peer.ID]*PeerHandler
 
+	rpc rpc.RPC
+
 	heightRange HeightRange
 
-	heightRangeChan      chan HeightRange
-	newPeerChan          chan peer.ID
-	peerErrChan          chan PeerError
+	newPeerChan     chan peer.ID
+	peerErrChan     chan PeerError
+	heightRangeChan chan HeightRange
+
+	// Below channels are drained by DownloadManager
+
 	myBlockTopologyChan  chan types.BlockTopology
 	myLastIrrChan        chan types.BlockTopology
 	peerHasBlockChan     chan PeerHasBlock
@@ -85,6 +96,7 @@ func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadReq
 	}
 
 	go func() {
+		// If there was an error, send it
 		if resp.Err != nil {
 			select {
 			case p.downloadResponseChan <- resp:
@@ -92,16 +104,56 @@ func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadReq
 			}
 			return
 		}
+
+		// Send to downloadRequestChan
 		select {
 		case peerHandler.downloadRequestChan <- req:
 		case <-ctx.Done():
 			return
 		}
-		// Response will be handled in providerLoop()
+
+		// Sequence of events that now happens elsewhere in the code:
+		//
+		// PeerHandler will drain downloadRequestChan
+		// PeerHandler will fill downloadResponseChan
+		// BlockDownloadManager will drain downloadResponseChan
+		// BlockDownloadManager will call BdmiProvider.ApplyBlock()
 	}()
 }
 
 func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadResponse) {
+
+	// Even if the peer's disappeared, we still attempt to apply the block.
+	go func() {
+		applyResult := BlockDownloadApplyResult{
+			Topology: resp.Topology,
+			PeerID:   resp.PeerID,
+			Ok:       false,
+			Err:      nil,
+		}
+
+		topo := util.BlockTopologyFromCmp(resp.Topology)
+
+		// TODO:  We should not unbox here, however for some reason the API requires Block not OpaqueBlock
+		resp.Block.Unbox()
+		block, err := resp.Block.GetNative()
+		if err != nil {
+			applyResult.Err = err
+		} else {
+			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(block, &topo)
+		}
+
+		select {
+		case p.applyBlockResultChan <- applyResult:
+		case <-ctx.Done():
+			return
+		}
+
+		// Sequence of events that now happens elsewhere in the code:
+		//
+		// BlockDownloadManager will drain applyBlockResultChan
+		// BlockDownloadManager will call another peer to download if apply failed
+	}()
 }
 
 func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
@@ -120,18 +172,23 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange HeightRange) {
 	p.heightRange = heightRange
 	for _, peerHandler := range p.peerHandlers {
-		go func() {
+		go func(ph *PeerHandler) {
 			select {
-			case peerHandler.heightRangeChan <- heightRange:
+			case ph.heightRangeChan <- heightRange:
 			case <-ctx.Done():
 			}
-		}()
+		}(peerHandler)
 	}
 }
 
+type MyTopologyLoopState struct {
+	heightRange HeightRange
+}
+
 func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
+	state := MyTopologyLoopState{heightRange: HeightRange{1, 1}}
 	for {
-		err := p.pollMyTopologyCycle(ctx)
+		err := p.pollMyTopologyCycle(ctx, &state)
 
 		if err != nil {
 			log.Printf("Error polling my topology: %v\n", err)
@@ -145,44 +202,69 @@ func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
 	}
 }
 
-func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context) error {
+func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopologyLoopState) error {
+	//
+	// TODO:  Currently this code has the client poll for blocks in the height range.
+	//        This is inefficient, we should instead have the server pro-actively send
+	//        blocks within the requested height range.  This way both client and server
+	//        are properly event-driven rather than polling.
+	//
+	//        We will need some means to feed height range, this may require modification to
+	//        libp2p-gorpc to support passing the peer ID into the caller.
+	//
+
+	forkHeads, blockTopology, err := p.rpc.GetTopologyAtHeight(state.heightRange.Height, state.heightRange.NumBlocks)
+
+	if err != nil {
+		return err
+	}
+
+	if len(forkHeads.ForkHeads) == 0 {
+		return errors.New("Zero ForkHeads were returned")
+	}
+
+	longestForkHeight := forkHeads.ForkHeads[0].Height
+	for i := 1; i < len(forkHeads.ForkHeads); i++ {
+		if forkHeads.ForkHeads[i].Height > longestForkHeight {
+			log.Printf("Best fork head was not returned first\n")
+			longestForkHeight = forkHeads.ForkHeads[i].Height
+		}
+	}
+
+	libHeight := uint64(forkHeads.LastIrreversibleBlock.Height)
+
+	newHeightRange := HeightRange{
+		Height:    types.BlockHeightType(libHeight),
+		NumBlocks: types.UInt32((uint64(longestForkHeight) + heightInterestReach) - libHeight),
+	}
+
+	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
+	if newHeightRange != state.heightRange {
+
+		state.heightRange = newHeightRange
+
+		select {
+		case p.heightRangeChan <- newHeightRange:
+		case <-ctx.Done():
+			return nil
+		}
+	}
+
+	select {
+	case p.myLastIrrChan <- forkHeads.LastIrreversibleBlock:
+	case <-ctx.Done():
+		return nil
+	}
+
+	for _, topo := range blockTopology {
+		select {
+		case p.myBlockTopologyChan <- topo:
+		case <-ctx.Done():
+			return nil
+		}
+	}
 	return nil
 }
-
-/*
-func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context) error {
-   // TODO:  Copy code from PeerHandler when GetTopologyAtHeightRange is done
-   select {
-   case <-ctx.Done():
-      return nil
-   }
-
-   // TODO:  Create loop to write heightRange, myBlockTopologyChan, myLastIrrChan
-   for _, b := range resp.Blocks {
-      select {
-      case hasBlockChan <- PeerHasBlock{h.peerID, b}:
-      case <-ctx.Done():
-         return nil
-      }
-   }
-}
-*/
-
-func (p *BdmiProvider) handleDownloadResponse(ctx context.Context, resp BlockDownloadResponse) {
-	go func() {
-		//
-	}()
-}
-
-/*
-type BlockDownloadResponse struct {
-   Topology BlockTopologyCmp
-   PeerID   peer.ID
-
-   Block types.OpaqueBlock
-   Err   error
-}
-*/
 
 // TODO:  Create loop to service downloadResponseChan and applyBlockResultChan
 // TODO:  Create loop to write downloadFailedChan
@@ -194,26 +276,42 @@ func (p *BdmiProvider) providerLoop(ctx context.Context) {
 			p.handleNewPeer(ctx, newPeer)
 		case heightRange := <-p.heightRangeChan:
 			p.handleHeightRange(ctx, heightRange)
-		case resp := <-p.downloadResponseChan:
-			p.handleDownloadResponse(ctx, resp)
 		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-func (p *BdmiProvider) dispatchDownloadLoop(ctx context.Context) {
-	// TODO: Implement this
-}
-
-func (p *BdmiProvider) applyBlockLoop(ctx context.Context) {
-	// TODO: Implement this
+type RescanLoopState struct {
+	lastForceRescanTime time.Time
 }
 
 func (p *BdmiProvider) triggerRescanLoop(ctx context.Context) {
-	// TODO: Implement this
+
+	// Set the start time to be far enough in the past to trigger rescan immediately
+	state := RescanLoopState{
+		lastForceRescanTime: time.Now().Add(-1000 * time.Duration(rescanIntervalMs) * time.Millisecond),
+	}
+	for {
+		select {
+		case <-time.After(time.Duration(rescanIntervalMs) * time.Millisecond):
+			p.triggerRescanCycle(ctx, &state)
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
-func (p *BdmiProvider) triggerRescanCycle(ctx context.Context) {
-	// TODO: Implement this
+func (p *BdmiProvider) triggerRescanCycle(ctx context.Context, state *RescanLoopState) {
+	forceRescan := false
+	now := time.Now()
+	if now.Sub(state.lastForceRescanTime) >= time.Duration(rescanIntervalMs)*time.Millisecond {
+		state.lastForceRescanTime = now
+		forceRescan = true
+	}
+	select {
+	case p.rescanChan <- forceRescan:
+	case <-ctx.Done():
+		return
+	}
 }

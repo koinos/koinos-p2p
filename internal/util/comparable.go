@@ -60,3 +60,11 @@ func BlockTopologyToCmp(topo types.BlockTopology) BlockTopologyCmp {
 		Previous: MultihashToCmp(topo.Previous),
 	}
 }
+
+func BlockTopologyFromCmp(topo BlockTopologyCmp) types.BlockTopology {
+	return types.BlockTopology{
+		ID:       MultihashFromCmp(topo.ID),
+		Height:   topo.Height,
+		Previous: MultihashFromCmp(topo.Previous),
+	}
+}

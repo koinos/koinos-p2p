@@ -41,6 +41,7 @@ type BlockDownloadApplyResult struct {
 	Topology util.BlockTopologyCmp
 	PeerID   peer.ID
 
+	Ok  bool
 	Err error
 }
 
@@ -194,7 +195,6 @@ func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadA
 
 // ConvertPeerSetToSlice converts a set (a map from PeerCmp to void) to a slice.
 //
-// Only the first n elements are converted.
 func ConvertPeerSetToSlice(m map[peer.ID]util.Void) []peer.ID {
 	result := make([]peer.ID, len(m))
 
@@ -270,16 +270,16 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 				m.needRescan = false
 			}
 		case newMyTopo := <-m.iface.MyBlockTopologyChan():
-			m.MyTopoCache.Add(util.BlockTopologyToCmp(newMyTopo))
-			m.needRescan = true
+			added := m.MyTopoCache.Add(util.BlockTopologyToCmp(newMyTopo))
+			m.needRescan = m.needRescan || added
 		case newMyLastIrr := <-m.iface.MyLastIrrChan():
 			c := util.BlockTopologyToCmp(newMyLastIrr)
 			m.MyTopoCache.SetLastIrr(c)
 			m.TopoCache.SetLastIrr(c)
 			m.needRescan = true
 		case peerHasBlock := <-m.iface.PeerHasBlockChan():
-			m.TopoCache.Add(peerHasBlock)
-			m.needRescan = true
+			added := m.TopoCache.Add(peerHasBlock)
+			m.needRescan = m.needRescan || added
 		case downloadResponse := <-m.iface.DownloadResponseChan():
 			m.handleDownloadResponse(ctx, downloadResponse)
 		case applyBlockResult := <-m.iface.ApplyBlockResultChan():

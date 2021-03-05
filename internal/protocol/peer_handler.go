@@ -15,8 +15,8 @@ import (
 // HeightRange is a message that specifies a peer should send topology updates for the given height range.
 // TODO: Refactor to have height, blocks
 type HeightRange struct {
-	MinHeight types.BlockHeightType
-	MaxHeight types.BlockHeightType
+	Height    types.BlockHeightType
+	NumBlocks types.UInt32
 }
 
 type PeerError struct {
@@ -127,8 +127,8 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//
 
 	req := GetTopologyAtHeightRequest{
-		BlockHeight: h.heightRange.MinHeight,
-		NumBlocks:   types.UInt32((h.heightRange.MaxHeight - h.heightRange.MinHeight) + 1),
+		BlockHeight: h.heightRange.Height,
+		NumBlocks:   h.heightRange.NumBlocks,
 	}
 	resp := GetTopologyAtHeightResponse{}
 	subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)

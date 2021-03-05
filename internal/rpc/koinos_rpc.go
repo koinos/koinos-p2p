@@ -60,15 +60,11 @@ func (k *KoinosRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
 }
 
 // ApplyBlock rpc call
-func (k *KoinosRPC) ApplyBlock(block *types.Block, topology ...*types.BlockTopology) (bool, error) {
+// TODO:  Block should be OpaqueBlock
+func (k *KoinosRPC) ApplyBlock(block *types.Block, topology *types.BlockTopology) (bool, error) {
 	blockSub := types.NewSubmitBlockRequest()
 	blockSub.Block = *block
-
-	if len(topology) == 0 {
-		// TODO: Fill in Block Topology
-	} else {
-		blockSub.Topology = *topology[0]
-	}
+	blockSub.Topology = *topology
 
 	blockSub.VerifyPassiveData = true
 	blockSub.VerifyBlockSignature = true

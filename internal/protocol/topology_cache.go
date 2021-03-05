@@ -35,7 +35,11 @@ func NewMyTopologyCache() *MyTopologyCache {
 	}
 }
 
-func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) {
+func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
+	_, hasBlock := c.ByTopology[block]
+	if hasBlock {
+		return false
+	}
 	c.ByTopology[block] = util.Void{}
 
 	{
@@ -64,6 +68,7 @@ func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) {
 		}
 		m[block] = util.Void{}
 	}
+	return true
 }
 
 func (c *MyTopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
@@ -90,7 +95,11 @@ func NewTopologyCache() *TopologyCache {
 	}
 }
 
-func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) {
+func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) bool {
+	_, hasBlock := c.Set[peerHasBlock]
+	if hasBlock {
+		return false
+	}
 	c.Set[peerHasBlock] = util.Void{}
 
 	{
@@ -133,6 +142,7 @@ func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) {
 		}
 		m[peerHasBlock] = util.Void{}
 	}
+	return true
 }
 
 func (c *TopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (peer.ID, error) {

@@ -129,12 +129,6 @@ func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequ
 	return nil
 }
 
-// GetAncestorTopologyAtHeights p2p rpc
-func (s *SyncService) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
-	// TODO: Implement this
-	return nil, nil
-}
-
 // GetForkStatus p2p rpc
 func (s *SyncService) GetForkStatus(ctx context.Context, request GetForkStatusRequest, response *GetForkStatusResponse) error {
 	response.Status = SameFork
