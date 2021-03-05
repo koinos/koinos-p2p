@@ -21,9 +21,9 @@ type TestRPC struct {
 }
 
 // GetHeadBlock rpc call
-func (k *TestRPC) GetHeadBlock() (*types.HeadInfo, error) {
-	hi := types.NewHeadInfo()
-	hi.Height = k.Height + types.BlockHeightType(len(k.BlocksApplied))
+func (k *TestRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
+	hi := types.NewGetHeadInfoResponse()
+	hi.Height = k.Height
 	hi.ID.ID = types.UInt64(k.Height) + k.HeadBlockIDDelta
 	return hi, nil
 }
