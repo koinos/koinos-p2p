@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -68,6 +69,39 @@ func (p *BdmiProvider) ApplyBlockResultChan() <-chan BlockDownloadApplyResult {
 
 func (p *BdmiProvider) RescanChan() <-chan bool {
 	return p.rescanChan
+}
+
+func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
+	resp := BlockDownloadResponse{
+		Topology: req.Topology,
+		PeerID:   req.PeerID,
+		Err:      nil,
+	}
+
+	peerHandler, hasHandler := p.peerHandlers[req.PeerID]
+	if !hasHandler {
+		resp.Err = fmt.Errorf("Tried to download block %v from peer %v, but handler was not registered\n", req.Topology.ID, req.PeerID)
+		log.Printf("%v\n", resp.Err.Error())
+	}
+
+	go func() {
+		if resp.Err != nil {
+			select {
+			case p.downloadResponseChan <- resp:
+			case <-ctx.Done():
+			}
+			return
+		}
+		select {
+		case peerHandler.downloadRequestChan <- req:
+		case <-ctx.Done():
+			return
+		}
+		// Response will be handled in providerLoop()
+	}()
+}
+
+func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadResponse) {
 }
 
 func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
