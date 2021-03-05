@@ -22,7 +22,7 @@ func NewKoinosRPC() *KoinosRPC {
 }
 
 // GetHeadBlock rpc call
-func (k *KoinosRPC) GetHeadBlock() (*types.HeadInfo, error) {
+func (k *KoinosRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
 	args := types.ChainRPCRequest{
 		Value: types.NewGetHeadInfoRequest(),
 	}
@@ -45,11 +45,11 @@ func (k *KoinosRPC) GetHeadBlock() (*types.HeadInfo, error) {
 		return nil, err
 	}
 
-	var response *types.HeadInfo
+	var response *types.GetHeadInfoResponse
 
 	switch t := responseVariant.Value.(type) {
 	case *types.GetHeadInfoResponse:
-		response = (*types.HeadInfo)(t)
+		response = t
 	case *types.ChainErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:

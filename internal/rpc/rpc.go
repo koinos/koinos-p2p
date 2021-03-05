@@ -7,7 +7,7 @@ import (
 // RPC interface for RPC methods required for koinos-p2p to function
 // TODO:  Add context to all these functions
 type RPC interface {
-	GetHeadBlock() (*types.HeadInfo, error)
+	GetHeadBlock() (*types.GetHeadInfoResponse, error)
 	ApplyBlock(block *types.Block, topology ...*types.BlockTopology) (bool, error)
 	ApplyTransaction(block *types.Transaction) (bool, error)
 	GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error)
