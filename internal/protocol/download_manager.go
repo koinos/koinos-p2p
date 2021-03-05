@@ -20,7 +20,7 @@ const (
 //
 // It contains a list of peers that are known to have the request, and a single peer to download from.
 type BlockDownloadRequest struct {
-	Topology BlockTopologyCmp
+	Topology util.BlockTopologyCmp
 	PeerID   peer.ID
 }
 
