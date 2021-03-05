@@ -164,28 +164,6 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 			return fmt.Errorf("%v: peer's chain id does not match", pid)
 		}
 
-		headBlock, err := m.rpc.GetHeadBlock()
-		if err != nil {
-			log.Printf("%v: error getting head block, %v", pid, err)
-			return err
-		}
-
-		peerForkStatus := GetForkStatusResponse{}
-		{
-			subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
-			defer cancel()
-			err = m.client.CallContext(subctx, pid, "SyncService", "GetForkStatus", GetForkStatusRequest{HeadID: headBlock.ID, HeadHeight: headBlock.Height}, &peerForkStatus)
-			if err != nil {
-				log.Printf("%v: error getting peer fork status, %v", pid, err)
-				return err
-			}
-		}
-
-		if peerForkStatus.Status == DifferentFork {
-			log.Printf("%v: peer is on a different fork", pid)
-			return fmt.Errorf("%v: peer is on a different fork", pid)
-		}
-
 		select {
 		case m.handshakeDonePeers <- pid:
 		case <-ctx.Done():
