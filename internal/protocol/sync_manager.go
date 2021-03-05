@@ -111,10 +111,12 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager 
 	manager.bdmiProvider = NewBdmiProvider(rpc)
 	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider)
 
+	log.Printf("Registering SyncService\n")
 	err := manager.server.Register(NewSyncService(&rpc))
 	if err != nil {
 		panic(err)
 	}
+	log.Printf("SyncService successfully registered\n")
 
 	// TODO: What is context?
 	peerAdder := NewSyncManagerPeerAddr(ctx, h, &manager)

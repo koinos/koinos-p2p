@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"log"
 
 	types "github.com/koinos/koinos-types-golang"
 
@@ -96,12 +97,15 @@ type SyncService struct {
 
 // GetChainID p2p rpc
 func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest, response *GetChainIDResponse) error {
+	log.Printf("SyncService.ChainID() start\n")
 	rpcResult, err := s.RPC.GetChainID()
 	if err != nil {
+		log.Printf("SyncService.ChainID() returning error\n")
 		return err
 	}
 
 	response.ChainID = rpcResult.ChainID
+	log.Printf("SyncService.ChainID() returning normally\n")
 	return nil
 }
 
