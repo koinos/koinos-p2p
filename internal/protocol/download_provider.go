@@ -58,6 +58,25 @@ type BdmiProvider struct {
 
 var _ BlockDownloadManagerInterface = (*BdmiProvider)(nil)
 
+func NewBdmiProvider(rpc rpc.RPC) *BdmiProvider {
+	return &BdmiProvider{
+		peerHandlers: make(map[peer.ID]*PeerHandler),
+		rpc:          rpc,
+		heightRange:  HeightRange{1, 1},
+
+		newPeerChan:     make(chan peer.ID),
+		peerErrChan:     make(chan PeerError),
+		heightRangeChan: make(chan HeightRange),
+
+		myBlockTopologyChan:  make(chan types.BlockTopology),
+		myLastIrrChan:        make(chan types.BlockTopology),
+		peerHasBlockChan:     make(chan PeerHasBlock),
+		downloadResponseChan: make(chan BlockDownloadResponse),
+		applyBlockResultChan: make(chan BlockDownloadApplyResult),
+		rescanChan:           make(chan bool),
+	}
+}
+
 func (p *BdmiProvider) MyBlockTopologyChan() <-chan types.BlockTopology {
 	return p.myBlockTopologyChan
 }

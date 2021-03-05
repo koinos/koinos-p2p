@@ -20,8 +20,8 @@ type HeightRange struct {
 }
 
 type PeerError struct {
-	Peer  peer.ID
-	Error error
+	PeerID peer.ID
+	Error  error
 }
 
 // PeerHandler is created by BdmiProvider to handle communications with a single peer.

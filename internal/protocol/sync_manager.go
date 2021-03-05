@@ -6,6 +6,8 @@ import (
 	"log"
 	"time"
 
+	"math/rand"
+
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-p2p/internal/util"
 
@@ -58,9 +60,14 @@ type PeerBlockResponseError struct {
 // TODO: Move blacklist to separate struct
 //
 type SyncManager struct {
+	rng *rand.Rand
+
 	server *gorpc.Server
 	client *gorpc.Client
 	rpc    rpc.RPC
+
+	downloadManager *BlockDownloadManager
+	bdmiProvider    *BdmiProvider
 
 	// Channel for new peer ID's we want to connect to
 	newPeers chan peer.ID
@@ -84,7 +91,11 @@ type SyncManager struct {
 // NewSyncManager factory
 func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager {
 
+	// TODO pass rng as parameter
+	// TODO initialize RNG from cryptographically secure source
 	manager := SyncManager{
+		rng: rand.New(rand.NewSource(99)),
+
 		server: gorpc.NewServer(h, SyncID),
 		client: gorpc.NewClient(h, SyncID),
 		rpc:    rpc,
@@ -97,6 +108,8 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager 
 		peers:     make(map[peer.ID]util.Void),
 		blacklist: make(map[peer.ID]util.Void),
 	}
+	manager.bdmiProvider = NewBdmiProvider(rpc)
+	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider)
 
 	err := manager.server.Register(NewSyncService(&rpc))
 	if err != nil {
@@ -110,7 +123,7 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager 
 	return &manager
 }
 
-// AddPeer ass a peer to the SyncManager.
+// AddPeer adds a peer to the SyncManager.
 // Will connect to the peer in the background.
 func (m *SyncManager) AddPeer(ctx context.Context, pid peer.ID) {
 
@@ -211,94 +224,25 @@ func (m *SyncManager) blacklistPeer(ctx context.Context, pid peer.ID, blacklistT
 }
 
 func (m *SyncManager) run(ctx context.Context) {
-	/*
-	   for {
-	      var peer peer.ID
-
-	      select {
-	      case pid <- m.newPeers:
-	         _, isBlacklisted := m.blacklist[pid]
-	         if !isBlacklisted {
-	            go doPeerHandshake(ctx, pid)
-	         }
-	      case pid <- m.handshakeDonePeers:
-	         m.peers[pid] = void{}
-	      case perr <- m.errPeers:
-	         // If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
-	         m.blacklistPeer(perr.PeerID, time.Duration(blacklistSeconds)*time.Second)
-	         delete(m.peers, perr.PeerID)
-	      case pid <- m.unblacklistPeers:
-	         delete(m.blacklist, pid)
-	      case <-ctx.Done():
-	         return
-	      }
-	   }
-
-	   smallestHeadBlock := ^uint64(0)
-	   peerHeads := make(map[peer.ID]types.Multihash)
-	   peersToDisconnect := make(map[peer.ID]void)
-	   peersToGossip := make(map[peer.ID]void)
-
-	   for peer := range peers {
-	      peerHeadBlock := GetHeadBlockResponse{}
-	      ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
-	      defer cancel()
-	      err := m.client.CallContext(ctx, peer, "SyncService", "GetHeadBlock", GetHeadBlockRequest{}, &peerHeadBlock)
-	      if err != nil {
-	         log.Printf("%v: error getting peer head block, disconnecting from peer", peer)
-	         peersToDisconnect[peer] = void{}
-	      } else {
-	         log.Print(peerHeadBlock.Height)
-	         if peerHeadBlock.Height <= headBlock.Height+types.BlockHeightType(syncDelta) {
-	            peersToGossip[peer] = void{}
-	         } else if uint64(peerHeadBlock.Height) < smallestHeadBlock {
-	            smallestHeadBlock = uint64(peerHeadBlock.Height)
-	         }
-
-	         peerHeads[peer] = peerHeadBlock.ID
-	      }
-	   }
-
-	   m.peerLock.Lock()
-	   for peer := range peersToGossip {
-	      log.Printf("synced with peer %v, moving to gossip", peer)
-	      // TODO: Send to gossip
-	      delete(m.peers, peer)
-	      delete(peers, peer)
-	   }
-	   for peer := range peersToDisconnect {
-	      log.Printf("disconnecting from peer %v", peer)
-	      // TODO: Trigger disconnect?
-	      delete(m.peers, peer)
-	      delete(peers, peer)
-	   }
-	   m.peerLock.Unlock()
-
-	   if len(peers) == 0 {
-	      continue
-	   }
-
-	   blockDelta := (smallestHeadBlock - uint64(headBlock.Height)) / 2
-	   if blockDelta > maxBlockDelta {
-	      blockDelta = maxBlockDelta
-	   }
-	   targetSyncBlock := uint64(headBlock.Height) + blockDelta
-
-	   // Get the fork each peer is on
-	   peerForks := m.getPeerForks(targetSyncBlock, peers, peerHeads)
-
-	   syncChans := make([]chan int, 0, len(peerForks))
-
-	   for _, peers := range peerForks {
-	      doneChan := make(chan int)
-	      go m.syncFork(targetSyncBlock, headBlock, peers, peerHeads, doneChan)
-	      syncChans = append(syncChans, doneChan)
-	   }
-
-	   for _, done := range syncChans {
-	      <-done
-	   }
-	*/
+	for {
+		select {
+		case pid := <-m.newPeers:
+			_, isBlacklisted := m.blacklist[pid]
+			if !isBlacklisted {
+				go m.doPeerHandshake(ctx, pid)
+			}
+		case pid := <-m.handshakeDonePeers:
+			m.peers[pid] = util.Void{}
+		case perr := <-m.errPeers:
+			// If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
+			m.blacklistPeer(ctx, perr.PeerID, time.Duration(blacklistSeconds)*time.Second)
+			delete(m.peers, perr.PeerID)
+		case pid := <-m.unblacklistPeers:
+			delete(m.blacklist, pid)
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // Start syncing blocks from peers
