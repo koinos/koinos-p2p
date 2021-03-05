@@ -13,6 +13,7 @@ import (
 )
 
 // HeightRange is a message that specifies a peer should send topology updates for the given height range.
+// TODO: Refactor to have height, blocks
 type HeightRange struct {
 	MinHeight types.BlockHeightType
 	MaxHeight types.BlockHeightType
@@ -45,7 +46,7 @@ type PeerHandler struct {
 
 	// Channel for sending your topology updates.
 	// All PeerHandlers send PeerHasBlock messages to a common channel.
-	peerHasBlockChan <-chan PeerHasBlock
+	peerHasBlockChan chan<- PeerHasBlock
 
 	// Channel for requesting downloads.
 	// Each PeerHandler has its own downloadRequestChan.
@@ -125,27 +126,25 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
-	/*
-	   req := GetTopologyAtHeightRangeRequest{
-	      MinHeight: h.heightRange.MinHeight,
-	      MaxHeight: h.heightRange.MaxHeight,
-	   }
-	   resp := GetTopologyAtHeightRangeResponse{}
-	   subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
-	   defer cancel()
-	   err := m.client.CallContext(subctx, pid, "SyncService", "GetTopologyAtHeightRangeReponse", req, &resp)
-	   if err != nil {
-	      log.Printf("%v: error calling GetTopologyAtHeightRange, error was %v\n", pid, err)
-	      return err
-	   }
+	req := GetTopologyAtHeightRequest{
+		BlockHeight: h.heightRange.MinHeight,
+		NumBlocks:   types.UInt32((h.heightRange.MaxHeight - h.heightRange.MinHeight) + 1),
+	}
+	resp := GetTopologyAtHeightResponse{}
+	subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeightReponse", req, &resp)
+	if err != nil {
+		log.Printf("%v: error calling GetTopologyAtHeight, error was %v\n", h.peerID, err)
+		return err
+	}
 
-	   for _, b := range resp.Blocks {
-	      select {
-	      case hasBlockChan <- PeerHasBlock{h.peerID, b}:
-	      case <-ctx.Done():
-	         return nil
-	      }
-	   }
-	*/
+	for _, b := range resp.BlockTopology {
+		select {
+		case h.peerHasBlockChan <- PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}:
+		case <-ctx.Done():
+			return nil
+		}
+	}
 	return nil
 }
