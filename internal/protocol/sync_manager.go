@@ -225,5 +225,7 @@ func (m *SyncManager) run(ctx context.Context) {
 
 // Start syncing blocks from peers
 func (m *SyncManager) Start(ctx context.Context) {
+	m.downloadManager.Start(ctx)
+	m.bdmiProvider.Start(ctx)
 	go m.run(ctx)
 }

@@ -334,3 +334,9 @@ func (p *BdmiProvider) triggerRescanCycle(ctx context.Context, state *RescanLoop
 		return
 	}
 }
+
+func (p *BdmiProvider) Start(ctx context.Context) {
+	go p.pollMyTopologyLoop(ctx)
+	go p.providerLoop(ctx)
+	go p.triggerRescanLoop(ctx)
+}
