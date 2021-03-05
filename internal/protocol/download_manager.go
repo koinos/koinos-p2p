@@ -195,7 +195,7 @@ func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadA
 // ConvertPeerSetToSlice converts a set (a map from PeerCmp to void) to a slice.
 //
 // Only the first n elements are converted.
-func ConvertPeerSetToSlice(m map[peer.ID]void) []peer.ID {
+func ConvertPeerSetToSlice(m map[peer.ID]util.Void) []peer.ID {
 	result := make([]peer.ID, len(m))
 
 	i := 0

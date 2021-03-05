@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-p2p/internal/util"
 
 	types "github.com/koinos/koinos-types-golang"
 
@@ -74,13 +75,11 @@ type SyncManager struct {
 	unblacklistPeers chan peer.ID
 
 	// Peer ID map.  Only updated in the internal SyncManager thread
-	peers map[peer.ID]void
+	peers map[peer.ID]util.Void
 
 	// Blacklisted peers.
-	blacklist map[peer.ID]void
+	blacklist map[peer.ID]util.Void
 }
-
-type void struct{}
 
 // NewSyncManager factory
 func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager {
@@ -95,8 +94,8 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager 
 		errPeers:           make(chan PeerError),
 		unblacklistPeers:   make(chan peer.ID),
 
-		peers:     make(map[peer.ID]void),
-		blacklist: make(map[peer.ID]void),
+		peers:     make(map[peer.ID]util.Void),
+		blacklist: make(map[peer.ID]util.Void),
 	}
 
 	err := manager.server.Register(NewSyncService(&rpc))
@@ -194,7 +193,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 // Blacklist a peer.  Runs in the main thread.
 func (m *SyncManager) blacklistPeer(ctx context.Context, pid peer.ID, blacklistTime time.Duration) {
 	// Add to the blacklist now
-	m.blacklist[pid] = void{}
+	m.blacklist[pid] = util.Void{}
 
 	// Un-blacklist it after some time has passed
 	go func() {
