@@ -274,7 +274,9 @@ func (k *KoinosRPC) SetBroadcastHandler(topic string, handler func(topic string,
 
 // GetForkHeads rpc call
 func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
-	args := types.GetForkHeadsRequest{}
+	args := types.ChainRPCRequest{
+		Value: types.NewGetForkHeadsRequest(),
+	}
 
 	data, err := json.Marshal(args)
 
