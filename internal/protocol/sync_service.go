@@ -79,6 +79,19 @@ type GetTopologyAtHeightResponse struct {
 	BlockTopology []types.BlockTopology
 }
 
+func NewGetTopologyAtHeightRequest() *GetTopologyAtHeightRequest {
+	req := GetTopologyAtHeightRequest{}
+	return &req
+}
+
+func NewGetTopologyAtHeightResponse() *GetTopologyAtHeightResponse {
+	resp := GetTopologyAtHeightResponse{
+		ForkHeads:     types.NewGetForkHeadsResponse(),
+		BlockTopology: make([]types.BlockTopology, 0),
+	}
+	return &resp
+}
+
 // GetBlocksByIDRequest args
 type GetBlocksByIDRequest struct {
 	BlockID types.VectorMultihash

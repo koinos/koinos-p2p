@@ -72,10 +72,9 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		subctx, cancel := context.WithTimeout(ctx, time.Duration(downloadTimeoutSeconds)*time.Second)
 		defer cancel()
 		err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetBlocksByID", rpcReq, rpcResp)
-		resp := BlockDownloadResponse{
-			Topology: req.Topology,
-			PeerID:   h.peerID,
-		}
+		resp := NewBlockDownloadResponse()
+		resp.Topology = req.Topology
+		resp.PeerID = h.peerID
 		if err != nil {
 			log.Printf("Error getting block %v from peer %v: error was %v", req.Topology.ID, h.peerID, err)
 			resp.Err = err
@@ -90,7 +89,7 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 			}
 		}
 		select {
-		case h.downloadResponseChan <- resp:
+		case h.downloadResponseChan <- *resp:
 		case <-ctx.Done():
 		}
 	}()
@@ -144,10 +143,10 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 		BlockHeight: h.heightRange.Height,
 		NumBlocks:   h.heightRange.NumBlocks,
 	}
-	resp := GetTopologyAtHeightResponse{}
+	resp := NewGetTopologyAtHeightResponse()
 	subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
-	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, &resp)
+	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, resp)
 	if err != nil {
 		log.Printf("%v: error calling GetTopologyAtHeight, error was %v\n", h.peerID, err)
 		return err

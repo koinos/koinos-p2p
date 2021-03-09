@@ -131,6 +131,15 @@ type BlockDownloadManager struct {
 	iface      BlockDownloadManagerInterface
 }
 
+func NewBlockDownloadResponse() *BlockDownloadResponse {
+	// It is okay to default-initialize all fields except Block
+	block := types.NewOpaqueBlock()
+	resp := BlockDownloadResponse{
+		Block: *block,
+	}
+	return &resp
+}
+
 func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface) *BlockDownloadManager {
 	man := BlockDownloadManager{
 		MyTopoCache:    *NewMyTopologyCache(),
