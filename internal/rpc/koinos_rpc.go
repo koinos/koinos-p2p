@@ -181,7 +181,7 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Blo
 	responseVariant := types.NewBlockStoreResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	var response *types.GetBlocksByHeightResponse
@@ -253,7 +253,7 @@ func (k *KoinosRPC) GetChainID() (*types.GetChainIDResponse, error) {
 	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	var response *types.GetChainIDResponse
