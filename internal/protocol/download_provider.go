@@ -102,6 +102,9 @@ func (p *BdmiProvider) RescanChan() <-chan bool {
 }
 
 func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
+
+	log.Printf("Downloading block %v from peer %v\n", req.Topology, req.PeerID)
+
 	resp := BlockDownloadResponse{
 		Topology: req.Topology,
 		PeerID:   req.PeerID,
@@ -172,6 +175,9 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		//
 		// BlockDownloadManager will drain applyBlockResultChan
 		// BlockDownloadManager will call another peer to download if apply failed
+
+		log.Printf("Successfully applied block %v from peer %v\n", applyResult.Topology, applyResult.PeerID)
+
 	}()
 }
 
@@ -259,6 +265,7 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 
 	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
 	if newHeightRange != state.heightRange {
+		log.Printf("My topology height range changed from %v to %v\n", state.heightRange, newHeightRange)
 
 		state.heightRange = newHeightRange
 
