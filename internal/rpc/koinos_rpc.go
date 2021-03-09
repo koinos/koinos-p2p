@@ -3,7 +3,6 @@ package rpc
 import (
 	"encoding/json"
 	"errors"
-	"log"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/util"
@@ -164,7 +163,6 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Blo
 		},
 	}
 	data, err := json.Marshal(args)
-	log.Printf("GetBlocksByHeight args: %s\n", data)
 
 	if err != nil {
 		return nil, err
@@ -176,8 +174,6 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Blo
 	if err != nil {
 		return nil, err
 	}
-
-	log.Printf("GetBlocksByHeight ret: %s\n", responseBytes)
 
 	responseVariant := types.NewBlockStoreResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
