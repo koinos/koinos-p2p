@@ -153,6 +153,7 @@ func (m *BlockDownloadManager) Start(ctx context.Context) {
 }
 
 func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp BlockDownloadResponse) {
+	log.Printf("Got BlockDownloadResponse for block of height %d from peer %v\n", resp.Topology.Height, resp.PeerID)
 	_, hasDownloading := m.Downloading[resp.Topology]
 	if !hasDownloading {
 		log.Printf("Got BlockDownloadResponse for block %v from peer %v, but it was unexpectedly not tracked in the Downloading map\n",
