@@ -342,22 +342,28 @@ func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks 
 
 		// Go through each block and extract its topology
 		for _, blockItem := range blocks.BlockItems {
-			opaqueBlock := blockItem.Block
-			opaqueBlock.Unbox()
-			block, err := opaqueBlock.GetNative()
-			if err != nil {
-				return nil, nil, err
+			topology := types.BlockTopology{
+				ID:     blockItem.BlockID,
+				Height: blockItem.BlockHeight,
 			}
 
-			opaqueActive := block.ActiveData
-			opaqueActive.Unbox()
-			active, err := opaqueActive.GetNative()
-			if err != nil {
-				return nil, nil, err
-			}
+			if blockItem.BlockHeight != 0 {
+				opaqueBlock := blockItem.Block
+				opaqueBlock.Unbox()
+				block, err := opaqueBlock.GetNative()
+				if err != nil {
+					return nil, nil, err
+				}
 
-			topology := types.BlockTopology{ID: blockItem.BlockID,
-				Height: blockItem.BlockHeight, Previous: active.PreviousBlock}
+				opaqueActive := block.ActiveData
+				opaqueActive.Unbox()
+				active, err := opaqueActive.GetNative()
+				if err != nil {
+					return nil, nil, err
+				}
+
+				topology.Previous = active.PreviousBlock
+			}
 
 			// Add the topology to the set / slice if it's not already there
 			cmp := util.BlockTopologyToCmp(topology)
