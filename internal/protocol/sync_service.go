@@ -107,12 +107,15 @@ type GetBlocksByIDResponse struct {
 // SyncService handles broadcasting inventory to peers
 // TODO: Rename RPC (to what?)
 type SyncService struct {
-	RPC rpc.RPC
+	RPC                 rpc.RPC
+	enableDebugMessages bool
 }
 
 // GetChainID p2p rpc
 func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest, response *GetChainIDResponse) error {
-	log.Printf("SyncService.ChainID() start\n")
+	if s.enableDebugMessages {
+		log.Printf("SyncService.ChainID() start\n")
+	}
 	rpcResult, err := s.RPC.GetChainID()
 	if err != nil {
 		log.Printf("SyncService.ChainID() returning error\n")
@@ -120,7 +123,9 @@ func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest,
 	}
 
 	response.ChainID = rpcResult.ChainID
-	log.Printf("SyncService.ChainID() returning normally, chain ID is %v\n", response.ChainID)
+	if s.enableDebugMessages {
+		log.Printf("SyncService.ChainID() returning normally, chain ID is %v\n", response.ChainID)
+	}
 	return nil
 }
 
@@ -210,7 +215,7 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 }
 
 // NewSyncService constructs a new broadcast protocol object
-func NewSyncService(rpc *rpc.RPC) *SyncService {
-	p := &SyncService{RPC: *rpc}
+func NewSyncService(rpc *rpc.RPC, enableDebugMessages bool) *SyncService {
+	p := &SyncService{RPC: *rpc, enableDebugMessages: enableDebugMessages}
 	return p
 }

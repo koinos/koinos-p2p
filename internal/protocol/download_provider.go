@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -43,6 +44,8 @@ type BdmiProvider struct {
 
 	heightRange HeightRange
 
+	enableDebugMessages bool
+
 	newPeerChan     chan peer.ID
 	peerErrChan     chan PeerError
 	heightRangeChan chan HeightRange
@@ -66,6 +69,8 @@ func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC) *BdmiProvider {
 		client:       client,
 		rpc:          rpc,
 		heightRange:  HeightRange{0, 0},
+
+		enableDebugMessages: false,
 
 		newPeerChan:     make(chan peer.ID),
 		peerErrChan:     make(chan PeerError),
@@ -113,7 +118,9 @@ func (p *BdmiProvider) RescanChan() <-chan bool {
 // RequestDownload initiates a downlaod request
 func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
 
-	log.Printf("Downloading block %v from peer %v\n", req.Topology, req.PeerID)
+	if p.enableDebugMessages {
+		log.Printf("Downloading block %v from peer %v\n", req.Topology, req.PeerID)
+	}
 
 	resp := BlockDownloadResponse{
 		Topology: req.Topology,
@@ -188,8 +195,10 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		// BlockDownloadManager will drain applyBlockResultChan
 		// BlockDownloadManager will call another peer to download if apply failed
 
-		log.Printf("Successfully applied block %v from peer %v\n", applyResult.Topology, applyResult.PeerID)
-
+		topoStr, err := json.Marshal(util.BlockTopologyFromCmp(applyResult.Topology))
+		if err != nil {
+			log.Printf("Successfully applied block %v from peer %v\n", topoStr, applyResult.PeerID)
+		}
 	}()
 }
 
@@ -199,6 +208,7 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 		peerID:               newPeer,
 		heightRange:          p.heightRange,
 		client:               p.client,
+		enableDebugMessages:  p.enableDebugMessages,
 		errChan:              p.peerErrChan,
 		heightRangeChan:      make(chan HeightRange),
 		peerHasBlockChan:     p.peerHasBlockChan,

@@ -38,6 +38,9 @@ type PeerHandler struct {
 	// RPC client
 	client *gorpc.Client
 
+	// Enable debug messages
+	enableDebugMessages bool
+
 	// Channel for sending if peer has an error.
 	// All PeerHandlers send their errors to a common channel.
 	errChan chan<- PeerError
@@ -145,7 +148,9 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
-	log.Printf("%v: Polling HeightRange{%d,%d}\n", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
+	if h.enableDebugMessages {
+		log.Printf("%v: Polling HeightRange{%d,%d}\n", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
+	}
 
 	req := GetTopologyAtHeightRequest{
 		BlockHeight: h.heightRange.Height,
@@ -162,9 +167,11 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 
 	for _, b := range resp.BlockTopology {
 		hasBlockMsg := PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}
-		topoStr, err := json.Marshal(b)
-		if err == nil {
-			log.Printf("%v: Sending PeerHasBlock message %s\n", h.peerID, topoStr)
+		if h.enableDebugMessages {
+			topoStr, err := json.Marshal(b)
+			if err == nil {
+				log.Printf("%v: Sending PeerHasBlock message %s\n", h.peerID, topoStr)
+			}
 		}
 
 		select {
