@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"time"
 
@@ -89,6 +90,9 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 
 func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 	// Helper function to call peerHandlerCycle() and send any error to errChan
+	log.Printf("Start peer handler loop for peer %v\n", h.peerID)
+	defer log.Printf("Exit peer handler loop for peer %v\n", h.peerID)
+
 	doPeerCycle := func() {
 		err := h.peerHandlerCycle(ctx)
 		if err != nil {
@@ -126,6 +130,8 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
+	log.Printf("%v: Polling HeightRange{%d,%d}\n", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
+
 	req := GetTopologyAtHeightRequest{
 		BlockHeight: h.heightRange.Height,
 		NumBlocks:   h.heightRange.NumBlocks,
@@ -140,8 +146,14 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	}
 
 	for _, b := range resp.BlockTopology {
+		hasBlockMsg := PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}
+		hasBlockStr, err := json.Marshal(hasBlockMsg)
+		if err == nil {
+			log.Printf("%v: Sending PeerHasBlock message %s\n", h.peerID, hasBlockStr)
+		}
+
 		select {
-		case h.peerHasBlockChan <- PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}:
+		case h.peerHasBlockChan <- hasBlockMsg:
 		case <-ctx.Done():
 			return nil
 		}
