@@ -208,17 +208,22 @@ func ConvertPeerSetToSlice(m map[peer.ID]util.Void) []peer.ID {
 }
 
 func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.BlockTopologyCmp) {
+	log.Printf("startDownload() on block of height %d\n", download.Height)
+
 	// If the download's already gotten in, no-op
 	_, isDownloading := m.Downloading[download]
 	if isDownloading {
+		log.Printf("  - Bail, already downloading\n")
 		return
 	}
 	_, isApplying := m.Applying[download]
 	if isApplying {
+		log.Printf("  - Bail, already applying\n")
 		return
 	}
 	_, isWaiting := m.WaitingToApply[download]
 	if isWaiting {
+		log.Printf("  - Bail, already waiting to apply\n")
 		return
 	}
 
@@ -241,6 +246,7 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 		PeerID:   peer,
 	}
 
+	log.Printf("  - Downloading from peer %v\n", req.PeerID)
 	m.Downloading[download] = req
 	m.iface.RequestDownload(ctx, req)
 }
@@ -254,6 +260,7 @@ func (m *BlockDownloadManager) rescan(ctx context.Context) {
 	for _, download := range downloadList {
 		// If we can't support additional downloads, bail
 		if len(m.Downloading)+len(m.Applying)+len(m.WaitingToApply) >= m.MaxDownloadsInFlight {
+			log.Printf("No more downloads will be initiated, as this would exceed %d in-flight downloads\n")
 			break
 		}
 
