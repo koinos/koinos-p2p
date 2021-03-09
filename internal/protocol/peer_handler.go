@@ -88,7 +88,7 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		} else {
 
 			resp.Block = rpcResp.BlockItems[0].Block
-			rpcRespStr, err := json.Marshal(&rpcResp)
+			rpcRespStr, err := json.Marshal(rpcResp)
 			if err == nil {
 				log.Printf("  - Got block: %s\n", rpcRespStr)
 			} else {
