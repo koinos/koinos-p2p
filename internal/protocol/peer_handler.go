@@ -147,9 +147,9 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 
 	for _, b := range resp.BlockTopology {
 		hasBlockMsg := PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}
-		hasBlockStr, err := json.Marshal(hasBlockMsg)
+		topoStr, err := json.Marshal(b)
 		if err == nil {
-			log.Printf("%v: Sending PeerHasBlock message %s\n", h.peerID, hasBlockStr)
+			log.Printf("%v: Sending PeerHasBlock message %s\n", h.peerID, topoStr)
 		}
 
 		select {

@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"math/rand"
 
@@ -245,8 +246,10 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 }
 
 func (m *BlockDownloadManager) rescan(ctx context.Context) {
+	log.Printf("Rescanning downloads\n")
 	// Figure out the blocks we'd ideally be downloading
 	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.MaxDownloadsInFlight, m.MaxDownloadDepth)
+	log.Printf("GetDownloads() suggests %d eligible downloads\n", len(downloadList))
 
 	for _, download := range downloadList {
 		// If we can't support additional downloads, bail
@@ -278,6 +281,10 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 			m.TopoCache.SetLastIrr(c)
 			m.needRescan = true
 		case peerHasBlock := <-m.iface.PeerHasBlockChan():
+			topoStr, err := json.Marshal(peerHasBlock.Block)
+			if err == nil {
+				log.Printf("%v: Service PeerHasBlock message %s\n", peerHasBlock.PeerID, topoStr)
+			}
 			added := m.TopoCache.Add(peerHasBlock)
 			m.needRescan = m.needRescan || added
 		case downloadResponse := <-m.iface.DownloadResponseChan():
