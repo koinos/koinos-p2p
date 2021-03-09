@@ -149,7 +149,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 			req := types.NewGetChainIDRequest()
 			subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 			defer cancel()
-			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, peerChainID)
+			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, &peerChainID)
 			if err != nil {
 				log.Printf("%v: error getting peer chain id, %v", pid, err)
 				return err
