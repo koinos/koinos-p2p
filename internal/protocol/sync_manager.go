@@ -144,9 +144,9 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 	err := func() error {
 		log.Printf("connecting to peer for sync: %v", pid)
 
-		peerChainID := types.NewGetChainIDResponse()
+		peerChainID := GetChainIDResponse{}
 		{
-			req := types.NewGetChainIDRequest()
+			req := GetChainIDRequest{}
 			subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 			defer cancel()
 			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, &peerChainID)
