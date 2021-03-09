@@ -81,11 +81,12 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 			resp.Err = err
 		} else {
 			resp.Block = rpcResp.BlockItems[0].Block
-			blockStr, err := json.Marshal(&resp.Block)
+			// blockStr, err := json.Marshal(&resp.Block)    // Segfaults!?
+			rpcRespStr, err := json.Marshal(&rpcResp)
 			if err == nil {
-				log.Printf("  - Got block: %s\n", blockStr)
+				log.Printf("  - Got block: %s\n", rpcRespStr)
 			} else {
-				log.Printf("  - Got unmarshalable block\n", blockStr)
+				log.Printf("  - Got unmarshalable block\n", rpcRespStr)
 			}
 		}
 		select {
