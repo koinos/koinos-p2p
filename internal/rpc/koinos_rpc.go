@@ -132,7 +132,8 @@ func (k *KoinosRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlo
 		return nil, err
 	}
 
-	log.Printf("GetBlocksByID() response: %s\n", responseBytes)
+	// TODO:  Redo printf statement with proper logging
+	// log.Printf("GetBlocksByID() response: %s\n", responseBytes)
 
 	responseVariant := types.NewBlockStoreResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
@@ -245,7 +246,8 @@ func (k *KoinosRPC) GetChainID() (*types.GetChainIDResponse, error) {
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.SendRPC("application/json", "chain", data)
-	log.Printf("GetChainID() response was %s\n", responseBytes)
+	// TODO:  Redo printf statement with proper logging
+	// log.Printf("GetChainID() response was %s\n", responseBytes)
 
 	if err != nil {
 		return nil, err

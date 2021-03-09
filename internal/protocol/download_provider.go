@@ -313,7 +313,9 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 
 	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
 	if newHeightRange != state.heightRange {
-		log.Printf("My topology height range changed from %v to %v\n", state.heightRange, newHeightRange)
+		if p.enableDebugMessages {
+			log.Printf("My topology height range changed from %v to %v\n", state.heightRange, newHeightRange)
+		}
 
 		state.heightRange = newHeightRange
 
