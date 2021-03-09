@@ -263,6 +263,16 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 		NumBlocks: types.UInt32((uint64(longestForkHeight) + heightInterestReach) - libHeight),
 	}
 
+	// Poll range should never include block 0, even if block 0 is irreversible
+	if newHeightRange.Height == 0 {
+		if newHeightRange.NumBlocks <= 1 {
+			newHeightRange = HeightRange{0, 0}
+		} else {
+			newHeightRange.Height++
+			newHeightRange.NumBlocks--
+		}
+	}
+
 	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
 	if newHeightRange != state.heightRange {
 		log.Printf("My topology height range changed from %v to %v\n", state.heightRange, newHeightRange)
