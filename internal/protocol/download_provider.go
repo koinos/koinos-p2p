@@ -232,6 +232,45 @@ func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
 	}
 }
 
+// getHeightInterestRange computes the heights of interest for a given GetForkHeadsResponse
+func getHeightInterestRange(forkHeads *types.GetForkHeadsResponse) HeightRange {
+	if len(forkHeads.ForkHeads) == 0 {
+		// Zero ForkHeads means we're spinning up a brand-new node that doesn't have any blocks yet.
+		// In this case we simply ask for the first few blocks.
+		return HeightRange{1, types.UInt32(heightInterestReach)}
+	}
+
+	longestForkHeight := forkHeads.ForkHeads[0].Height
+	for i := 1; i < len(forkHeads.ForkHeads); i++ {
+		if forkHeads.ForkHeads[i].Height > longestForkHeight {
+			log.Printf("Best fork head was not returned first\n")
+			longestForkHeight = forkHeads.ForkHeads[i].Height
+		}
+	}
+
+	libHeight := uint64(forkHeads.LastIrreversibleBlock.Height)
+
+	if uint64(longestForkHeight) < libHeight {
+		log.Printf("Longest fork height was smaller than LIB height!?\n")
+		return HeightRange{types.BlockHeightType(libHeight), types.UInt32(heightInterestReach)}
+	}
+
+	newHeightRange := HeightRange{
+		Height:    types.BlockHeightType(libHeight),
+		NumBlocks: types.UInt32((uint64(longestForkHeight) + heightInterestReach) - libHeight),
+	}
+
+	// Poll range should never include block 0, even if block 0 is irreversible
+	if newHeightRange.Height < 1 {
+		newHeightRange.Height = 1
+	}
+
+	if newHeightRange.NumBlocks < types.UInt32(heightInterestReach) {
+		newHeightRange.NumBlocks = types.UInt32(heightInterestReach)
+	}
+	return newHeightRange
+}
+
 func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopologyLoopState) error {
 	//
 	// TODO:  Currently this code has the client poll for blocks in the height range.
@@ -249,36 +288,7 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 		return err
 	}
 
-	if len(forkHeads.ForkHeads) == 0 {
-		// Zero ForkHeads means we're spinning up a brand-new node that doesn't have any blocks yet.
-		// Since this happens in normal operation, we do a no-op cycle instead of returning an error.
-		return nil
-	}
-
-	longestForkHeight := forkHeads.ForkHeads[0].Height
-	for i := 1; i < len(forkHeads.ForkHeads); i++ {
-		if forkHeads.ForkHeads[i].Height > longestForkHeight {
-			log.Printf("Best fork head was not returned first\n")
-			longestForkHeight = forkHeads.ForkHeads[i].Height
-		}
-	}
-
-	libHeight := uint64(forkHeads.LastIrreversibleBlock.Height)
-
-	newHeightRange := HeightRange{
-		Height:    types.BlockHeightType(libHeight),
-		NumBlocks: types.UInt32((uint64(longestForkHeight) + heightInterestReach) - libHeight),
-	}
-
-	// Poll range should never include block 0, even if block 0 is irreversible
-	if newHeightRange.Height == 0 {
-		if newHeightRange.NumBlocks <= 1 {
-			newHeightRange = HeightRange{0, 0}
-		} else {
-			newHeightRange.Height++
-			newHeightRange.NumBlocks--
-		}
-	}
+	newHeightRange := getHeightInterestRange(forkHeads)
 
 	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
 	if newHeightRange != state.heightRange {
@@ -308,9 +318,6 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 	}
 	return nil
 }
-
-// TODO:  Create loop to service downloadResponseChan and applyBlockResultChan
-// TODO:  Create loop to write downloadFailedChan
 
 func (p *BdmiProvider) providerLoop(ctx context.Context) {
 	for {
