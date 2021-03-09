@@ -129,9 +129,10 @@ type BlockDownloadManager struct {
 	MaxDownloadsInFlight int
 	MaxDownloadDepth     int
 
-	needRescan bool
-	rng        *rand.Rand
-	iface      BlockDownloadManagerInterface
+	enableDebugMessages bool
+	needRescan          bool
+	rng                 *rand.Rand
+	iface               BlockDownloadManagerInterface
 }
 
 // NewBlockDownloadResponse creates a new instance of BlockDownloadResponse
@@ -192,7 +193,9 @@ func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDo
 }
 
 func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp BlockDownloadResponse) {
-	log.Printf("Got BlockDownloadResponse for block of height %d from peer %v\n", resp.Topology.Height, resp.PeerID)
+	if m.enableDebugMessages {
+		log.Printf("Got BlockDownloadResponse for block of height %d from peer %v\n", resp.Topology.Height, resp.PeerID)
+	}
 	_, hasDownloading := m.Downloading[resp.Topology]
 	if !hasDownloading {
 		log.Printf("Got BlockDownloadResponse for block %v from peer %v, but it was unexpectedly not tracked in the Downloading map\n",
@@ -252,23 +255,31 @@ func ConvertPeerSetToSlice(m map[peer.ID]util.Void) []peer.ID {
 }
 
 func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.BlockTopologyCmp) {
-	log.Printf("startDownload() on block of height %d\n", download.Height)
+	if m.enableDebugMessages {
+		log.Printf("startDownload() on block of height %d\n", download.Height)
+	}
 
 	// If the download's already gotten in, no-op
 	_, isDownloading := m.Downloading[download]
 	if isDownloading {
-		log.Printf("  - Bail, already downloading\n")
+		if m.enableDebugMessages {
+			log.Printf("  - Bail, already downloading\n")
+		}
 		return
 	}
 	_, isApplying := m.Applying[download]
 	if isApplying {
-		log.Printf("  - Bail, already applying\n")
+		if m.enableDebugMessages {
+			log.Printf("  - Bail, already applying\n")
+		}
 		return
 	}
 	waitingResp, isWaiting := m.WaitingToApply[download]
 	if isWaiting {
 		m.maybeApplyBlock(ctx, waitingResp)
-		log.Printf("  - Bail, already waiting to apply\n")
+		if m.enableDebugMessages {
+			log.Printf("  - Bail, already waiting to apply\n")
+		}
 		return
 	}
 
@@ -291,13 +302,17 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 		PeerID:   peer,
 	}
 
-	log.Printf("  - Downloading from peer %v\n", req.PeerID)
+	if m.enableDebugMessages {
+		log.Printf("  - Downloading from peer %v\n", req.PeerID)
+	}
 	m.Downloading[download] = req
 	m.iface.RequestDownload(ctx, req)
 }
 
 func (m *BlockDownloadManager) rescan(ctx context.Context) {
-	log.Printf("Rescanning downloads\n")
+	if m.enableDebugMessages {
+		log.Printf("Rescanning downloads\n")
+	}
 
 	for _, resp := range m.WaitingToApply {
 		m.maybeApplyBlock(ctx, resp)
@@ -305,12 +320,16 @@ func (m *BlockDownloadManager) rescan(ctx context.Context) {
 
 	// Figure out the blocks we'd ideally be downloading
 	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.MaxDownloadsInFlight, m.MaxDownloadDepth)
-	log.Printf("GetDownloads() suggests %d eligible downloads\n", len(downloadList))
+	if m.enableDebugMessages {
+		log.Printf("GetDownloads() suggests %d eligible downloads\n", len(downloadList))
+	}
 
 	for _, download := range downloadList {
 		// If we can't support additional downloads, bail
 		if len(m.Downloading)+len(m.Applying)+len(m.WaitingToApply) >= m.MaxDownloadsInFlight {
-			log.Printf("No more downloads will be initiated, as this would exceed %d in-flight downloads\n", m.MaxDownloadsInFlight)
+			if m.enableDebugMessages {
+				log.Printf("No more downloads will be initiated, as this would exceed %d in-flight downloads\n", m.MaxDownloadsInFlight)
+			}
 			break
 		}
 
@@ -340,7 +359,9 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 		case peerHasBlock := <-m.iface.PeerHasBlockChan():
 			topoStr, err := json.Marshal(peerHasBlock.Block)
 			if err == nil {
-				log.Printf("%v: Service PeerHasBlock message %s\n", peerHasBlock.PeerID, topoStr)
+				if m.enableDebugMessages {
+					log.Printf("%v: Service PeerHasBlock message %s\n", peerHasBlock.PeerID, topoStr)
+				}
 			}
 			added := m.TopoCache.Add(peerHasBlock)
 			m.needRescan = m.needRescan || added
