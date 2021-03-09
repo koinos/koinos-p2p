@@ -219,8 +219,15 @@ func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp 
 
 func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadApplyResult) {
 	if applyResult.Err == nil {
+		//
 		// Success.
-		// Do nothing, subsequent waiting blocks will be activated by MyBlockTopologyChan message.
+		//
+		// TODO:  For performance reasons, we should advance the fork head and active the same
+		// code path as MyBlockTopologyChan here.
+		//
+		// Even if we do nothing, subsequent waiting blocks will be activated by MyBlockTopologyChan message,
+		// but this may occur at a limited rate (especially considering the polling implementation).
+		//
 		return
 	}
 
