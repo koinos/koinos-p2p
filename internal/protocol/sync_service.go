@@ -118,7 +118,7 @@ func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest,
 	}
 
 	response.ChainID = rpcResult.ChainID
-	log.Printf("SyncService.ChainID() returning normally\n")
+	log.Printf("SyncService.ChainID() returning normally, chain ID is %v\n", response.ChainID)
 	return nil
 }
 
