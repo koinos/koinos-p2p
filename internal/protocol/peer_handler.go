@@ -69,10 +69,10 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 	go func() {
 		log.Printf("Getting block %d from peer %v using SyncService GetBlocksByID RPC\n", req.Topology.Height, req.PeerID)
 		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{util.MultihashFromCmp(req.Topology.ID)}}
-		rpcResp := types.NewGetBlocksByIDResponse()
+		rpcResp := GetBlocksByIDResponse{}
 		subctx, cancel := context.WithTimeout(ctx, time.Duration(downloadTimeoutSeconds)*time.Second)
 		defer cancel()
-		err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetBlocksByID", rpcReq, rpcResp)
+		err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetBlocksByID", rpcReq, &rpcResp)
 		resp := NewBlockDownloadResponse()
 		resp.Topology = req.Topology
 		resp.PeerID = h.peerID
@@ -85,7 +85,6 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		} else {
 
 			resp.Block = rpcResp.BlockItems[0].Block
-			// blockStr, err := json.Marshal(&resp.Block)    // Segfaults!?
 			rpcRespStr, err := json.Marshal(rpcResp)
 			if err == nil {
 				log.Printf("  - Got block: %s\n", rpcRespStr)
@@ -151,7 +150,7 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	resp := NewGetTopologyAtHeightResponse()
 	subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
-	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, resp)
+	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, &resp)
 	if err != nil {
 		log.Printf("%v: error calling GetTopologyAtHeight, error was %v\n", h.peerID, err)
 		return err
