@@ -163,6 +163,7 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		block, err := resp.Block.GetNative()
 		if err != nil {
 			applyResult.Err = err
+			log.Printf("Tried to apply block of height %d, got error %s\n", applyResult.Topology.Height, err.Error())
 		} else {
 			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(block, &topo)
 		}
