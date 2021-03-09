@@ -245,6 +245,7 @@ func (k *KoinosRPC) GetChainID() (*types.GetChainIDResponse, error) {
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.SendRPC("application/json", "chain", data)
+	log.Printf("GetChainID() response was %s\n", responseBytes)
 
 	if err != nil {
 		return nil, err
