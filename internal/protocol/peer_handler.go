@@ -71,7 +71,7 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		log.Printf("Getting block %d from peer %v using SyncService GetBlocksByID RPC\n", req.Topology.Height, req.PeerID)
 		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{util.MultihashFromCmp(req.Topology.ID)}}
 		rpcResp := GetBlocksByIDResponse{}
-		rpcResp.BlockItems = *types.NewVectorBlockItem()
+		rpcResp.BlockItems = [][]byte{}
 
 		subctx, cancel := context.WithTimeout(ctx, time.Duration(downloadTimeoutSeconds)*time.Second)
 		defer cancel()
@@ -86,8 +86,8 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 			log.Printf("  - Got 0 blocks\n")
 			resp.Err = errors.New("Got 0 blocks from peer")
 		} else {
-
-			resp.Block = rpcResp.BlockItems[0].Block
+			vbBlock := types.VariableBlob(rpcResp.BlockItems[0])
+			resp.Block = *types.NewOpaqueBlockFromBlob(&vbBlock)
 			log.Printf("  - rpcResp value is: %v\n", rpcResp)
 			rpcRespStr, err := json.Marshal(rpcResp)
 			if err == nil {
