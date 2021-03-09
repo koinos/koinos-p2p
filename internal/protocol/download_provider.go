@@ -18,7 +18,7 @@ const (
 	pollMyTopologySeconds = uint64(2)
 	// TODO:  This should be configurable, and probably ~100 for mainnet
 	heightInterestReach = uint64(5)
-	rescanIntervalMs    = uint64(200)
+	rescanIntervalMs    = uint64(1000) // TODO: Lower to 200ms once we're done debugging the p2p code
 )
 
 // BdmiProvider is the implementation of Block Download Manager Interface.
