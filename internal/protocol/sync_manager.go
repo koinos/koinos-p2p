@@ -183,6 +183,14 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 	}
 }
 
+func (m *SyncManager) doPeerEnableDownload(ctx context.Context, pid peer.ID) {
+	// Handoff to BdmiProvider
+	select {
+	case m.bdmiProvider.newPeerChan <- pid:
+	case <-ctx.Done():
+	}
+}
+
 // Blacklist a peer.  Runs in the main thread.
 func (m *SyncManager) blacklistPeer(ctx context.Context, pid peer.ID, blacklistTime time.Duration) {
 	// Add to the blacklist now
@@ -213,6 +221,8 @@ func (m *SyncManager) run(ctx context.Context) {
 			}
 		case pid := <-m.handshakeDonePeers:
 			m.peers[pid] = util.Void{}
+			// Now that our data structures are all set up, we're ready to send it off to the BdmiProvider
+			go m.doPeerEnableDownload(ctx, pid)
 		case perr := <-m.errPeers:
 			// If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
 			m.blacklistPeer(ctx, perr.PeerID, time.Duration(blacklistSeconds)*time.Second)
