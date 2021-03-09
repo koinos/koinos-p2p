@@ -324,6 +324,9 @@ func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks 
 	if err != nil {
 		return nil, nil, err
 	}
+	if numBlocks == 0 {
+		return forkHeads, []types.BlockTopology{}, nil
+	}
 
 	topologySet := make(map[util.BlockTopologyCmp]util.Void)
 	topologySlice := make([]types.BlockTopology, 0, len(forkHeads.ForkHeads))

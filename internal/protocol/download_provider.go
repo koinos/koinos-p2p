@@ -62,7 +62,7 @@ func NewBdmiProvider(rpc rpc.RPC) *BdmiProvider {
 	return &BdmiProvider{
 		peerHandlers: make(map[peer.ID]*PeerHandler),
 		rpc:          rpc,
-		heightRange:  HeightRange{1, 1},
+		heightRange:  HeightRange{0, 0},
 
 		newPeerChan:     make(chan peer.ID),
 		peerErrChan:     make(chan PeerError),
@@ -211,7 +211,7 @@ type MyTopologyLoopState struct {
 }
 
 func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
-	state := MyTopologyLoopState{heightRange: HeightRange{1, 1}}
+	state := MyTopologyLoopState{heightRange: HeightRange{0, 0}}
 	for {
 		err := p.pollMyTopologyCycle(ctx, &state)
 
