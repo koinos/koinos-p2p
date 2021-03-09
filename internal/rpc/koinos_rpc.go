@@ -54,7 +54,7 @@ func (k *KoinosRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
 	case *types.ChainErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:
-		err = errors.New("Unexptected return type")
+		err = errors.New("Unexpected return type")
 	}
 
 	return response, err
@@ -264,7 +264,7 @@ func (k *KoinosRPC) GetChainID() (*types.GetChainIDResponse, error) {
 	case *types.ChainErrorResponse:
 		err = errors.New(string(t.ErrorText))
 	default:
-		err = errors.New("Unexptected return type")
+		err = errors.New("Unexpected return type")
 	}
 
 	return response, err
