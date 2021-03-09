@@ -7,6 +7,7 @@ import (
 	"time"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	gorpc "github.com/libp2p/go-libp2p-gorpc"
 
 	rpc "github.com/koinos/koinos-p2p/internal/rpc"
 	util "github.com/koinos/koinos-p2p/internal/util"
@@ -37,7 +38,8 @@ const (
 type BdmiProvider struct {
 	peerHandlers map[peer.ID]*PeerHandler
 
-	rpc rpc.RPC
+	client *gorpc.Client
+	rpc    rpc.RPC
 
 	heightRange HeightRange
 
@@ -57,9 +59,10 @@ type BdmiProvider struct {
 
 var _ BlockDownloadManagerInterface = (*BdmiProvider)(nil)
 
-func NewBdmiProvider(rpc rpc.RPC) *BdmiProvider {
+func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC) *BdmiProvider {
 	return &BdmiProvider{
 		peerHandlers: make(map[peer.ID]*PeerHandler),
+		client:       client,
 		rpc:          rpc,
 		heightRange:  HeightRange{0, 0},
 
@@ -185,6 +188,7 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 	h := &PeerHandler{
 		peerID:               newPeer,
 		heightRange:          p.heightRange,
+		client:               p.client,
 		errChan:              p.peerErrChan,
 		heightRangeChan:      make(chan HeightRange),
 		peerHasBlockChan:     p.peerHasBlockChan,

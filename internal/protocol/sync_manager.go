@@ -108,7 +108,7 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager 
 		peers:     make(map[peer.ID]util.Void),
 		blacklist: make(map[peer.ID]util.Void),
 	}
-	manager.bdmiProvider = NewBdmiProvider(rpc)
+	manager.bdmiProvider = NewBdmiProvider(manager.client, rpc)
 	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider)
 
 	log.Printf("Registering SyncService\n")
