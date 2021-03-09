@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
@@ -78,7 +79,11 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		if err != nil {
 			log.Printf("Error getting block %v from peer %v: error was %v", req.Topology.ID, h.peerID, err)
 			resp.Err = err
+		} else if len(rpcResp.BlockItems) < 1 {
+			log.Printf("  - Got 0 blocks\n")
+			resp.Err = errors.New("Got 0 blocks from peer")
 		} else {
+
 			resp.Block = rpcResp.BlockItems[0].Block
 			// blockStr, err := json.Marshal(&resp.Block)    // Segfaults!?
 			rpcRespStr, err := json.Marshal(rpcResp)
