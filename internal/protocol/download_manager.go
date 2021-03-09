@@ -175,7 +175,13 @@ func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp 
 		return
 	}
 
-	_, hasPrev := m.MyTopoCache.ByID[resp.Topology.Previous]
+	var hasPrev bool
+	if resp.Topology.Height == 1 {
+		hasPrev = true
+	} else {
+		_, hasPrev = m.MyTopoCache.ByID[resp.Topology.Previous]
+	}
+
 	if hasPrev {
 		m.Applying[resp.Topology] = resp
 		m.iface.ApplyBlock(ctx, resp)
