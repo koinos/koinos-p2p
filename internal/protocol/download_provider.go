@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -245,7 +244,9 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 	}
 
 	if len(forkHeads.ForkHeads) == 0 {
-		return errors.New("Zero ForkHeads were returned")
+		// Zero ForkHeads means we're spinning up a brand-new node that doesn't have any blocks yet.
+		// Since this happens in normal operation, we do a no-op cycle instead of returning an error.
+		return nil
 	}
 
 	longestForkHeight := forkHeads.ForkHeads[0].Height
