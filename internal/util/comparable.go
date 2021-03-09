@@ -28,17 +28,20 @@ import (
 // [2] https://github.com/koinos/koinos-types/issues/142
 //
 
+// MultihashCmp is a comparable version of Koinos Types Multihash
 type MultihashCmp struct {
 	ID     types.UInt64
 	Digest string
 }
 
+// BlockTopologyCmp is a comparable version of Koinos Types Block Topology
 type BlockTopologyCmp struct {
 	ID       MultihashCmp
 	Height   types.BlockHeightType
 	Previous MultihashCmp
 }
 
+// MultihashToCmp returns a MultihashCmp object for the given Multihash
 func MultihashToCmp(h types.Multihash) MultihashCmp {
 	return MultihashCmp{
 		ID:     h.ID,
@@ -46,6 +49,7 @@ func MultihashToCmp(h types.Multihash) MultihashCmp {
 	}
 }
 
+// MultihashFromCmp returns a Multihash object for the given MultihashCmp
 func MultihashFromCmp(h MultihashCmp) types.Multihash {
 	return types.Multihash{
 		ID:     h.ID,
@@ -53,6 +57,7 @@ func MultihashFromCmp(h MultihashCmp) types.Multihash {
 	}
 }
 
+// BlockTopologyToCmp returns a BlockTopologyCmp object for the given BlockTopology
 func BlockTopologyToCmp(topo types.BlockTopology) BlockTopologyCmp {
 	return BlockTopologyCmp{
 		ID:       MultihashToCmp(topo.ID),
@@ -61,6 +66,7 @@ func BlockTopologyToCmp(topo types.BlockTopology) BlockTopologyCmp {
 	}
 }
 
+// BlockTopologyFromCmp returns a BlockTopology object for the given BlockTopologyCmp
 func BlockTopologyFromCmp(topo BlockTopologyCmp) types.BlockTopology {
 	return types.BlockTopology{
 		ID:       MultihashFromCmp(topo.ID),

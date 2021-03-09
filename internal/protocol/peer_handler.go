@@ -21,6 +21,7 @@ type HeightRange struct {
 	NumBlocks types.UInt32
 }
 
+// PeerError represents an error in communication with a peer
 type PeerError struct {
 	PeerID peer.ID
 	Error  error
@@ -91,7 +92,7 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 			if err == nil {
 				log.Printf("  - Got block: %s\n", rpcRespStr)
 			} else {
-				log.Printf("  - Got unmarshalable block\n", rpcRespStr)
+				log.Printf("  - Got unmarshalable block: %s\n", rpcRespStr)
 			}
 		}
 		select {

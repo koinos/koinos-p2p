@@ -38,6 +38,7 @@ type BlockDownloadResponse struct {
 	Err   error
 }
 
+// BlockDownloadApplyResult represents the result of an attempt to apply a block
 type BlockDownloadApplyResult struct {
 	Topology util.BlockTopologyCmp
 	PeerID   peer.ID
@@ -46,6 +47,7 @@ type BlockDownloadApplyResult struct {
 	Err error
 }
 
+// BlockDownloadManagerInterface is an abstraction of the methods a BlockDownloadManager should contain
 type BlockDownloadManagerInterface interface {
 	// RequestDownload is called by the BlockDownloadManager to request a download to begin.
 	//
@@ -116,6 +118,7 @@ type BlockDownloadManagerInterface interface {
 	RescanChan() <-chan bool
 }
 
+// BlockDownloadManager handles downloads
 type BlockDownloadManager struct {
 	MyTopoCache    MyTopologyCache
 	TopoCache      TopologyCache
@@ -131,6 +134,7 @@ type BlockDownloadManager struct {
 	iface      BlockDownloadManagerInterface
 }
 
+// NewBlockDownloadResponse creates a new instance of BlockDownloadResponse
 func NewBlockDownloadResponse() *BlockDownloadResponse {
 	// It is okay to default-initialize all fields except Block
 	block := types.NewOpaqueBlock()
@@ -140,6 +144,7 @@ func NewBlockDownloadResponse() *BlockDownloadResponse {
 	return &resp
 }
 
+// NewBlockDownloadManager creates a new instance of BlockDownloadManager
 func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface) *BlockDownloadManager {
 	man := BlockDownloadManager{
 		MyTopoCache:    *NewMyTopologyCache(),
@@ -157,6 +162,7 @@ func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface
 	return &man
 }
 
+// Start starts the download manager
 func (m *BlockDownloadManager) Start(ctx context.Context) {
 	go m.downloadManagerLoop(ctx)
 }
@@ -276,7 +282,7 @@ func (m *BlockDownloadManager) rescan(ctx context.Context) {
 	for _, download := range downloadList {
 		// If we can't support additional downloads, bail
 		if len(m.Downloading)+len(m.Applying)+len(m.WaitingToApply) >= m.MaxDownloadsInFlight {
-			log.Printf("No more downloads will be initiated, as this would exceed %d in-flight downloads\n")
+			log.Printf("No more downloads will be initiated, as this would exceed %d in-flight downloads\n", m.MaxDownloadsInFlight)
 			break
 		}
 

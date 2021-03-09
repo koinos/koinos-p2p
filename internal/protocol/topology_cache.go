@@ -27,6 +27,7 @@ type MyTopologyCache struct {
 	ByHeight   map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void
 }
 
+// NewMyTopologyCache instantiates a new MyTopologyCache
 func NewMyTopologyCache() *MyTopologyCache {
 	return &MyTopologyCache{
 		ByTopology: make(map[util.BlockTopologyCmp]util.Void),
@@ -36,6 +37,7 @@ func NewMyTopologyCache() *MyTopologyCache {
 	}
 }
 
+// Add adds the given BlockTopology to the cache
 func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
 	_, hasBlock := c.ByTopology[block]
 	if hasBlock {
@@ -72,6 +74,7 @@ func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
 	return true
 }
 
+// SetLastIrr sets the last irreversible block
 func (c *MyTopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
 	// TODO: Implement this
 }
@@ -86,6 +89,7 @@ type TopologyCache struct {
 	ByPeer     map[peer.ID]map[PeerHasBlock]util.Void
 }
 
+// NewTopologyCache instantiates a new TopologyCache
 func NewTopologyCache() *TopologyCache {
 	return &TopologyCache{
 		Set:        make(map[PeerHasBlock]util.Void),
@@ -96,6 +100,7 @@ func NewTopologyCache() *TopologyCache {
 	}
 }
 
+// Add adds a known block held by a peer
 func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) bool {
 	_, hasBlock := c.Set[peerHasBlock]
 	if hasBlock {
@@ -146,6 +151,7 @@ func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) bool {
 	return true
 }
 
+// PickPeer chooses a random peer
 func (c *TopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (peer.ID, error) {
 	var emptyPeerID peer.ID
 
@@ -160,15 +166,16 @@ func (c *TopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (pe
 
 	// O(n) scan to pick peer, is there a way to speed this up?
 	i := 0
-	for peerID, _ := range peers {
+	for peerID := range peers {
 		if i == pickIndex {
 			return peerID, nil
 		}
-		i += 1
+		i++
 	}
 	return emptyPeerID, fmt.Errorf("Could not pick the %dth element of map of length %d", pickIndex, len(peers))
 }
 
+// SetLastIrr sets the last irreversible block
 func (c *TopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
 	// TODO: Implement this
 }
@@ -185,7 +192,7 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 		log.Printf("I have no blocks, so GetInitialDownload is looking for blocks of height 1")
 		netNextBlocks, ok := netTopo.ByHeight[1]
 		if ok {
-			for nextBlock, _ := range netNextBlocks {
+			for nextBlock := range netNextBlocks {
 				result[nextBlock.Block] = util.Void{}
 			}
 		}
@@ -193,12 +200,12 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 		return result
 	}
 
-	for block, _ := range myTopo.ByTopology {
+	for block := range myTopo.ByTopology {
 		netNextBlocks, ok := netTopo.ByPrevious[block.ID]
 		if !ok {
 			continue
 		}
-		for nextBlock, _ := range netNextBlocks {
+		for nextBlock := range netNextBlocks {
 			// Skip blocks we already have
 			_, myHasNextBlock := myTopo.ByTopology[nextBlock]
 			if myHasNextBlock {
@@ -216,12 +223,12 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 // The next download is the set of blocks in netTopo that directly connect to currentDownload.
 func GetNextDownload(myTopo *MyTopologyCache, netTopo *TopologyCache, currentDownload map[util.BlockTopologyCmp]util.Void) map[util.BlockTopologyCmp]util.Void {
 	result := make(map[util.BlockTopologyCmp]util.Void)
-	for block, _ := range currentDownload {
+	for block := range currentDownload {
 		netNextBlocks, ok := netTopo.ByPrevious[block.ID]
 		if !ok {
 			continue
 		}
-		for nextBlock, _ := range netNextBlocks {
+		for nextBlock := range netNextBlocks {
 			result[nextBlock] = util.Void{}
 		}
 	}
@@ -235,14 +242,14 @@ func ConvertBlockTopologySetToSlice(m map[util.BlockTopologyCmp]util.Void) []uti
 	result := make([]util.BlockTopologyCmp, len(m))
 
 	i := 0
-	for k, _ := range m {
+	for k := range m {
 		result[i] = k
-		i += 1
+		i++
 	}
 	return result
 }
 
-// GetDownloads() scans for a set of downloads that makes progress from the current topology.
+// GetDownloads scans for a set of downloads that makes progress from the current topology.
 //
 // This function could likely be optimized by adding additional indexing.
 func GetDownloads(myTopo *MyTopologyCache, netTopo *TopologyCache, maxCount int, maxDepth int) []util.BlockTopologyCmp {
@@ -250,7 +257,7 @@ func GetDownloads(myTopo *MyTopologyCache, netTopo *TopologyCache, maxCount int,
 	resultSet := make(map[util.BlockTopologyCmp]util.Void)
 
 	// Set resultSet to the union of resultSet and nextSet
-	for k, _ := range nextSet {
+	for k := range nextSet {
 		if len(resultSet) >= maxCount {
 			return ConvertBlockTopologySetToSlice(resultSet)
 		}
@@ -263,7 +270,7 @@ func GetDownloads(myTopo *MyTopologyCache, netTopo *TopologyCache, maxCount int,
 		}
 
 		// Set resultSet to the union of resultSet and nextSet
-		for k, _ := range nextSet {
+		for k := range nextSet {
 			if len(resultSet) >= maxCount {
 				return ConvertBlockTopologySetToSlice(resultSet)
 			}

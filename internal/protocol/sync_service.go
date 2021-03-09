@@ -79,11 +79,13 @@ type GetTopologyAtHeightResponse struct {
 	BlockTopology []types.BlockTopology
 }
 
+// NewGetTopologyAtHeightRequest instantiates a new GetTopologyAtHeightRequest
 func NewGetTopologyAtHeightRequest() *GetTopologyAtHeightRequest {
 	req := GetTopologyAtHeightRequest{}
 	return &req
 }
 
+// NewGetTopologyAtHeightResponse instantiates a new GetTopologyAtHeightResponse
 func NewGetTopologyAtHeightResponse() *GetTopologyAtHeightResponse {
 	resp := GetTopologyAtHeightResponse{
 		ForkHeads:     types.NewGetForkHeadsResponse(),

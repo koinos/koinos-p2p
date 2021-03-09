@@ -59,6 +59,7 @@ type BdmiProvider struct {
 
 var _ BlockDownloadManagerInterface = (*BdmiProvider)(nil)
 
+// NewBdmiProvider creates a new instance of BdmiProvider
 func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC) *BdmiProvider {
 	return &BdmiProvider{
 		peerHandlers: make(map[peer.ID]*PeerHandler),
@@ -79,30 +80,37 @@ func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC) *BdmiProvider {
 	}
 }
 
+// MyBlockTopologyChan is a getter for myBlockTopologyChan
 func (p *BdmiProvider) MyBlockTopologyChan() <-chan types.BlockTopology {
 	return p.myBlockTopologyChan
 }
 
+// MyLastIrrChan is a getter for myLastIrrChan
 func (p *BdmiProvider) MyLastIrrChan() <-chan types.BlockTopology {
 	return p.myLastIrrChan
 }
 
+// PeerHasBlockChan is a getter for peerHasBlockChan
 func (p *BdmiProvider) PeerHasBlockChan() <-chan PeerHasBlock {
 	return p.peerHasBlockChan
 }
 
+// DownloadResponseChan is a getter for downloadResponseChan
 func (p *BdmiProvider) DownloadResponseChan() <-chan BlockDownloadResponse {
 	return p.downloadResponseChan
 }
 
+// ApplyBlockResultChan is a getter for applyBlockResultChan
 func (p *BdmiProvider) ApplyBlockResultChan() <-chan BlockDownloadApplyResult {
 	return p.applyBlockResultChan
 }
 
+// RescanChan is a getter for rescanChan
 func (p *BdmiProvider) RescanChan() <-chan bool {
 	return p.rescanChan
 }
 
+// RequestDownload initiates a downlaod request
 func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
 
 	log.Printf("Downloading block %v from peer %v\n", req.Topology, req.PeerID)
@@ -115,7 +123,7 @@ func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadReq
 
 	peerHandler, hasHandler := p.peerHandlers[req.PeerID]
 	if !hasHandler {
-		resp.Err = fmt.Errorf("Tried to download block %v from peer %v, but handler was not registered\n", req.Topology.ID, req.PeerID)
+		resp.Err = fmt.Errorf("Tried to download block %v from peer %v, but handler was not registered", req.Topology.ID, req.PeerID)
 		log.Printf("%v\n", resp.Err.Error())
 	}
 
@@ -145,6 +153,7 @@ func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadReq
 	}()
 }
 
+// ApplyBlock attempts to apply a block from a peer
 func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadResponse) {
 
 	// Even if the peer's disappeared, we still attempt to apply the block.
@@ -212,6 +221,7 @@ func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange Height
 	}
 }
 
+// MyTopologyLoopState represents that state of a topology loop
 type MyTopologyLoopState struct {
 	heightRange HeightRange
 }
@@ -333,6 +343,7 @@ func (p *BdmiProvider) providerLoop(ctx context.Context) {
 	}
 }
 
+// RescanLoopState represents the state of a rescan loop
 type RescanLoopState struct {
 	lastForceRescanTime time.Time
 }
@@ -367,6 +378,7 @@ func (p *BdmiProvider) triggerRescanCycle(ctx context.Context, state *RescanLoop
 	}
 }
 
+// Start starts the Bdmi provider
 func (p *BdmiProvider) Start(ctx context.Context) {
 	go p.pollMyTopologyLoop(ctx)
 	go p.providerLoop(ctx)
