@@ -216,6 +216,7 @@ func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heigh
 		if err != nil {
 			return nil, err
 		}
+		block.ActiveData.Unbox()
 		activeData, err := block.ActiveData.GetNative()
 		if err != nil {
 			return nil, err
