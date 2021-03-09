@@ -3,6 +3,7 @@ package rpc
 import (
 	"encoding/json"
 	"errors"
+	"log"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/util"
@@ -322,6 +323,7 @@ func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
 func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
 	forkHeads, err := k.GetForkHeads()
 	if err != nil {
+		log.Printf("GetTopologyAtHeight(%d, %d) returned error %s after GetForkHeads()\n", height, numBlocks)
 		return nil, nil, err
 	}
 	if numBlocks == 0 {
