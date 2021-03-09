@@ -139,7 +139,7 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	resp := GetTopologyAtHeightResponse{}
 	subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
-	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeightReponse", req, &resp)
+	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, &resp)
 	if err != nil {
 		log.Printf("%v: error calling GetTopologyAtHeight, error was %v\n", h.peerID, err)
 		return err
