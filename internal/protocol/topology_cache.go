@@ -3,6 +3,7 @@ package protocol
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -178,6 +179,20 @@ func (c *TopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
 // not themselves in myTopo.
 func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[util.BlockTopologyCmp]util.Void {
 	result := make(map[util.BlockTopologyCmp]util.Void)
+
+	// Special case:  A node that has no blocks is interested in blocks of height 1
+	if len(myTopo.ByTopology) == 0 {
+		log.Printf("I have no blocks, so GetInitialDownload is looking for blocks of height 1")
+		netNextBlocks, ok := netTopo.ByHeight[1]
+		if ok {
+			for nextBlock, _ := range netNextBlocks {
+				result[nextBlock.Block] = util.Void{}
+			}
+		}
+		log.Printf("GetInitialDownload() returned %d blocks", len(result))
+		return result
+	}
+
 	for block, _ := range myTopo.ByTopology {
 		netNextBlocks, ok := netTopo.ByPrevious[block.ID]
 		if !ok {
@@ -192,6 +207,7 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 			result[nextBlock] = util.Void{}
 		}
 	}
+	log.Printf("GetInitialDownload() returned %d blocks", len(result))
 	return result
 }
 
