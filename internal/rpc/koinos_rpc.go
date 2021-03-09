@@ -135,7 +135,7 @@ func (k *KoinosRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlo
 	responseVariant := types.NewBlockStoreResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
 	var response *types.GetBlocksByIDResponse
