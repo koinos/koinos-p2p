@@ -163,7 +163,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 		}
 
 		if !chainID.ChainID.Equals(&peerChainID.ChainID) {
-			log.Printf("%v: peer's chain id does not match", pid)
+			log.Printf("%v: peer's chain id %v does not match my chain ID %v", pid, peerChainID.ChainID, chainID.ChainID)
 			return fmt.Errorf("%v: peer's chain id does not match", pid)
 		}
 
