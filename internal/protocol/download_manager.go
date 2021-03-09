@@ -167,6 +167,30 @@ func (m *BlockDownloadManager) Start(ctx context.Context) {
 	go m.downloadManagerLoop(ctx)
 }
 
+func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDownloadResponse) {
+	_, isAlreadyApplying := m.Applying[resp.Topology]
+	if isAlreadyApplying {
+		return
+	}
+
+	var hasPrev bool
+	if resp.Topology.Height == 1 {
+		hasPrev = true
+	} else {
+		_, hasPrev = m.MyTopoCache.ByID[resp.Topology.Previous]
+	}
+
+	if hasPrev {
+		delete(m.Downloading, resp.Topology)
+		delete(m.WaitingToApply, resp.Topology)
+		m.Applying[resp.Topology] = resp
+		m.iface.ApplyBlock(ctx, resp)
+	} else {
+		delete(m.Downloading, resp.Topology)
+		m.WaitingToApply[resp.Topology] = resp
+	}
+}
+
 func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp BlockDownloadResponse) {
 	log.Printf("Got BlockDownloadResponse for block of height %d from peer %v\n", resp.Topology.Height, resp.PeerID)
 	_, hasDownloading := m.Downloading[resp.Topology]
@@ -190,19 +214,7 @@ func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp 
 		return
 	}
 
-	var hasPrev bool
-	if resp.Topology.Height == 1 {
-		hasPrev = true
-	} else {
-		_, hasPrev = m.MyTopoCache.ByID[resp.Topology.Previous]
-	}
-
-	if hasPrev {
-		m.Applying[resp.Topology] = resp
-		m.iface.ApplyBlock(ctx, resp)
-	} else {
-		m.WaitingToApply[resp.Topology] = resp
-	}
+	m.maybeApplyBlock(ctx, resp)
 }
 
 func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadApplyResult) {
@@ -243,8 +255,9 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 		log.Printf("  - Bail, already applying\n")
 		return
 	}
-	_, isWaiting := m.WaitingToApply[download]
+	waitingResp, isWaiting := m.WaitingToApply[download]
 	if isWaiting {
+		m.maybeApplyBlock(ctx, waitingResp)
 		log.Printf("  - Bail, already waiting to apply\n")
 		return
 	}
@@ -275,6 +288,11 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 
 func (m *BlockDownloadManager) rescan(ctx context.Context) {
 	log.Printf("Rescanning downloads\n")
+
+	for _, resp := range m.WaitingToApply {
+		m.maybeApplyBlock(ctx, resp)
+	}
+
 	// Figure out the blocks we'd ideally be downloading
 	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.MaxDownloadsInFlight, m.MaxDownloadDepth)
 	log.Printf("GetDownloads() suggests %d eligible downloads\n", len(downloadList))
