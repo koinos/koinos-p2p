@@ -218,6 +218,9 @@ func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp 
 }
 
 func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadApplyResult) {
+
+	delete(m.Applying, applyResult.Topology)
+
 	if applyResult.Err == nil {
 		//
 		// Success.
