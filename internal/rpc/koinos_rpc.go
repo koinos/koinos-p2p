@@ -323,7 +323,7 @@ func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
 func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
 	forkHeads, err := k.GetForkHeads()
 	if err != nil {
-		log.Printf("GetTopologyAtHeight(%d, %d) returned error %s after GetForkHeads()\n", height, numBlocks)
+		log.Printf("GetTopologyAtHeight(%d, %d) returned error %s after GetForkHeads()\n", height, numBlocks, err.Error())
 		return nil, nil, err
 	}
 	if numBlocks == 0 {
@@ -338,6 +338,12 @@ func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks 
 		//t.
 		blocks, err := k.GetBlocksByHeight(&head.ID, height, numBlocks)
 		if err != nil {
+			headStr, err2 := json.Marshal(head)
+			if err2 != nil {
+				log.Printf("GetTopologyAtHeight(%d, %d) tried to print error %s but got another error %s\n", height, numBlocks, err, err2)
+			}
+
+			log.Printf("GetTopologyAtHeight(%d, %d) returned error %s after GetBlocksByHeight(), head=%s\n", height, numBlocks, err, headStr)
 			return nil, nil, err
 		}
 
