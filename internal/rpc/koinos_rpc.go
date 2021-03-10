@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -23,7 +24,7 @@ func NewKoinosRPC() *KoinosRPC {
 }
 
 // GetHeadBlock rpc call
-func (k *KoinosRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
+func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error) {
 	args := types.ChainRPCRequest{
 		Value: types.NewGetHeadInfoRequest(),
 	}
@@ -34,7 +35,7 @@ func (k *KoinosRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.SendRPC("application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
 
 	if err != nil {
 		return nil, err
@@ -62,7 +63,7 @@ func (k *KoinosRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
 
 // ApplyBlock rpc call
 // TODO:  Block should be OpaqueBlock
-func (k *KoinosRPC) ApplyBlock(block *types.Block, topology *types.BlockTopology) (bool, error) {
+func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error) {
 	blockSub := types.NewSubmitBlockRequest()
 	blockSub.Block = *block
 	blockSub.Topology = *topology
@@ -81,7 +82,7 @@ func (k *KoinosRPC) ApplyBlock(block *types.Block, topology *types.BlockTopology
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.SendRPC("application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
 
 	if err != nil {
 		return false, err
@@ -108,12 +109,12 @@ func (k *KoinosRPC) ApplyBlock(block *types.Block, topology *types.BlockTopology
 }
 
 // ApplyTransaction rpc call
-func (k *KoinosRPC) ApplyTransaction(block *types.Transaction) (bool, error) {
+func (k *KoinosRPC) ApplyTransaction(ctx context.Context, block *types.Transaction) (bool, error) {
 	return true, nil
 }
 
 // GetBlocksByID rpc call
-func (k *KoinosRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
+func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
 	args := types.BlockStoreRequest{
 		Value: &types.GetBlocksByIDRequest{
 			BlockID:           *blockID,
@@ -127,7 +128,7 @@ func (k *KoinosRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlo
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.SendRPC("application/json", "koinos_block", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "koinos_block", data)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +157,7 @@ func (k *KoinosRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlo
 }
 
 // GetBlocksByHeight rpc call
-func (k *KoinosRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
+func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
 	args := types.BlockStoreRequest{
 		Value: &types.GetBlocksByHeightRequest{
 			HeadBlockID:         *blockID,
@@ -173,7 +174,7 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Blo
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.SendRPC("application/json", "koinos_block", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "koinos_block", data)
 
 	if err != nil {
 		return nil, err
@@ -200,7 +201,7 @@ func (k *KoinosRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Blo
 }
 
 // GetAncestorTopologyAtHeights rpc call
-func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
+func (k *KoinosRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
 
 	// TODO:  Implement this properly in the block store.
 	// This implementation is an inefficient, abstraction-breaking hack that unboxes stuff in the p2p code (where it definitely shouldn't be unboxed).
@@ -208,7 +209,7 @@ func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heigh
 	result := make([]types.BlockTopology, len(heights))
 
 	for i, h := range heights {
-		resp, err := k.GetBlocksByHeight(blockID, h, 1)
+		resp, err := k.GetBlocksByHeight(ctx, blockID, h, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +235,7 @@ func (k *KoinosRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heigh
 }
 
 // GetChainID rpc call
-func (k *KoinosRPC) GetChainID() (*types.GetChainIDResponse, error) {
+func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, error) {
 	args := types.ChainRPCRequest{
 		Value: types.NewGetChainIDRequest(),
 	}
@@ -245,7 +246,7 @@ func (k *KoinosRPC) GetChainID() (*types.GetChainIDResponse, error) {
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.SendRPC("application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
 	// TODO:  Redo printf statement with proper logging
 	// log.Printf("GetChainID() response was %s\n", responseBytes)
 
@@ -280,7 +281,7 @@ func (k *KoinosRPC) SetBroadcastHandler(topic string, handler func(topic string,
 }
 
 // GetForkHeads rpc call
-func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
+func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error) {
 	args := types.ChainRPCRequest{
 		Value: types.NewGetForkHeadsRequest(),
 	}
@@ -292,7 +293,7 @@ func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.SendRPC("application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
 
 	if err != nil {
 		return nil, err
@@ -325,8 +326,8 @@ func (k *KoinosRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
 // - (2) For each fork, call GetBlocksByHeight() with the given height bounds to get the blocks in that height range on that fork.
 // - (3) Finally, do some purely computational cleanup:  Extract the BlockTopology and de-duplicate multiple instances of the same block.
 //
-func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
-	forkHeads, err := k.GetForkHeads()
+func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
+	forkHeads, err := k.GetForkHeads(ctx)
 	if err != nil {
 		log.Printf("GetTopologyAtHeight(%d, %d) returned error %s after GetForkHeads()\n", height, numBlocks, err.Error())
 		return nil, nil, err
@@ -341,7 +342,7 @@ func (k *KoinosRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks 
 	for _, head := range forkHeads.ForkHeads {
 		//var t types.BlockTopology
 		//t.
-		blocks, err := k.GetBlocksByHeight(&head.ID, height, numBlocks)
+		blocks, err := k.GetBlocksByHeight(ctx, &head.ID, height, numBlocks)
 		if err != nil {
 			headStr, err2 := json.Marshal(head)
 			if err2 != nil {

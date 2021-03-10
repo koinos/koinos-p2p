@@ -127,7 +127,7 @@ func (kg *KoinosGossip) readBlocks(ctx context.Context) {
 		}
 
 		// TODO: Fix nil argument
-		if ok, err := kg.rpc.ApplyBlock(block, nil); !ok || err != nil {
+		if ok, err := kg.rpc.ApplyBlock(ctx, block, nil); !ok || err != nil {
 			continue
 		}
 	}
@@ -149,7 +149,7 @@ func (kg *KoinosGossip) readTransactions(ctx context.Context) {
 			continue
 		}
 
-		if ok, err := kg.rpc.ApplyTransaction(transaction); !ok || err != nil {
+		if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
 			continue
 		}
 	}

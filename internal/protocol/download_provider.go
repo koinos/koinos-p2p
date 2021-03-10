@@ -182,7 +182,7 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 			applyResult.Err = err
 			log.Printf("Tried to apply block of height %d, got error %s\n", applyResult.Topology.Height, err.Error())
 		} else {
-			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(block, &topo)
+			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block, &topo)
 		}
 
 		select {
@@ -309,7 +309,7 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
-	forkHeads, blockTopology, err := p.rpc.GetTopologyAtHeight(state.heightRange.Height, state.heightRange.NumBlocks)
+	forkHeads, blockTopology, err := p.rpc.GetTopologyAtHeight(ctx, state.heightRange.Height, state.heightRange.NumBlocks)
 
 	if err != nil {
 		return err

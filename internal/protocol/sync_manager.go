@@ -156,7 +156,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 			}
 		}
 
-		chainID, err := m.rpc.GetChainID()
+		chainID, err := m.rpc.GetChainID(ctx)
 		if err != nil {
 			log.Printf("%v: error getting chain id, %v", pid, err)
 			return err

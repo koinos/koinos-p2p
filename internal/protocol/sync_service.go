@@ -116,7 +116,7 @@ func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest,
 	if s.enableDebugMessages {
 		log.Printf("SyncService.ChainID() start\n")
 	}
-	rpcResult, err := s.RPC.GetChainID()
+	rpcResult, err := s.RPC.GetChainID(ctx)
 	if err != nil {
 		log.Printf("SyncService.ChainID() returning error\n")
 		return err
@@ -131,7 +131,7 @@ func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest,
 
 // GetHeadBlock p2p rpc
 func (s *SyncService) GetHeadBlock(ctx context.Context, request GetHeadBlockRequest, response *GetHeadBlockResponse) error {
-	rpcResult, err := s.RPC.GetHeadBlock()
+	rpcResult, err := s.RPC.GetHeadBlock(ctx)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func (s *SyncService) GetHeadBlock(ctx context.Context, request GetHeadBlockRequ
 
 // GetForkHeads p2p rpc
 func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequest, response *GetForkHeadsResponse) error {
-	rpcResult, err := s.RPC.GetForkHeads()
+	rpcResult, err := s.RPC.GetForkHeads(ctx)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (s *SyncService) GetForkStatus(ctx context.Context, request GetForkStatusRe
 
 	// If peer is not in genesis state, check if they are on an ancestor chain of our's
 	if request.HeadHeight > 0 {
-		ancestor, err := s.RPC.GetBlocksByHeight(&request.HeadID, request.HeadHeight, 1)
+		ancestor, err := s.RPC.GetBlocksByHeight(ctx, &request.HeadID, request.HeadHeight, 1)
 
 		if err != nil { // Should not happen, requested blocks from ID that we do not have
 			return err
@@ -190,7 +190,7 @@ func (s *SyncService) GetBlocks(ctx context.Context, request GetBlocksRequest, r
 
 // GetBlocksByID p2p rpc
 func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRequest, response *GetBlocksByIDResponse) error {
-	blocks, err := s.RPC.GetBlocksByID(&request.BlockID)
+	blocks, err := s.RPC.GetBlocksByID(ctx, &request.BlockID)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRe
 
 // GetTopologyAtHeight p2p rpc
 func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopologyAtHeightRequest, response *GetTopologyAtHeightResponse) error {
-	forkHeads, blockTopology, err := s.RPC.GetTopologyAtHeight(request.BlockHeight, request.NumBlocks)
+	forkHeads, blockTopology, err := s.RPC.GetTopologyAtHeight(ctx, request.BlockHeight, request.NumBlocks)
 	if err != nil {
 		return err
 	}
