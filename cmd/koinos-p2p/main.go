@@ -20,6 +20,9 @@ func main() {
 	var peerFlags = flag.StringSliceP("peer", "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
 	var directFlags = flag.StringSliceP("direct", "d", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
 	var pexFlag = flag.BoolP("pex", "x", true, "Exchange peers with other nodes")
+	var bootstrapFlag = flag.BoolP("bootstrap", "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
+	var gossipFlag = flag.BoolP("gossip", "g", true, "Enable gossip mode")
+	var forceGossipFlag = flag.BoolP("force-gossip", "G", false, "Force gossip mode")
 
 	flag.Parse()
 
@@ -28,6 +31,10 @@ func main() {
 
 	opt := node.NewKoinosP2POptions()
 	opt.EnablePeerExchange = *pexFlag
+	opt.EnableBootstrap = *bootstrapFlag
+	opt.EnableGossip = *gossipFlag
+	opt.ForceGossip = *forceGossipFlag
+
 	opt.InitialPeers = *peerFlags
 	opt.DirectPeers = *directFlags
 

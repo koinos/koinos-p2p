@@ -31,6 +31,12 @@ type KoinosP2POptions struct {
 	// Set to true to enable bootstrap mode, where incoming connections are referred to other nodes
 	EnableBootstrap bool
 
+	// Set to true to enable gossip mode at all times
+	EnableGossip bool
+
+	// Set to true to enable gossip mode at all times
+	ForceGossip bool
+
 	// Peers to initially connect
 	InitialPeers []string
 
@@ -53,6 +59,8 @@ func NewKoinosP2POptions() *KoinosP2POptions {
 	return &KoinosP2POptions{
 		EnablePeerExchange: true,
 		EnableBootstrap:    false,
+		EnableGossip:       true,
+		ForceGossip:        false,
 		InitialPeers:       make([]string, 0),
 		DirectPeers:        make([]string, 0),
 	}
@@ -129,6 +137,10 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	err = node.connectInitialPeers()
 	if err != nil {
 		return nil, err
+	}
+
+	if node.Options.ForceGossip {
+		node.Gossip.StartGossip(ctx)
 	}
 
 	return node, nil
