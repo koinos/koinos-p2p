@@ -206,18 +206,20 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 	// TODO handle case where peer already exists
 	h := &PeerHandler{
-		peerID:               newPeer,
-		heightRange:          p.heightRange,
-		client:               p.client,
-		enableDebugMessages:  p.enableDebugMessages,
-		errChan:              p.peerErrChan,
-		heightRangeChan:      make(chan HeightRange),
-		peerHasBlockChan:     p.peerHasBlockChan,
-		downloadRequestChan:  make(chan BlockDownloadRequest),
-		downloadResponseChan: p.downloadResponseChan,
+		peerID:                  newPeer,
+		heightRange:             p.heightRange,
+		client:                  p.client,
+		enableDebugMessages:     p.enableDebugMessages,
+		errChan:                 p.peerErrChan,
+		heightRangeChan:         make(chan HeightRange),
+		internalHeightRangeChan: make(chan HeightRange),
+		peerHasBlockChan:        p.peerHasBlockChan,
+		downloadRequestChan:     make(chan BlockDownloadRequest),
+		downloadResponseChan:    p.downloadResponseChan,
 	}
 	p.peerHandlers[newPeer] = h
 	go h.peerHandlerLoop(ctx)
+	go h.heightRangeUpdateLoop(ctx)
 }
 
 func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange HeightRange) {

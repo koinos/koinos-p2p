@@ -50,6 +50,9 @@ type PeerHandler struct {
 	// It is filled by BdmiProvider and drained by PeerHandler.
 	heightRangeChan chan HeightRange
 
+	// Channel for sending height updates from heightRangeUpdateLoop to peerHandlerLoop.
+	internalHeightRangeChan chan HeightRange
+
 	// Channel for sending your topology updates.
 	// All PeerHandlers send PeerHasBlock messages to a common channel.
 	peerHasBlockChan chan<- PeerHasBlock
@@ -108,6 +111,30 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 	}()
 }
 
+func (h *PeerHandler) heightRangeUpdateLoop(ctx context.Context) {
+	var value HeightRange
+	hasValue := false
+
+	for {
+		if hasValue {
+			select {
+			case value = <-h.heightRangeChan:
+			case h.internalHeightRangeChan <- value:
+				hasValue = false
+			case <-ctx.Done():
+				return
+			}
+		} else {
+			select {
+			case value = <-h.heightRangeChan:
+				hasValue = true
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
 func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 	// Helper function to call peerHandlerCycle() and send any error to errChan
 	log.Printf("Start peer handler loop for peer %v\n", h.peerID)
@@ -130,7 +157,7 @@ func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 		case <-nextPollTime:
 			doPeerCycle()
 			nextPollTime = time.After(time.Duration(heightRangePollTime) * time.Second)
-		case h.heightRange = <-h.heightRangeChan:
+		case h.heightRange = <-h.internalHeightRangeChan:
 		case req := <-h.downloadRequestChan:
 			h.requestDownload(ctx, req)
 		case <-ctx.Done():
