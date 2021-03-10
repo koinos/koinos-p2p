@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	pollMyTopologySeconds = uint64(2)
+	pollMyTopologySeconds     = uint64(2)
+	heightRangeTimeoutSeconds = uint64(10)
 	// TODO:  This should be configurable, and probably ~100 for mainnet
 	heightInterestReach = uint64(5)
 	rescanIntervalMs    = uint64(1000) // TODO: Lower to 200ms once we're done debugging the p2p code
@@ -224,6 +225,9 @@ func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange Height
 	for _, peerHandler := range p.peerHandlers {
 		go func(ph *PeerHandler) {
 			select {
+			case <-time.After(time.Duration(heightRangeTimeoutSeconds) * time.Second):
+				log.Printf("PeerHandler for peer %s did not timely service height range update %v\n",
+					ph.peerID, heightRange)
 			case ph.heightRangeChan <- heightRange:
 			case <-ctx.Done():
 			}
