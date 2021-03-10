@@ -113,6 +113,7 @@ func (kg *KoinosGossip) StopGossip() {
 func (kg *KoinosGossip) readBlocks(ctx context.Context) {
 	ch := make(chan types.VariableBlob, 8) // TODO: Magic number
 	kg.Block.StartGossip(ctx, ch)
+	log.Println("Started block gossip listener")
 
 	for {
 		vb, ok := <-ch
@@ -121,21 +122,28 @@ func (kg *KoinosGossip) readBlocks(ctx context.Context) {
 			return
 		}
 
+		log.Println("Received block via gossip")
 		_, block, err := types.DeserializeBlock(&vb)
 		if err != nil { // TODO: Bad message, assign naughty points
+			log.Println("Gossiped block is corrupt")
 			continue
 		}
 
 		// TODO: Fix nil argument
+		// TODO: Perhaps this block should sent to the block cache instead?
 		if ok, err := kg.rpc.ApplyBlock(ctx, block, nil); !ok || err != nil {
+			log.Println("Gossiped block not applied")
 			continue
 		}
+
+		log.Println("Gossiped block applied")
 	}
 }
 
 func (kg *KoinosGossip) readTransactions(ctx context.Context) {
 	ch := make(chan types.VariableBlob, 32) // TODO: Magic number
 	kg.Transaction.StartGossip(ctx, ch)
+	log.Println("Started transaction gossip listener")
 
 	for {
 		vb, ok := <-ch
@@ -144,13 +152,18 @@ func (kg *KoinosGossip) readTransactions(ctx context.Context) {
 			return
 		}
 
+		log.Println("Received transaction via gossip")
 		_, transaction, err := types.DeserializeTransaction(&vb)
 		if err != nil { // TODO: Bad message, assign naughty points
+			log.Println("Gossiped transaction is corrupt")
 			continue
 		}
 
+		// TODO: Perhaps these should be cached?
 		if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
+			log.Println("Gossiped transaction not applied")
 			continue
 		}
+		log.Println("Gossiped transaction applied")
 	}
 }
