@@ -39,6 +39,9 @@ type KoinosP2POptions struct {
 	// Set to true to enable gossip mode at all times
 	ForceGossip bool
 
+	// Set to true to enable verbose logging
+	EnableDebugMessages bool
+
 	// Peers to initially connect
 	InitialPeers []string
 
@@ -59,12 +62,13 @@ type KoinosP2PNode struct {
 // NewKoinosP2POptions creates a KoinosP2POptions object which controls how p2p works
 func NewKoinosP2POptions() *KoinosP2POptions {
 	return &KoinosP2POptions{
-		EnablePeerExchange: true,
-		EnableBootstrap:    false,
-		EnableGossip:       true,
-		ForceGossip:        false,
-		InitialPeers:       make([]string, 0),
-		DirectPeers:        make([]string, 0),
+		EnablePeerExchange:  true,
+		EnableBootstrap:     false,
+		EnableGossip:        true,
+		ForceGossip:         false,
+		EnableDebugMessages: false,
+		InitialPeers:        make([]string, 0),
+		DirectPeers:         make([]string, 0),
 	}
 }
 
@@ -105,7 +109,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	mq.Start()
 	time.Sleep(1 * time.Second)
 
-	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC)
+	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, koptions.EnableDebugMessages)
 	node.SyncManager.Start(ctx)
 	node.Options = koptions
 

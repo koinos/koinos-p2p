@@ -23,6 +23,7 @@ func main() {
 	var bootstrapFlag = flag.BoolP("bootstrap", "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
 	var gossipFlag = flag.BoolP("gossip", "g", true, "Enable gossip mode")
 	var forceGossipFlag = flag.BoolP("force-gossip", "G", false, "Force gossip mode")
+	var verboseFlag = flag.BoolP("verbose", "v", false, "Enable verbose debug messages")
 
 	flag.Parse()
 
@@ -32,6 +33,7 @@ func main() {
 	opt.EnablePeerExchange = *pexFlag
 	opt.EnableBootstrap = *bootstrapFlag
 	opt.EnableGossip = *gossipFlag
+	opt.EnableDebugMessages = *verboseFlag
 	opt.ForceGossip = *forceGossipFlag
 
 	opt.InitialPeers = *peerFlags

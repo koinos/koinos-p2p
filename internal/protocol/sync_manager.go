@@ -89,7 +89,7 @@ type SyncManager struct {
 }
 
 // NewSyncManager factory
-func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager {
+func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, enableDebugMessages bool) *SyncManager {
 
 	// TODO pass rng as parameter
 	// TODO initialize RNG from cryptographically secure source
@@ -108,11 +108,11 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager 
 		peers:     make(map[peer.ID]util.Void),
 		blacklist: make(map[peer.ID]util.Void),
 	}
-	manager.bdmiProvider = NewBdmiProvider(manager.client, rpc)
-	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider)
+	manager.bdmiProvider = NewBdmiProvider(manager.client, rpc, enableDebugMessages)
+	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider, enableDebugMessages)
 
 	log.Printf("Registering SyncService\n")
-	err := manager.server.Register(NewSyncService(&rpc, true))
+	err := manager.server.Register(NewSyncService(&rpc, enableDebugMessages))
 	if err != nil {
 		panic(err)
 	}

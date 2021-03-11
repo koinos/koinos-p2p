@@ -146,7 +146,7 @@ func NewBlockDownloadResponse() *BlockDownloadResponse {
 }
 
 // NewBlockDownloadManager creates a new instance of BlockDownloadManager
-func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface) *BlockDownloadManager {
+func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface, enableDebugMessages bool) *BlockDownloadManager {
 	man := BlockDownloadManager{
 		MyTopoCache:    *NewMyTopologyCache(),
 		TopoCache:      *NewTopologyCache(),
@@ -156,6 +156,7 @@ func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface
 
 		MaxDownloadsInFlight: defaultMaxDownloadsInFlight,
 		MaxDownloadDepth:     defaultMaxDownloadDepth,
+		enableDebugMessages:  enableDebugMessages,
 		needRescan:           false,
 		rng:                  rng,
 		iface:                iface,

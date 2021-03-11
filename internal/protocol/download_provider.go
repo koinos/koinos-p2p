@@ -64,14 +64,14 @@ type BdmiProvider struct {
 var _ BlockDownloadManagerInterface = (*BdmiProvider)(nil)
 
 // NewBdmiProvider creates a new instance of BdmiProvider
-func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC) *BdmiProvider {
+func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, enableDebugMessages bool) *BdmiProvider {
 	return &BdmiProvider{
 		peerHandlers: make(map[peer.ID]*PeerHandler),
 		client:       client,
 		rpc:          rpc,
 		heightRange:  HeightRange{0, 0},
 
-		enableDebugMessages: false,
+		enableDebugMessages: enableDebugMessages,
 
 		newPeerChan:     make(chan peer.ID),
 		peerErrChan:     make(chan PeerError),
