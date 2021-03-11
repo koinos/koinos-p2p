@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"log"
 
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
