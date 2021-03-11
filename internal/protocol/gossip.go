@@ -6,6 +6,7 @@ import (
 
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
+	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
@@ -16,11 +17,12 @@ type GossipManager struct {
 	sub       *pubsub.Subscription
 	topicName string
 	enabled   bool
+	myPeerID  peer.ID
 }
 
 // NewGossipManager creates and returns a new instance of gossipManager
-func NewGossipManager(ps *pubsub.PubSub, topicName string) *GossipManager {
-	gm := GossipManager{ps: ps, topicName: topicName, enabled: false}
+func NewGossipManager(ps *pubsub.PubSub, topicName string, id peer.ID) *GossipManager {
+	gm := GossipManager{ps: ps, topicName: topicName, enabled: false, myPeerID: id}
 	return &gm
 }
 
@@ -81,7 +83,9 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.Varia
 			return
 		}
 
-		ch <- types.VariableBlob(msg.Data)
+		if msg.GetFrom() != gm.myPeerID {
+			ch <- types.VariableBlob(msg.Data)
+		}
 	}
 }
 
@@ -94,9 +98,9 @@ type KoinosGossip struct {
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
-func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub) *KoinosGossip {
-	block := NewGossipManager(ps, "koinos.blocks")
-	transaction := NewGossipManager(ps, "koinos.transactions")
+func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, id peer.ID) *KoinosGossip {
+	block := NewGossipManager(ps, "koinos.blocks", id)
+	transaction := NewGossipManager(ps, "koinos.transactions", id)
 	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, PubSub: ps}
 
 	return &kg

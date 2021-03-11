@@ -141,7 +141,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	if err != nil {
 		return nil, err
 	}
-	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps)
+	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.Host.ID())
 
 	err = node.connectInitialPeers()
 	if err != nil {
