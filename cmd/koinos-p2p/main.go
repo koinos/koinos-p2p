@@ -26,8 +26,7 @@ func main() {
 
 	flag.Parse()
 
-	mq := koinosmq.NewKoinosMQ(*amqpFlag)
-	mq.Start()
+	_ = koinosmq.NewKoinosMQ(*amqpFlag)
 
 	opt := node.NewKoinosP2POptions()
 	opt.EnablePeerExchange = *pexFlag

@@ -62,7 +62,7 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 }
 
 // ApplyBlock rpc call
-// TODO:  Block should be OpaqueBlock
+// TODO:  Block should be OpaqueBlock - No it shouldn't
 func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error) {
 	blockSub := types.NewSubmitBlockRequest()
 	blockSub.Block = *block
@@ -272,12 +272,6 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 	}
 
 	return response, err
-}
-
-// SetBroadcastHandler allows a function to be called for every broadcast block
-func (k *KoinosRPC) SetBroadcastHandler(topic string, handler func(topic string, data []byte)) {
-	mq := koinosmq.GetKoinosMQ()
-	mq.SetBroadcastHandler(topic, handler)
 }
 
 // GetForkHeads rpc call

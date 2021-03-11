@@ -44,6 +44,8 @@ func (gm *GossipManager) StartGossip(ctx context.Context, ch chan<- types.Variab
 
 	go gm.readMessages(ctx, ch)
 
+	gm.enabled = true
+
 	return nil
 }
 
@@ -65,6 +67,7 @@ func (gm *GossipManager) PublishMessage(ctx context.Context, vb *types.VariableB
 		return false
 	}
 
+	log.Print("Publishing message")
 	gm.topic.Publish(ctx, *vb)
 
 	return true
@@ -124,7 +127,7 @@ func (kg *KoinosGossip) readBlocks(ctx context.Context) {
 		}
 
 		log.Println("Received block via gossip")
-		_, block, err := types.DeserializeBlock(&vb)
+		_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
 		if err != nil { // TODO: Bad message, assign naughty points
 			log.Println("Gossiped block is corrupt")
 			continue
@@ -132,7 +135,7 @@ func (kg *KoinosGossip) readBlocks(ctx context.Context) {
 
 		// TODO: Fix nil argument
 		// TODO: Perhaps this block should sent to the block cache instead?
-		if ok, err := kg.rpc.ApplyBlock(ctx, block, nil); !ok || err != nil {
+		if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block, &blockBroadcast.Topology); !ok || err != nil {
 			log.Println("Gossiped block not applied")
 			continue
 		}

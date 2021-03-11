@@ -112,7 +112,7 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC) *SyncManager 
 	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider)
 
 	log.Printf("Registering SyncService\n")
-	err := manager.server.Register(NewSyncService(&rpc, false))
+	err := manager.server.Register(NewSyncService(&rpc, true))
 	if err != nil {
 		panic(err)
 	}

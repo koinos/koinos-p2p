@@ -3,12 +3,14 @@ package node
 import (
 	"context"
 	crand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	mrand "math/rand"
 	"time"
 
+	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
@@ -97,6 +99,12 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.Host = host
 	node.RPC = rpc
 
+	mq := koinosmq.GetKoinosMQ()
+	mq.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
+	mq.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
+	mq.Start()
+	time.Sleep(1 * time.Second)
+
 	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC)
 	node.SyncManager.Start(ctx)
 	node.Options = koptions
@@ -131,9 +139,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	}
 	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps)
 
-	node.RPC.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
-	node.RPC.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
-
 	err = node.connectInitialPeers()
 	if err != nil {
 		return nil, err
@@ -148,9 +153,17 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 
 func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
 	vb := types.VariableBlob(data)
+	log.Printf("Received broadcast: %v", string(data))
 	switch topic {
 	case "koinos.block.accept":
-		n.Gossip.Block.PublishMessage(context.Background(), &vb)
+		blockBroadcast := types.NewBlockAccepted()
+		err := json.Unmarshal(data, blockBroadcast)
+		if err != nil {
+			return
+		}
+		binary := types.NewVariableBlob()
+		binary = blockBroadcast.Serialize(binary)
+		n.Gossip.Block.PublishMessage(context.Background(), binary)
 
 	case "koinos.transaction.accept":
 		n.Gossip.Transaction.PublishMessage(context.Background(), &vb)
