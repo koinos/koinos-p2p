@@ -172,6 +172,9 @@ func (m *BlockDownloadManager) Start(ctx context.Context) {
 func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDownloadResponse) {
 	_, isAlreadyApplying := m.Applying[resp.Topology]
 	if isAlreadyApplying {
+		if m.enableDebugMessages {
+			log.Printf("maybeApplyBlock() could not apply block of height %d from peer %s\n", resp.Topology.Height, resp.PeerID)
+		}
 		return
 	}
 
@@ -183,11 +186,17 @@ func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDo
 	}
 
 	if hasPrev {
+		if m.enableDebugMessages {
+			log.Printf("maybeApplyBlock() entering hasPrev case for block of height %d from peer %s\n", resp.Topology.Height, resp.PeerID)
+		}
 		delete(m.Downloading, resp.Topology)
 		delete(m.WaitingToApply, resp.Topology)
 		m.Applying[resp.Topology] = resp
 		m.iface.ApplyBlock(ctx, resp)
 	} else {
+		if m.enableDebugMessages {
+			log.Printf("maybeApplyBlock() entering !hasPrev case for block of height %d from peer %s\n", resp.Topology.Height, resp.PeerID)
+		}
 		delete(m.Downloading, resp.Topology)
 		m.WaitingToApply[resp.Topology] = resp
 	}
@@ -229,12 +238,14 @@ func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadA
 		//
 		// Success.
 		//
-		// TODO:  For performance reasons, we should advance the fork head and active the same
-		// code path as MyBlockTopologyChan here.
-		//
+		// Advance the fork head as in MyBlockTopologyChan case, but don't trigger a rescan.
 		// Even if we do nothing, subsequent waiting blocks will be activated by MyBlockTopologyChan message,
 		// but this may occur at a limited rate (especially considering the polling implementation).
 		//
+
+		// Since we're not triggering a rescan based on whether it was added or not, we ignore the result of Add()
+		m.MyTopoCache.Add(applyResult.Topology)
+
 		return
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"testing"
 	"time"
 
@@ -67,13 +68,15 @@ func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse,
 
 // ApplyBlock rpc call
 func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error) {
+	log.Printf("ApplyBlock %d\n", topology.Height)
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
 
-	if k.BlocksApplied != nil {
-		k.BlocksApplied = append(k.BlocksApplied, block)
-		k.BlocksByID[util.MultihashToCmp(topology.ID)] = block
+	k.BlocksApplied = append(k.BlocksApplied, block)
+	k.BlocksByID[util.MultihashToCmp(topology.ID)] = block
+	if topology.Height > k.Height {
+		k.Height = topology.Height
 	}
 
 	return true, nil
@@ -109,6 +112,7 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultih
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
 	if height+types.BlockHeightType(numBlocks) > k.Height+types.BlockHeightType(len(k.BlocksApplied)) {
+		log.Printf("Error in GetBlocksByHeight()\n")
 		return nil, fmt.Errorf("Requested block exceeded height")
 	}
 
@@ -147,6 +151,7 @@ func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse
 	if k.Height > 0 {
 		resp.ForkHeads = types.VectorBlockTopology{*k.getDummyTopologyAtHeight(k.Height)}
 		resp.LastIrreversibleBlock = *k.getDummyTopologyAtHeight(1)
+		log.Printf("GetForkHeads() response: %v\n", resp.ForkHeads)
 	}
 	return resp, nil
 }
@@ -208,12 +213,14 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 }
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
-	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234, *node.NewKoinosP2POptions())
+	options := node.NewKoinosP2POptions()
+	options.EnableDebugMessages = true
+	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234, *options)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 
-	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345, *node.NewKoinosP2POptions())
+	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345, *options)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
