@@ -222,17 +222,19 @@ func SetUnitTestOptions(config *options.Config) {
 	config.BdmiProviderOptions.RescanIntervalMs = 15
 	config.DownloadManagerOptions.MaxDownloadDepth = 3
 	config.DownloadManagerOptions.MaxDownloadsInFlight = 8
-	config.PeerHandlerOptions.HeightRangePollTimeMs = 10
+	config.PeerHandlerOptions.HeightRangePollTimeMs = 700
 	config.PeerHandlerOptions.DownloadTimeoutMs = 50000
 	config.PeerHandlerOptions.RpcTimeoutMs = 10000
 }
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
 	config := options.NewConfig()
+	SetUnitTestOptions(config)
+	config.PeerHandlerOptions.HeightRangePollTimeMs = 100
+	config.BdmiProviderOptions.HeightInterestReach = 50
 	config.DownloadManagerOptions.MaxDownloadDepth = 15
 	config.DownloadManagerOptions.MaxDownloadsInFlight = 25
 	config.SetEnableDebugMessages(true)
-	SetUnitTestOptions(config)
 	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234, config)
 	if err != nil {
 		return nil, nil, nil, nil, err

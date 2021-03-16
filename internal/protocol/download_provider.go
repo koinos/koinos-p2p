@@ -82,7 +82,7 @@ func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, opts options.BdmiProvide
 
 		myBlockTopologyChan:  make(chan types.BlockTopology),
 		myLastIrrChan:        make(chan types.BlockTopology),
-		peerHasBlockChan:     make(chan PeerHasBlock),
+		peerHasBlockChan:     make(chan PeerHasBlock, opts.PeerHasBlockQueueSize),
 		downloadResponseChan: make(chan BlockDownloadResponse),
 		applyBlockResultChan: make(chan BlockDownloadApplyResult),
 		rescanChan:           make(chan bool),
