@@ -12,6 +12,10 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
+// TestRPC implements dummy blockchain RPC.
+//
+// Note:  This struct and all tests that use it will need to be massively redesigned to test forking.
+//
 type TestRPC struct {
 	ChainID          types.UInt64
 	Height           types.BlockHeightType
@@ -25,6 +29,17 @@ func (k *TestRPC) getBlockIDAtHeight(height types.BlockHeightType) *types.Multih
 	result := types.NewMultihash()
 	result.ID = types.UInt64(height) + k.HeadBlockIDDelta
 	return result
+}
+
+// getBlockTopologyAtHeight() gets the topology of the dummy block at the given height
+func (k *TestRPC) getTopologyAtHeight(height types.BlockHeightType) *types.BlockTopology {
+	topo := types.NewBlockTopology()
+	topo.ID = *k.getBlockIDAtHeight(height)
+	topo.Height = height
+	if height > 1 {
+		topo.Previous = *k.getBlockIDAtHeight(height - 1)
+	}
+	return topo
 }
 
 // GetHeadBlock rpc call
@@ -94,7 +109,12 @@ func (k *TestRPC) SetBroadcastHandler(topic string, handler func(topic string, d
 }
 
 func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error) {
-	return nil, nil
+	resp := types.NewGetForkHeadsResponse()
+	if k.Height > 0 {
+		resp.ForkHeads = types.VectorBlockTopology{*k.getTopologyAtHeight(k.Height)}
+		resp.LastIrreversibleBlock = *k.getTopologyAtHeight(1)
+	}
+	return resp, nil
 }
 
 func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
