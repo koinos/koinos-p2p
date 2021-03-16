@@ -1,5 +1,6 @@
 package options
 
+// BlacklistOptions is parameters for the peer blacklist
 type BlacklistOptions struct {
 	// How long blacklisting lasts
 	BlacklistMs uint64
@@ -8,6 +9,7 @@ type BlacklistOptions struct {
 	BlacklistRescanMs uint64
 }
 
+// NewBlacklistOptions creates a BlacklistOptions
 func NewBlacklistOptions() *BlacklistOptions {
 	options := BlacklistOptions{
 		BlacklistMs:       60000,

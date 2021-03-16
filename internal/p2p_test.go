@@ -215,7 +215,7 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 }
 
 func SetUnitTestOptions(config *options.Config) {
-	config.SyncManagerOptions.RpcTimeoutMs = 30000
+	config.SyncManagerOptions.RPCTimeoutMs = 30000
 	config.SyncManagerOptions.BlacklistMs = 60000
 	config.BdmiProviderOptions.PollMyTopologyMs = 20
 	config.BdmiProviderOptions.HeightRangeTimeoutMs = 10000
@@ -225,7 +225,7 @@ func SetUnitTestOptions(config *options.Config) {
 	config.DownloadManagerOptions.MaxDownloadsInFlight = 8
 	config.PeerHandlerOptions.HeightRangePollTimeMs = 700
 	config.PeerHandlerOptions.DownloadTimeoutMs = 50000
-	config.PeerHandlerOptions.RpcTimeoutMs = 10000
+	config.PeerHandlerOptions.RPCTimeoutMs = 10000
 }
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {

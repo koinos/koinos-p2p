@@ -11,6 +11,7 @@ type Config struct {
 	BlacklistOptions       BlacklistOptions
 }
 
+// NewConfig creates a new Config
 func NewConfig() *Config {
 	config := Config{
 		NodeOptions:            *NewNodeOptions(),
@@ -24,6 +25,7 @@ func NewConfig() *Config {
 	return &config
 }
 
+// SetEnableDebugMessages sets the EnableDebugMessages flag on all subobjects
 func (config *Config) SetEnableDebugMessages(enableDebugMessages bool) {
 	config.NodeOptions.EnableDebugMessages = enableDebugMessages
 	config.SyncManagerOptions.EnableDebugMessages = enableDebugMessages

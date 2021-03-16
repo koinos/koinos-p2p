@@ -178,7 +178,7 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 		NumBlocks:   h.heightRange.NumBlocks,
 	}
 	resp := NewGetTopologyAtHeightResponse()
-	subctx, cancel := context.WithTimeout(ctx, time.Duration(h.Options.RpcTimeoutMs)*time.Millisecond)
+	subctx, cancel := context.WithTimeout(ctx, time.Duration(h.Options.RPCTimeoutMs)*time.Millisecond)
 	defer cancel()
 	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, &resp)
 	if err != nil {

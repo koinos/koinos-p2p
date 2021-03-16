@@ -1,14 +1,16 @@
 package options
 
+// SyncManagerOptions is parameters that control the SyncManager
 type SyncManagerOptions struct {
-	RpcTimeoutMs        uint64
+	RPCTimeoutMs        uint64
 	BlacklistMs         uint64
 	EnableDebugMessages bool
 }
 
+// NewSyncManagerOptions creates a SyncManagerOptions with default field values
 func NewSyncManagerOptions() *SyncManagerOptions {
 	options := SyncManagerOptions{
-		RpcTimeoutMs:        30000,
+		RPCTimeoutMs:        30000,
 		BlacklistMs:         60000,
 		EnableDebugMessages: false,
 	}

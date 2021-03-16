@@ -1,5 +1,6 @@
 package options
 
+// BdmiProviderOptions is parameters that control the BdmiProvider
 type BdmiProviderOptions struct {
 	EnableDebugMessages  bool
 	PollMyTopologyMs     uint64
@@ -11,6 +12,7 @@ type BdmiProviderOptions struct {
 	PeerHasBlockQueueSize int
 }
 
+// NewBdmiProviderOptions creates a BdmiProviderOptions with default field values
 func NewBdmiProviderOptions() *BdmiProviderOptions {
 	options := BdmiProviderOptions{
 		EnableDebugMessages:  false,
