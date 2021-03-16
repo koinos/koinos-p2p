@@ -69,7 +69,7 @@ func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse,
 
 // ApplyBlock rpc call
 func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error) {
-	log.Printf("ApplyBlock %d\n", topology.Height)
+	// log.Printf("ApplyBlock %d\n", topology.Height)
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
@@ -152,7 +152,7 @@ func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse
 	if k.Height > 0 {
 		resp.ForkHeads = types.VectorBlockTopology{*k.getDummyTopologyAtHeight(k.Height)}
 		resp.LastIrreversibleBlock = *k.getDummyTopologyAtHeight(1)
-		log.Printf("GetForkHeads() response: %v\n", resp.ForkHeads)
+		// log.Printf("GetForkHeads() response: %v\n", resp.ForkHeads)
 	}
 	return resp, nil
 }
@@ -234,7 +234,7 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 	config.BdmiProviderOptions.HeightInterestReach = 50
 	config.DownloadManagerOptions.MaxDownloadDepth = 15
 	config.DownloadManagerOptions.MaxDownloadsInFlight = 25
-	config.SetEnableDebugMessages(true)
+	config.SetEnableDebugMessages(false)
 	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234, config)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -264,10 +264,10 @@ func TestSyncNoError(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Duration(20000) * time.Duration(time.Millisecond))
+	time.Sleep(time.Duration(2000) * time.Duration(time.Millisecond))
 
-	// SendRPC should have applied 122 blocks
-	if len(sendRPC.BlocksApplied) != 122 {
+	// SendRPC should have applied 123 blocks
+	if len(sendRPC.BlocksApplied) != 123 {
 		t.Errorf("Incorrect number of blocks applied")
 	}
 }
