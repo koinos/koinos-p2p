@@ -10,6 +10,7 @@ import (
 	mrand "math/rand"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
@@ -22,32 +23,6 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
-// KoinosP2POptions is a list of options that affect how a node is created
-//
-// Mostly used to implement p2p tests and command line flags
-type KoinosP2POptions struct {
-	// Set to true to enable peer exchange, where peers are given to / accepted from other nodes
-	EnablePeerExchange bool
-
-	// Set to true to enable bootstrap mode, where incoming connections are referred to other nodes
-	EnableBootstrap bool
-
-	// Set to true to enable gossip mode at all times
-	EnableGossip bool
-
-	// Set to true to enable gossip mode at all times
-	ForceGossip bool
-
-	// Set to true to enable verbose logging
-	EnableDebugMessages bool
-
-	// Peers to initially connect
-	InitialPeers []string
-
-	// Peers to directly connect
-	DirectPeers []string
-}
-
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
 	Host        host.Host
@@ -55,27 +30,14 @@ type KoinosP2PNode struct {
 	Gossip      *protocol.KoinosGossip
 	SyncManager *protocol.SyncManager
 
-	Options KoinosP2POptions
-}
-
-// NewKoinosP2POptions creates a KoinosP2POptions object which controls how p2p works
-func NewKoinosP2POptions() *KoinosP2POptions {
-	return &KoinosP2POptions{
-		EnablePeerExchange:  true,
-		EnableBootstrap:     false,
-		EnableGossip:        true,
-		ForceGossip:         false,
-		EnableDebugMessages: false,
-		InitialPeers:        make([]string, 0),
-		DirectPeers:         make([]string, 0),
-	}
+	Options options.NodeOptions
 }
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use a negative number for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed int64, koptions KoinosP2POptions) (*KoinosP2PNode, error) {
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed int64, nodeOptions options.NodeOptions) (*KoinosP2PNode, error) {
 	var r io.Reader
 	if seed == 0 {
 		r = crand.Reader
@@ -105,9 +67,9 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	rpc.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
 	rpc.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
 
-	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, koptions.EnableDebugMessages)
+	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, nodeOptions.EnableDebugMessages)
 	node.SyncManager.Start(ctx)
-	node.Options = koptions
+	node.Options = nodeOptions
 
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {

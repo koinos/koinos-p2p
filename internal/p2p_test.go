@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/koinos/koinos-p2p/internal/node"
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
@@ -213,7 +214,7 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 }
 
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
-	options := node.NewKoinosP2POptions()
+	options := options.NewNodeOptions()
 	options.EnableDebugMessages = true
 	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234, *options)
 	if err != nil {
