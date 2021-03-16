@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -118,7 +119,31 @@ func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse
 }
 
 func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
-	return nil, nil
+	result := make([]types.BlockTopology, len(heights))
+	for i, h := range heights {
+		resp, err := k.GetBlocksByHeight(ctx, blockID, h, 1)
+		if err != nil {
+			return nil, err
+		}
+		if len(resp.BlockItems) != 1 {
+			return nil, errors.New("Unexpected multiple blocks returned")
+		}
+		resp.BlockItems[0].Block.Unbox()
+		block, err := resp.BlockItems[0].Block.GetNative()
+		if err != nil {
+			return nil, err
+		}
+		block.ActiveData.Unbox()
+		activeData, err := block.ActiveData.GetNative()
+		if err != nil {
+			return nil, err
+		}
+		result[i].ID = resp.BlockItems[0].BlockID
+		result[i].Height = resp.BlockItems[0].BlockHeight
+		result[i].Previous = activeData.PreviousBlock
+	}
+
+	return result, nil
 }
 
 func (k *TestRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
