@@ -9,6 +9,7 @@ import (
 
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -23,31 +24,44 @@ type TestRPC struct {
 	HeadBlockIDDelta types.UInt64 // To ensure unique IDs within a "test chain", the multihash ID of each block is its height + this delta
 	ApplyBlocks      int          // Number of blocks to apply before failure. < 0 = always apply
 	BlocksApplied    []*types.Block
+	BlocksByID       map[util.MultihashCmp]*types.Block
 }
 
-// getBlockIDAtHeight() gets the ID of the dummy block at the given height
-func (k *TestRPC) getBlockIDAtHeight(height types.BlockHeightType) *types.Multihash {
+// getDummyBlockIDAtHeight() gets the ID of the dummy block at the given height
+func (k *TestRPC) getDummyBlockIDAtHeight(height types.BlockHeightType) *types.Multihash {
 	result := types.NewMultihash()
 	result.ID = types.UInt64(height) + k.HeadBlockIDDelta
 	return result
 }
 
 // getBlockTopologyAtHeight() gets the topology of the dummy block at the given height
-func (k *TestRPC) getTopologyAtHeight(height types.BlockHeightType) *types.BlockTopology {
+func (k *TestRPC) getDummyTopologyAtHeight(height types.BlockHeightType) *types.BlockTopology {
 	topo := types.NewBlockTopology()
-	topo.ID = *k.getBlockIDAtHeight(height)
+	topo.ID = *k.getDummyBlockIDAtHeight(height)
 	topo.Height = height
 	if height > 1 {
-		topo.Previous = *k.getBlockIDAtHeight(height - 1)
+		topo.Previous = *k.getDummyBlockIDAtHeight(height - 1)
 	}
 	return topo
+}
+
+// createDummyBlock() creates a dummy block at the given height
+func (k *TestRPC) createDummyBlock(height types.BlockHeightType) *types.Block {
+	activeData := types.NewActiveBlockData()
+	topo := k.getDummyTopologyAtHeight(height)
+	activeData.PreviousBlock = topo.Previous
+	activeData.Height = height
+
+	block := types.NewBlock()
+	block.ActiveData = *types.NewOpaqueActiveBlockDataFromNative(*activeData)
+	return block
 }
 
 // GetHeadBlock rpc call
 func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error) {
 	hi := types.NewGetHeadInfoResponse()
 	hi.Height = k.Height
-	hi.ID = *k.getBlockIDAtHeight(hi.Height)
+	hi.ID = *k.getDummyBlockIDAtHeight(hi.Height)
 	return hi, nil
 }
 
@@ -58,8 +72,8 @@ func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *
 	}
 
 	if k.BlocksApplied != nil {
-		b := append(k.BlocksApplied, block)
-		k.BlocksApplied = b
+		k.BlocksApplied = append(k.BlocksApplied, block)
+		k.BlocksByID[util.MultihashToCmp(topology.ID)] = block
 	}
 
 	return true, nil
@@ -70,7 +84,26 @@ func (k *TestRPC) ApplyTransaction(ctx context.Context, txn *types.Transaction) 
 }
 
 func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
-	return nil, nil
+	resp := types.NewGetBlocksByIDResponse()
+	for i := 0; i < len(*blockID); i++ {
+		blockID := (*blockID)[i]
+		block, hasBlock := k.BlocksByID[util.MultihashToCmp(blockID)]
+		if hasBlock {
+			block.ActiveData.Unbox()
+			activeData, err := block.ActiveData.GetNative()
+			if err != nil {
+				return nil, err
+			}
+
+			item := types.NewBlockItem()
+			item.BlockID = blockID
+			item.BlockHeight = activeData.Height
+			item.Block = *types.NewOpaqueBlockFromNative(*block)
+			resp.BlockItems = append(resp.BlockItems, *item)
+		}
+	}
+
+	return resp, nil
 }
 
 // GetBlocksByHeight rpc call
@@ -83,7 +116,7 @@ func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihas
 	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
 		blockItem := types.NewBlockItem()
 		blockItem.BlockHeight = height + types.BlockHeightType(i)
-		blockItem.BlockID = *k.getBlockIDAtHeight(blockItem.BlockHeight)
+		blockItem.BlockID = *k.getDummyBlockIDAtHeight(blockItem.BlockHeight)
 		vb := types.NewVariableBlob()
 		block := types.NewBlock()
 		activeData := types.NewActiveBlockData()
@@ -112,8 +145,8 @@ func (k *TestRPC) SetBroadcastHandler(topic string, handler func(topic string, d
 func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error) {
 	resp := types.NewGetForkHeadsResponse()
 	if k.Height > 0 {
-		resp.ForkHeads = types.VectorBlockTopology{*k.getTopologyAtHeight(k.Height)}
-		resp.LastIrreversibleBlock = *k.getTopologyAtHeight(1)
+		resp.ForkHeads = types.VectorBlockTopology{*k.getDummyTopologyAtHeight(k.Height)}
+		resp.LastIrreversibleBlock = *k.getDummyTopologyAtHeight(1)
 	}
 	return resp, nil
 }
@@ -147,12 +180,29 @@ func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *typ
 }
 
 func (k *TestRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
-	return nil, nil, nil
+	forkHeads, _ := k.GetForkHeads(ctx)
+	result := make([]types.BlockTopology, 0)
+	for i := types.UInt32(0); i < numBlocks; i++ {
+		h := height + types.BlockHeightType(i)
+		if h > k.Height {
+			break
+		}
+		result = append(result, *k.getDummyTopologyAtHeight(h))
+	}
+
+	return forkHeads, result, nil
 }
 
 func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	rpc := TestRPC{ChainID: 1, Height: height, HeadBlockIDDelta: 0, ApplyBlocks: -1}
 	rpc.BlocksApplied = make([]*types.Block, 0)
+	rpc.BlocksByID = make(map[util.MultihashCmp]*types.Block)
+
+	for h := types.BlockHeightType(1); h <= height; h++ {
+		block := rpc.createDummyBlock(h)
+		blockID := rpc.getDummyBlockIDAtHeight(h)
+		rpc.BlocksByID[util.MultihashToCmp(*blockID)] = block
+	}
 
 	return &rpc
 }
@@ -187,7 +237,7 @@ func TestSyncNoError(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Duration(200) * time.Duration(time.Millisecond))
+	time.Sleep(time.Duration(20000) * time.Duration(time.Millisecond))
 
 	// SendRPC should have applied 122 blocks
 	if len(sendRPC.BlocksApplied) != 122 {
