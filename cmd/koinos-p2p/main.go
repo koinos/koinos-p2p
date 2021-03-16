@@ -29,6 +29,7 @@ func main() {
 	flag.Parse()
 
 	mq := koinosmq.NewKoinosMQ(*amqpFlag)
+	mq.Start()
 
 	config := options.NewConfig()
 
