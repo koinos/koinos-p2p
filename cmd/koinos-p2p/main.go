@@ -27,7 +27,7 @@ func main() {
 
 	flag.Parse()
 
-	_ = koinosmq.NewKoinosMQ(*amqpFlag)
+	mq := koinosmq.NewKoinosMQ(*amqpFlag)
 
 	opt := node.NewKoinosP2POptions()
 	opt.EnablePeerExchange = *pexFlag
@@ -39,7 +39,7 @@ func main() {
 	opt.InitialPeers = *peerFlags
 	opt.DirectPeers = *directFlags
 
-	host, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(), int64(*seed), *opt)
+	host, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), int64(*seed), *opt)
 	if err != nil {
 		panic(err)
 	}

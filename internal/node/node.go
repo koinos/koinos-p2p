@@ -10,7 +10,6 @@ import (
 	mrand "math/rand"
 	"time"
 
-	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
@@ -103,11 +102,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.Host = host
 	node.RPC = rpc
 
-	mq := koinosmq.GetKoinosMQ()
-	mq.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
-	mq.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
-	mq.Start()
-	time.Sleep(1 * time.Second)
+	rpc.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
+	rpc.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
 
 	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, koptions.EnableDebugMessages)
 	node.SyncManager.Start(ctx)
