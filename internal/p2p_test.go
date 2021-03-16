@@ -309,43 +309,6 @@ func TestSyncChainID(t *testing.T) {
 }
 
 // Test same head block
-func TestSyncHeadBlock(t *testing.T) {
-	listenRPC := NewTestRPC(128)
-	sendRPC := NewTestRPC(128)
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
-	if err != nil {
-		t.Error(err)
-	}
-	defer listenNode.Close()
-	defer sendNode.Close()
-
-	_, err = sendNode.ConnectToPeer(peer.String())
-	if err == nil {
-		t.Error("Nodes with same head block should return an error, but did not")
-	}
-}
-
-// Test same head block
-func TestDifferentFork(t *testing.T) {
-	//listenRPC := TestRPC{Height: 128, ChainID: 1, HeadBlockIDDelta: 1, ApplyBlocks: -1}
-	//sendRPC := TestRPC{Height: 15, ChainID: 1, ApplyBlocks: -1}
-	listenRPC := NewTestRPC(128)
-	listenRPC.HeadBlockIDDelta = 1
-	sendRPC := NewTestRPC(15)
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
-	if err != nil {
-		t.Error(err)
-	}
-	defer listenNode.Close()
-	defer sendNode.Close()
-
-	_, err = sendNode.ConnectToPeer(peer.String())
-	if err == nil {
-		t.Error("Nodes on different forks should return an error, but do not")
-	}
-}
-
-// Test same head block
 func TestApplyBlockFailure(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
