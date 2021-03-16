@@ -8,6 +8,7 @@ import (
 
 	"math/rand"
 
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-p2p/internal/util"
 
@@ -21,11 +22,6 @@ import (
 
 // SyncID Identifies the koinos sync protocol
 const SyncID = "/koinos/sync/1.0.0"
-
-const (
-	timeoutSeconds   = uint64(30)
-	blacklistSeconds = uint64(60)
-)
 
 // BatchBlockRequest a batch block request
 type BatchBlockRequest struct {
@@ -66,6 +62,7 @@ type SyncManager struct {
 	client *gorpc.Client
 	rpc    rpc.RPC
 
+	Options         options.SyncManagerOptions
 	downloadManager *BlockDownloadManager
 	bdmiProvider    *BdmiProvider
 
@@ -89,7 +86,7 @@ type SyncManager struct {
 }
 
 // NewSyncManager factory
-func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, enableDebugMessages bool) *SyncManager {
+func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *options.Config) *SyncManager {
 
 	// TODO pass rng as parameter
 	// TODO initialize RNG from cryptographically secure source
@@ -100,6 +97,8 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, enableDebugMe
 		client: gorpc.NewClient(h, SyncID),
 		rpc:    rpc,
 
+		Options: config.SyncManagerOptions,
+
 		newPeers:           make(chan peer.ID),
 		handshakeDonePeers: make(chan peer.ID),
 		errPeers:           make(chan PeerError),
@@ -108,11 +107,11 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, enableDebugMe
 		peers:     make(map[peer.ID]util.Void),
 		blacklist: make(map[peer.ID]util.Void),
 	}
-	manager.bdmiProvider = NewBdmiProvider(manager.client, rpc, enableDebugMessages)
-	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider, enableDebugMessages)
+	manager.bdmiProvider = NewBdmiProvider(manager.client, rpc, config.BdmiProviderOptions, config.PeerHandlerOptions)
+	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider, config.DownloadManagerOptions)
 
 	log.Printf("Registering SyncService\n")
-	err := manager.server.Register(NewSyncService(&rpc, enableDebugMessages))
+	err := manager.server.Register(NewSyncService(&rpc, config.SyncServiceOptions))
 	if err != nil {
 		panic(err)
 	}
@@ -147,7 +146,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 		peerChainID := GetChainIDResponse{}
 		{
 			req := GetChainIDRequest{}
-			subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+			subctx, cancel := context.WithTimeout(ctx, time.Duration(m.Options.RpcTimeoutMs)*time.Millisecond)
 			defer cancel()
 			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, &peerChainID)
 			if err != nil {
@@ -226,7 +225,7 @@ func (m *SyncManager) run(ctx context.Context) {
 			go m.doPeerEnableDownload(ctx, pid)
 		case perr := <-m.errPeers:
 			// If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
-			m.blacklistPeer(ctx, perr.PeerID, time.Duration(blacklistSeconds)*time.Second)
+			m.blacklistPeer(ctx, perr.PeerID, time.Duration(m.Options.BlacklistMs)*time.Millisecond)
 			delete(m.peers, perr.PeerID)
 		case pid := <-m.unblacklistPeers:
 			delete(m.blacklist, pid)

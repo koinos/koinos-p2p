@@ -8,13 +8,9 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
-)
-
-const (
-	defaultMaxDownloadsInFlight int = 8
-	defaultMaxDownloadDepth     int = 3
 )
 
 // BlockDownloadRequest represents a block download request.
@@ -125,14 +121,11 @@ type BlockDownloadManager struct {
 	Downloading    map[util.BlockTopologyCmp]BlockDownloadRequest
 	Applying       map[util.BlockTopologyCmp]BlockDownloadResponse
 	WaitingToApply map[util.BlockTopologyCmp]BlockDownloadResponse
+	Options        options.DownloadManagerOptions
 
-	MaxDownloadsInFlight int
-	MaxDownloadDepth     int
-
-	enableDebugMessages bool
-	needRescan          bool
-	rng                 *rand.Rand
-	iface               BlockDownloadManagerInterface
+	needRescan bool
+	rng        *rand.Rand
+	iface      BlockDownloadManagerInterface
 }
 
 // NewBlockDownloadResponse creates a new instance of BlockDownloadResponse
@@ -146,20 +139,18 @@ func NewBlockDownloadResponse() *BlockDownloadResponse {
 }
 
 // NewBlockDownloadManager creates a new instance of BlockDownloadManager
-func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface, enableDebugMessages bool) *BlockDownloadManager {
+func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface, opt options.DownloadManagerOptions) *BlockDownloadManager {
 	man := BlockDownloadManager{
 		MyTopoCache:    *NewMyTopologyCache(),
 		TopoCache:      *NewTopologyCache(),
 		Downloading:    make(map[util.BlockTopologyCmp]BlockDownloadRequest),
 		Applying:       make(map[util.BlockTopologyCmp]BlockDownloadResponse),
 		WaitingToApply: make(map[util.BlockTopologyCmp]BlockDownloadResponse),
+		Options:        opt,
 
-		MaxDownloadsInFlight: defaultMaxDownloadsInFlight,
-		MaxDownloadDepth:     defaultMaxDownloadDepth,
-		enableDebugMessages:  enableDebugMessages,
-		needRescan:           false,
-		rng:                  rng,
-		iface:                iface,
+		needRescan: false,
+		rng:        rng,
+		iface:      iface,
 	}
 	return &man
 }
@@ -172,7 +163,7 @@ func (m *BlockDownloadManager) Start(ctx context.Context) {
 func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDownloadResponse) {
 	_, isAlreadyApplying := m.Applying[resp.Topology]
 	if isAlreadyApplying {
-		if m.enableDebugMessages {
+		if m.Options.EnableDebugMessages {
 			log.Printf("maybeApplyBlock() could not apply block of height %d from peer %s\n", resp.Topology.Height, resp.PeerID)
 		}
 		return
@@ -186,7 +177,7 @@ func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDo
 	}
 
 	if hasPrev {
-		if m.enableDebugMessages {
+		if m.Options.EnableDebugMessages {
 			log.Printf("maybeApplyBlock() entering hasPrev case for block of height %d from peer %s\n", resp.Topology.Height, resp.PeerID)
 		}
 		delete(m.Downloading, resp.Topology)
@@ -194,7 +185,7 @@ func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDo
 		m.Applying[resp.Topology] = resp
 		m.iface.ApplyBlock(ctx, resp)
 	} else {
-		if m.enableDebugMessages {
+		if m.Options.EnableDebugMessages {
 			log.Printf("maybeApplyBlock() entering !hasPrev case for block of height %d from peer %s\n", resp.Topology.Height, resp.PeerID)
 		}
 		delete(m.Downloading, resp.Topology)
@@ -203,7 +194,7 @@ func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDo
 }
 
 func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp BlockDownloadResponse) {
-	if m.enableDebugMessages {
+	if m.Options.EnableDebugMessages {
 		log.Printf("Got BlockDownloadResponse for block of height %d from peer %v\n", resp.Topology.Height, resp.PeerID)
 	}
 	_, hasDownloading := m.Downloading[resp.Topology]
@@ -267,21 +258,21 @@ func ConvertPeerSetToSlice(m map[peer.ID]util.Void) []peer.ID {
 }
 
 func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.BlockTopologyCmp) {
-	if m.enableDebugMessages {
+	if m.Options.EnableDebugMessages {
 		log.Printf("startDownload() on block of height %d\n", download.Height)
 	}
 
 	// If the download's already gotten in, no-op
 	_, isDownloading := m.Downloading[download]
 	if isDownloading {
-		if m.enableDebugMessages {
+		if m.Options.EnableDebugMessages {
 			log.Printf("  - Bail, already downloading\n")
 		}
 		return
 	}
 	_, isApplying := m.Applying[download]
 	if isApplying {
-		if m.enableDebugMessages {
+		if m.Options.EnableDebugMessages {
 			log.Printf("  - Bail, already applying\n")
 		}
 		return
@@ -289,7 +280,7 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 	waitingResp, isWaiting := m.WaitingToApply[download]
 	if isWaiting {
 		m.maybeApplyBlock(ctx, waitingResp)
-		if m.enableDebugMessages {
+		if m.Options.EnableDebugMessages {
 			log.Printf("  - Bail, already waiting to apply\n")
 		}
 		return
@@ -314,7 +305,7 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 		PeerID:   peer,
 	}
 
-	if m.enableDebugMessages {
+	if m.Options.EnableDebugMessages {
 		log.Printf("  - Downloading from peer %v\n", req.PeerID)
 	}
 	m.Downloading[download] = req
@@ -322,7 +313,7 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 }
 
 func (m *BlockDownloadManager) rescan(ctx context.Context) {
-	if m.enableDebugMessages {
+	if m.Options.EnableDebugMessages {
 		log.Printf("Rescanning downloads\n")
 	}
 
@@ -331,16 +322,16 @@ func (m *BlockDownloadManager) rescan(ctx context.Context) {
 	}
 
 	// Figure out the blocks we'd ideally be downloading
-	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.MaxDownloadsInFlight, m.MaxDownloadDepth)
-	if m.enableDebugMessages {
+	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.Options.MaxDownloadsInFlight, m.Options.MaxDownloadDepth)
+	if m.Options.EnableDebugMessages {
 		log.Printf("GetDownloads() suggests %d eligible downloads\n", len(downloadList))
 	}
 
 	for _, download := range downloadList {
 		// If we can't support additional downloads, bail
-		if len(m.Downloading)+len(m.Applying)+len(m.WaitingToApply) >= m.MaxDownloadsInFlight {
-			if m.enableDebugMessages {
-				log.Printf("No more downloads will be initiated, as this would exceed %d in-flight downloads\n", m.MaxDownloadsInFlight)
+		if len(m.Downloading)+len(m.Applying)+len(m.WaitingToApply) >= m.Options.MaxDownloadsInFlight {
+			if m.Options.EnableDebugMessages {
+				log.Printf("No more downloads will be initiated, as this would exceed %d in-flight downloads\n", m.Options.MaxDownloadsInFlight)
 			}
 			break
 		}
@@ -371,7 +362,7 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 		case peerHasBlock := <-m.iface.PeerHasBlockChan():
 			topoStr, err := json.Marshal(peerHasBlock.Block)
 			if err == nil {
-				if m.enableDebugMessages {
+				if m.Options.EnableDebugMessages {
 					log.Printf("%v: Service PeerHasBlock message %s\n", peerHasBlock.PeerID, topoStr)
 				}
 			}

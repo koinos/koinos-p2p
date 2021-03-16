@@ -6,6 +6,7 @@ import (
 
 	types "github.com/koinos/koinos-types-golang"
 
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 )
 
@@ -107,13 +108,13 @@ type GetBlocksByIDResponse struct {
 // SyncService handles broadcasting inventory to peers
 // TODO: Rename RPC (to what?)
 type SyncService struct {
-	RPC                 rpc.RPC
-	enableDebugMessages bool
+	RPC     rpc.RPC
+	Options options.SyncServiceOptions
 }
 
 // GetChainID p2p rpc
 func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest, response *GetChainIDResponse) error {
-	if s.enableDebugMessages {
+	if s.Options.EnableDebugMessages {
 		log.Printf("SyncService.ChainID() start\n")
 	}
 	rpcResult, err := s.RPC.GetChainID(ctx)
@@ -123,7 +124,7 @@ func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest,
 	}
 
 	response.ChainID = rpcResult.ChainID
-	if s.enableDebugMessages {
+	if s.Options.EnableDebugMessages {
 		log.Printf("SyncService.ChainID() returning normally, chain ID is %v\n", response.ChainID)
 	}
 	return nil
@@ -215,7 +216,7 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 }
 
 // NewSyncService constructs a new broadcast protocol object
-func NewSyncService(rpc *rpc.RPC, enableDebugMessages bool) *SyncService {
-	p := &SyncService{RPC: *rpc, enableDebugMessages: enableDebugMessages}
+func NewSyncService(rpc *rpc.RPC, opts options.SyncServiceOptions) *SyncService {
+	p := &SyncService{RPC: *rpc, Options: opts}
 	return p
 }

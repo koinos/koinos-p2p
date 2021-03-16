@@ -10,8 +10,9 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 
-	rpc "github.com/koinos/koinos-p2p/internal/rpc"
-	util "github.com/koinos/koinos-p2p/internal/util"
+	"github.com/koinos/koinos-p2p/internal/options"
+	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 )
 
@@ -45,7 +46,8 @@ type BdmiProvider struct {
 
 	heightRange HeightRange
 
-	enableDebugMessages bool
+	Options            options.BdmiProviderOptions
+	PeerHandlerOptions options.PeerHandlerOptions
 
 	newPeerChan     chan peer.ID
 	peerErrChan     chan PeerError
@@ -64,14 +66,15 @@ type BdmiProvider struct {
 var _ BlockDownloadManagerInterface = (*BdmiProvider)(nil)
 
 // NewBdmiProvider creates a new instance of BdmiProvider
-func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, enableDebugMessages bool) *BdmiProvider {
+func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, opts options.BdmiProviderOptions, phopts options.PeerHandlerOptions) *BdmiProvider {
 	return &BdmiProvider{
 		peerHandlers: make(map[peer.ID]*PeerHandler),
 		client:       client,
 		rpc:          rpc,
 		heightRange:  HeightRange{0, 0},
 
-		enableDebugMessages: enableDebugMessages,
+		Options:            opts,
+		PeerHandlerOptions: phopts,
 
 		newPeerChan:     make(chan peer.ID),
 		peerErrChan:     make(chan PeerError),
@@ -119,7 +122,7 @@ func (p *BdmiProvider) RescanChan() <-chan bool {
 // RequestDownload initiates a downlaod request
 func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
 
-	if p.enableDebugMessages {
+	if p.Options.EnableDebugMessages {
 		log.Printf("Downloading block %v from peer %v\n", req.Topology, req.PeerID)
 	}
 
@@ -209,7 +212,7 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 		peerID:                  newPeer,
 		heightRange:             p.heightRange,
 		client:                  p.client,
-		enableDebugMessages:     p.enableDebugMessages,
+		Options:                 p.PeerHandlerOptions,
 		errChan:                 p.peerErrChan,
 		heightRangeChan:         make(chan HeightRange),
 		internalHeightRangeChan: make(chan HeightRange),
@@ -319,7 +322,7 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 
 	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
 	if newHeightRange != state.heightRange {
-		if p.enableDebugMessages {
+		if p.Options.EnableDebugMessages {
 			log.Printf("My topology height range changed from %v to %v\n", state.heightRange, newHeightRange)
 		}
 

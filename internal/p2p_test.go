@@ -213,15 +213,32 @@ func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	return &rpc
 }
 
+func SetUnitTestOptions(config *options.Config) {
+	config.SyncManagerOptions.RpcTimeoutMs = 30000
+	config.SyncManagerOptions.BlacklistMs = 60000
+	config.BdmiProviderOptions.PollMyTopologyMs = 20
+	config.BdmiProviderOptions.HeightRangeTimeoutMs = 10000
+	config.BdmiProviderOptions.HeightInterestReach = 5
+	config.BdmiProviderOptions.RescanIntervalMs = 15
+	config.DownloadManagerOptions.MaxDownloadDepth = 3
+	config.DownloadManagerOptions.MaxDownloadsInFlight = 8
+	config.PeerHandlerOptions.HeightRangePollTimeMs = 10
+	config.PeerHandlerOptions.DownloadTimeoutMs = 50000
+	config.PeerHandlerOptions.RpcTimeoutMs = 10000
+}
+
 func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
-	options := options.NewNodeOptions()
-	options.EnableDebugMessages = true
-	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234, *options)
+	config := options.NewConfig()
+	config.DownloadManagerOptions.MaxDownloadDepth = 15
+	config.DownloadManagerOptions.MaxDownloadsInFlight = 25
+	config.SetEnableDebugMessages(true)
+	SetUnitTestOptions(config)
+	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, 1234, config)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 
-	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345, *options)
+	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, 2345, config)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

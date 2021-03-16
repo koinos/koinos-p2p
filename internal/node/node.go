@@ -37,7 +37,7 @@ type KoinosP2PNode struct {
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use a negative number for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed int64, nodeOptions options.NodeOptions) (*KoinosP2PNode, error) {
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed int64, config *options.Config) (*KoinosP2PNode, error) {
 	var r io.Reader
 	if seed == 0 {
 		r = crand.Reader
@@ -67,9 +67,9 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	rpc.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
 	rpc.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
 
-	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, nodeOptions.EnableDebugMessages)
+	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, config)
 	node.SyncManager.Start(ctx)
-	node.Options = nodeOptions
+	node.Options = config.NodeOptions
 
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {

@@ -10,6 +10,7 @@ import (
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 )
@@ -38,8 +39,8 @@ type PeerHandler struct {
 	// RPC client
 	client *gorpc.Client
 
-	// Enable debug messages
-	enableDebugMessages bool
+	// Options
+	Options options.PeerHandlerOptions
 
 	// Channel for sending if peer has an error.
 	// All PeerHandlers send their errors to a common channel.
@@ -67,11 +68,6 @@ type PeerHandler struct {
 	downloadResponseChan chan<- BlockDownloadResponse
 }
 
-const (
-	heightRangePollTime    = 2
-	downloadTimeoutSeconds = 50
-)
-
 func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequest) {
 	go func() {
 		log.Printf("Getting block %d from peer %v using SyncService GetBlocksByID RPC\n", req.Topology.Height, req.PeerID)
@@ -79,7 +75,7 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		rpcResp := GetBlocksByIDResponse{}
 		rpcResp.BlockItems = [][]byte{}
 
-		subctx, cancel := context.WithTimeout(ctx, time.Duration(downloadTimeoutSeconds)*time.Second)
+		subctx, cancel := context.WithTimeout(ctx, time.Duration(h.Options.DownloadTimeoutMs)*time.Millisecond)
 		defer cancel()
 		err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetBlocksByID", rpcReq, &rpcResp)
 		resp := NewBlockDownloadResponse()
@@ -94,7 +90,7 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		} else {
 			vbBlock := types.VariableBlob(rpcResp.BlockItems[0])
 			resp.Block = *types.NewOpaqueBlockFromBlob(&vbBlock)
-			if h.enableDebugMessages {
+			if h.Options.EnableDebugMessages {
 				log.Printf("  - rpcResp value is: %v\n", rpcResp)
 				rpcRespStr, err := json.Marshal(rpcResp)
 				if err == nil {
@@ -151,12 +147,12 @@ func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 		}
 	}
 
-	nextPollTime := time.After(time.Duration(heightRangePollTime) * time.Second)
+	nextPollTime := time.After(time.Duration(h.Options.HeightRangePollTimeMs) * time.Millisecond)
 	for {
 		select {
 		case <-nextPollTime:
 			doPeerCycle()
-			nextPollTime = time.After(time.Duration(heightRangePollTime) * time.Second)
+			nextPollTime = time.After(time.Duration(h.Options.HeightRangePollTimeMs) * time.Millisecond)
 		case h.heightRange = <-h.internalHeightRangeChan:
 		case req := <-h.downloadRequestChan:
 			h.requestDownload(ctx, req)
@@ -177,7 +173,7 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
-	if h.enableDebugMessages {
+	if h.Options.EnableDebugMessages {
 		log.Printf("%v: Polling HeightRange{%d,%d}\n", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
 	}
 
@@ -186,7 +182,7 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 		NumBlocks:   h.heightRange.NumBlocks,
 	}
 	resp := NewGetTopologyAtHeightResponse()
-	subctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	subctx, cancel := context.WithTimeout(ctx, time.Duration(h.Options.RpcTimeoutMs)*time.Millisecond)
 	defer cancel()
 	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, &resp)
 	if err != nil {
@@ -196,7 +192,7 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 
 	for _, b := range resp.BlockTopology {
 		hasBlockMsg := PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}
-		if h.enableDebugMessages {
+		if h.Options.EnableDebugMessages {
 			topoStr, err := json.Marshal(b)
 			if err == nil {
 				log.Printf("%v: Sending PeerHasBlock message %s\n", h.peerID, topoStr)
