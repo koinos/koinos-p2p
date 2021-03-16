@@ -8,6 +8,7 @@ type Config struct {
 	DownloadManagerOptions DownloadManagerOptions
 	PeerHandlerOptions     PeerHandlerOptions
 	SyncServiceOptions     SyncServiceOptions
+	BlacklistOptions       BlacklistOptions
 }
 
 func NewConfig() *Config {
@@ -18,6 +19,7 @@ func NewConfig() *Config {
 		DownloadManagerOptions: *NewDownloadManagerOptions(),
 		PeerHandlerOptions:     *NewPeerHandlerOptions(),
 		SyncServiceOptions:     *NewSyncServiceOptions(),
+		BlacklistOptions:       *NewBlacklistOptions(),
 	}
 	return &config
 }

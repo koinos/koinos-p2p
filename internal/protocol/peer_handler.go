@@ -22,12 +22,6 @@ type HeightRange struct {
 	NumBlocks types.UInt32
 }
 
-// PeerError represents an error in communication with a peer
-type PeerError struct {
-	PeerID peer.ID
-	Error  error
-}
-
 // PeerHandler is created by BdmiProvider to handle communications with a single peer.
 type PeerHandler struct {
 	// ID of the current peer

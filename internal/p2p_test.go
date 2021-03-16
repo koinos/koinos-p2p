@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -285,8 +286,25 @@ func TestSyncChainID(t *testing.T) {
 	defer sendNode.Close()
 
 	_, err = sendNode.ConnectToPeer(peer.String())
-	if err == nil {
-		t.Error("Nodes with different chain ids should return an error, but did not")
+	if err != nil {
+		t.Error("ConnectToPeer() returned unexpected error")
+	}
+
+	ok := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(time.Duration(100) * time.Duration(time.Millisecond))
+		listenError, hasListenError := listenNode.SyncManager.Blacklist.GetBlacklistEntry(sendNode.Host.ID())
+		sendError, hasSendError := sendNode.SyncManager.Blacklist.GetBlacklistEntry(listenNode.Host.ID())
+		if hasListenError &&
+			hasSendError &&
+			strings.HasSuffix(listenError.Error.Error(), "peer's chain id does not match") &&
+			strings.HasSuffix(sendError.Error.Error(), "peer's chain id does not match") {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		t.Error("Never got expected error")
 	}
 }
 

@@ -53,8 +53,6 @@ type PeerBlockResponseError struct {
 // - Hooking together the above components
 // - Starting (and TODO: canceling) all loops
 //
-// TODO: Move blacklist to separate struct
-//
 type SyncManager struct {
 	rng *rand.Rand
 
@@ -69,20 +67,20 @@ type SyncManager struct {
 	// Channel for new peer ID's we want to connect to
 	newPeers chan peer.ID
 
+	// Channel for peers that have errors
+	errPeers chan PeerError
+
 	// Channel for peer to notify when handshake is done
 	handshakeDonePeers chan peer.ID
 
-	// Channel for peer to notify when error occurs
-	errPeers chan PeerError
-
-	// Channel for peer ID's coming off a blacklist
-	unblacklistPeers chan peer.ID
+	// rescanBlacklist is a ticker channel to rescan the Blacklist
+	rescanBlacklist <-chan time.Time
 
 	// Peer ID map.  Only updated in the internal SyncManager thread
 	peers map[peer.ID]util.Void
 
-	// Blacklisted peers.
-	blacklist map[peer.ID]util.Void
+	// Blacklist of peers.
+	Blacklist *Blacklist
 }
 
 // NewSyncManager factory
@@ -102,13 +100,15 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *optio
 		newPeers:           make(chan peer.ID),
 		handshakeDonePeers: make(chan peer.ID),
 		errPeers:           make(chan PeerError),
-		unblacklistPeers:   make(chan peer.ID),
 
 		peers:     make(map[peer.ID]util.Void),
-		blacklist: make(map[peer.ID]util.Void),
+		Blacklist: NewBlacklist(config.BlacklistOptions),
 	}
 	manager.bdmiProvider = NewBdmiProvider(manager.client, rpc, config.BdmiProviderOptions, config.PeerHandlerOptions)
 	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider, config.DownloadManagerOptions)
+	// TODO: Find a good place to call ticker.Stop() to avoid leak
+	ticker := time.NewTicker(time.Duration(config.BlacklistOptions.BlacklistRescanMs) * time.Millisecond)
+	manager.rescanBlacklist = ticker.C
 
 	log.Printf("Registering SyncService\n")
 	err := manager.server.Register(NewSyncService(&rpc, config.SyncServiceOptions))
@@ -191,31 +191,11 @@ func (m *SyncManager) doPeerEnableDownload(ctx context.Context, pid peer.ID) {
 	}
 }
 
-// Blacklist a peer.  Runs in the main thread.
-func (m *SyncManager) blacklistPeer(ctx context.Context, pid peer.ID, blacklistTime time.Duration) {
-	// Add to the blacklist now
-	m.blacklist[pid] = util.Void{}
-
-	// Un-blacklist it after some time has passed
-	go func() {
-		select {
-		case <-time.After(blacklistTime):
-		case <-ctx.Done():
-			return
-		}
-
-		select {
-		case m.unblacklistPeers <- pid:
-		case <-ctx.Done():
-		}
-	}()
-}
-
 func (m *SyncManager) run(ctx context.Context) {
 	for {
 		select {
 		case pid := <-m.newPeers:
-			_, isBlacklisted := m.blacklist[pid]
+			isBlacklisted := m.Blacklist.IsPeerBlacklisted(pid)
 			if !isBlacklisted {
 				go m.doPeerHandshake(ctx, pid)
 			}
@@ -225,10 +205,10 @@ func (m *SyncManager) run(ctx context.Context) {
 			go m.doPeerEnableDownload(ctx, pid)
 		case perr := <-m.errPeers:
 			// If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
-			m.blacklistPeer(ctx, perr.PeerID, time.Duration(m.Options.BlacklistMs)*time.Millisecond)
+			m.Blacklist.AddPeerToBlacklist(perr)
 			delete(m.peers, perr.PeerID)
-		case pid := <-m.unblacklistPeers:
-			delete(m.blacklist, pid)
+		case <-m.rescanBlacklist:
+			m.Blacklist.RemoveExpiredBlacklistEntries()
 		case <-ctx.Done():
 			return
 		}
