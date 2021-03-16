@@ -3,7 +3,7 @@ module github.com/koinos/koinos-p2p
 go 1.15
 
 require (
-	github.com/koinos/koinos-mq-golang v0.0.0-20210316032821-c05943753ef8
+	github.com/koinos/koinos-mq-golang v0.0.0-20210316232732-6a186f97179b
 	github.com/koinos/koinos-types-golang v0.1.1-0.20210304205158-23a7e711ac8a
 	github.com/libp2p/go-libp2p v0.13.0
 	github.com/libp2p/go-libp2p-core v0.8.5
