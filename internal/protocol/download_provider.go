@@ -16,14 +16,6 @@ import (
 	types "github.com/koinos/koinos-types-golang"
 )
 
-const (
-	pollMyTopologySeconds     = uint64(2)
-	heightRangeTimeoutSeconds = uint64(10)
-	// TODO:  This should be configurable, and probably ~100 for mainnet
-	heightInterestReach = uint64(5)
-	rescanIntervalMs    = uint64(1000) // TODO: Lower to 200ms once we're done debugging the p2p code
-)
-
 // BdmiProvider is the implementation of Block Download Manager Interface.
 //
 // BdmiProvider is responsible for the following:
@@ -230,7 +222,7 @@ func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange Height
 	for _, peerHandler := range p.peerHandlers {
 		go func(ph *PeerHandler) {
 			select {
-			case <-time.After(time.Duration(heightRangeTimeoutSeconds) * time.Second):
+			case <-time.After(time.Duration(p.Options.HeightRangeTimeoutMs) * time.Millisecond):
 				log.Printf("PeerHandler for peer %s did not timely service height range update %v\n",
 					ph.peerID, heightRange)
 			case ph.heightRangeChan <- heightRange:
@@ -255,7 +247,7 @@ func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
 		}
 
 		select {
-		case <-time.After(time.Duration(pollMyTopologySeconds) * time.Second):
+		case <-time.After(time.Duration(p.Options.PollMyTopologyMs) * time.Millisecond):
 		case <-ctx.Done():
 			return
 		}
@@ -263,7 +255,7 @@ func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
 }
 
 // getHeightInterestRange computes the heights of interest for a given GetForkHeadsResponse
-func getHeightInterestRange(forkHeads *types.GetForkHeadsResponse) HeightRange {
+func getHeightInterestRange(forkHeads *types.GetForkHeadsResponse, heightInterestReach uint64) HeightRange {
 	if len(forkHeads.ForkHeads) == 0 {
 		// Zero ForkHeads means we're spinning up a brand-new node that doesn't have any blocks yet.
 		// In this case we simply ask for the first few blocks.
@@ -318,7 +310,7 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 		return err
 	}
 
-	newHeightRange := getHeightInterestRange(forkHeads)
+	newHeightRange := getHeightInterestRange(forkHeads, p.Options.HeightInterestReach)
 
 	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
 	if newHeightRange != state.heightRange {
@@ -373,11 +365,11 @@ func (p *BdmiProvider) triggerRescanLoop(ctx context.Context) {
 
 	// Set the start time to be far enough in the past to trigger rescan immediately
 	state := RescanLoopState{
-		lastForceRescanTime: time.Now().Add(-1000 * time.Duration(rescanIntervalMs) * time.Millisecond),
+		lastForceRescanTime: time.Now().Add(-1000 * time.Duration(p.Options.RescanIntervalMs) * time.Millisecond),
 	}
 	for {
 		select {
-		case <-time.After(time.Duration(rescanIntervalMs) * time.Millisecond):
+		case <-time.After(time.Duration(p.Options.RescanIntervalMs) * time.Millisecond):
 			p.triggerRescanCycle(ctx, &state)
 		case <-ctx.Done():
 			return
@@ -388,7 +380,7 @@ func (p *BdmiProvider) triggerRescanLoop(ctx context.Context) {
 func (p *BdmiProvider) triggerRescanCycle(ctx context.Context, state *RescanLoopState) {
 	forceRescan := false
 	now := time.Now()
-	if now.Sub(state.lastForceRescanTime) >= time.Duration(rescanIntervalMs)*time.Millisecond {
+	if now.Sub(state.lastForceRescanTime) >= time.Duration(p.Options.RescanIntervalMs)*time.Millisecond {
 		state.lastForceRescanTime = now
 		forceRescan = true
 	}
