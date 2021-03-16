@@ -9,6 +9,7 @@ import (
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	flag "github.com/spf13/pflag"
 )
@@ -29,21 +30,26 @@ func main() {
 
 	mq := koinosmq.NewKoinosMQ(*amqpFlag)
 
-	opt := node.NewKoinosP2POptions()
-	opt.EnablePeerExchange = *pexFlag
-	opt.EnableBootstrap = *bootstrapFlag
-	opt.EnableGossip = *gossipFlag
-	opt.EnableDebugMessages = *verboseFlag
-	opt.ForceGossip = *forceGossipFlag
+	config := options.NewConfig()
 
-	opt.InitialPeers = *peerFlags
-	opt.DirectPeers = *directFlags
+	config.NodeOptions.EnablePeerExchange = *pexFlag
+	config.NodeOptions.EnableBootstrap = *bootstrapFlag
+	config.NodeOptions.EnableGossip = *gossipFlag
+	config.NodeOptions.EnableDebugMessages = *verboseFlag
+	config.NodeOptions.ForceGossip = *forceGossipFlag
 
-	host, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), int64(*seed), *opt)
+	config.NodeOptions.InitialPeers = *peerFlags
+	config.NodeOptions.DirectPeers = *directFlags
+
+	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), int64(*seed), config)
 	if err != nil {
 		panic(err)
 	}
-	log.Printf("Starting node at address: %s\n", host.GetPeerAddress())
+	err = node.Start(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	log.Printf("Starting node at address: %s\n", node.GetPeerAddress())
 
 	// Wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
@@ -51,5 +57,5 @@ func main() {
 	<-ch
 	log.Println("Shutting down node...")
 	// Shut the node down
-	host.Close()
+	node.Close()
 }

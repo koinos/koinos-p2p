@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/koinos/koinos-p2p/internal/options"
+
 	types "github.com/koinos/koinos-types-golang"
 )
 
@@ -17,7 +19,7 @@ type TestRPC struct {
 }
 
 // GetHeadBlock rpc call
-func (k *TestRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
+func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error) {
 	hi := types.NewGetHeadInfoResponse()
 	hi.Height = k.Height
 	hi.ID.ID = types.UInt64(k.Height) + k.HeadBlockIDDelta
@@ -25,7 +27,7 @@ func (k *TestRPC) GetHeadBlock() (*types.GetHeadInfoResponse, error) {
 }
 
 // ApplyBlock rpc call
-func (k *TestRPC) ApplyBlock(block *types.Block, topology ...*types.BlockTopology) (bool, error) {
+func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error) {
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
@@ -38,28 +40,28 @@ func (k *TestRPC) ApplyBlock(block *types.Block, topology ...*types.BlockTopolog
 	return true, nil
 }
 
-func (k *TestRPC) ApplyTransaction(txn *types.Transaction) (bool, error) {
+func (k *TestRPC) ApplyTransaction(ctx context.Context, txn *types.Transaction) (bool, error) {
 	return true, nil
 }
 
-func (k *TestRPC) GetForkHeads() (*types.GetForkHeadsResponse, error) {
+func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error) {
 	return nil, nil
 }
 
-func (k *TestRPC) GetAncestorTopologyAtHeights(blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
+func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
 	return nil, nil
 }
 
-func (k *TestRPC) GetTopologyAtHeight(height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
+func (k *TestRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
 	return nil, nil, nil
 }
 
-func (k *TestRPC) GetBlocksByID(blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
+func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
 	return nil, nil
 }
 
 // GetBlocksByHeight rpc call
-func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
+func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
 	blocks := types.NewGetBlocksByHeightResponse()
 	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
 		blockItem := types.NewBlockItem()
@@ -77,7 +79,7 @@ func (k *TestRPC) GetBlocksByHeight(blockID *types.Multihash, height types.Block
 }
 
 // GetChainID rpc call
-func (k *TestRPC) GetChainID() (*types.GetChainIDResponse, error) {
+func (k *TestRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, error) {
 	mh := types.NewGetChainIDResponse()
 	mh.ChainID.ID = k.ChainID
 	return mh, nil
@@ -102,7 +104,7 @@ func TestBasicNode(t *testing.T) {
 	rpc := NewTestRPC(128)
 
 	// With an explicit seed
-	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 1234, *NewKoinosP2POptions())
+	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 1234, options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -116,7 +118,7 @@ func TestBasicNode(t *testing.T) {
 	bn.Close()
 
 	// With 0 seed
-	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 0, *NewKoinosP2POptions())
+	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 0, options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -124,7 +126,7 @@ func TestBasicNode(t *testing.T) {
 	bn.Close()
 
 	// Give an invalid listen address
-	bn, err = NewKoinosP2PNode(ctx, "---", rpc, 0, *NewKoinosP2POptions())
+	bn, err = NewKoinosP2PNode(ctx, "---", rpc, 0, options.NewConfig())
 	if err == nil {
 		bn.Close()
 		t.Error("Starting a node with an invalid address should give an error, but it did not")

@@ -68,7 +68,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	rpc.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
 
 	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, config)
-	node.SyncManager.Start(ctx)
 	node.Options = config.NodeOptions
 
 	// Create the pubsub gossip
@@ -100,15 +99,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 		return nil, err
 	}
 	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.Host.ID())
-
-	err = node.connectInitialPeers()
-	if err != nil {
-		return nil, err
-	}
-
-	if node.Options.ForceGossip {
-		node.Gossip.StartGossip(ctx)
-	}
 
 	return node, nil
 }
@@ -198,5 +188,18 @@ func (n *KoinosP2PNode) Close() error {
 		return err
 	}
 
+	return nil
+}
+
+// Start starts background goroutines
+func (n *KoinosP2PNode) Start(ctx context.Context) error {
+	err := n.connectInitialPeers()
+	if err != nil {
+		return err
+	}
+	if n.Options.ForceGossip {
+		n.Gossip.StartGossip(ctx)
+	}
+	n.SyncManager.Start(ctx)
 	return nil
 }
