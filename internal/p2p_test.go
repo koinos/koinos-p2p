@@ -322,7 +322,7 @@ func TestApplyBlockFailure(t *testing.T) {
 
 	_, err = sendNode.ConnectToPeer(peer.String())
 
-	time.Sleep(time.Duration(200) * time.Duration(time.Millisecond))
+	time.Sleep(time.Duration(800) * time.Duration(time.Millisecond))
 
 	// SendRPC should have applied 18 blocks
 	if len(sendRPC.BlocksApplied) != 18 {
