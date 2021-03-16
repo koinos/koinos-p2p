@@ -20,11 +20,18 @@ type TestRPC struct {
 	BlocksApplied    []*types.Block
 }
 
+// getBlockIDAtHeight() gets the ID of the dummy block at the given height
+func (k *TestRPC) getBlockIDAtHeight(height types.BlockHeightType) *types.Multihash {
+	result := types.NewMultihash()
+	result.ID = types.UInt64(height) + k.HeadBlockIDDelta
+	return result
+}
+
 // GetHeadBlock rpc call
 func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error) {
 	hi := types.NewGetHeadInfoResponse()
 	hi.Height = k.Height
-	hi.ID.ID = types.UInt64(k.Height) + k.HeadBlockIDDelta
+	hi.ID = *k.getBlockIDAtHeight(hi.Height)
 	return hi, nil
 }
 
@@ -60,8 +67,7 @@ func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihas
 	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
 		blockItem := types.NewBlockItem()
 		blockItem.BlockHeight = height + types.BlockHeightType(i)
-		blockItem.BlockID = *types.NewMultihash()
-		blockItem.BlockID.ID = types.UInt64(blockItem.BlockHeight) + k.HeadBlockIDDelta
+		blockItem.BlockID = *k.getBlockIDAtHeight(blockItem.BlockHeight)
 		vb := types.NewVariableBlob()
 		block := types.NewBlock()
 		activeData := types.NewActiveBlockData()
