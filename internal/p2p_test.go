@@ -50,35 +50,35 @@ func (k *TestRPC) getDummyTopologyAtHeight(height types.BlockHeightType) *types.
 
 // createDummyBlock() creates a dummy block at the given height
 func (k *TestRPC) createDummyBlock(height types.BlockHeightType) *types.Block {
-	activeData := types.NewActiveBlockData()
 	topo := k.getDummyTopologyAtHeight(height)
-	activeData.PreviousBlock = topo.Previous
-	activeData.Height = height
 
 	block := types.NewBlock()
-	block.ActiveData = *types.NewOpaqueActiveBlockDataFromNative(*activeData)
+	block.Header.Previous = topo.Previous
+	block.Header.Height = height
+	block.ActiveData = *types.NewOpaqueActiveBlockData()
+	block.PassiveData = *types.NewOpaquePassiveBlockData()
 	return block
 }
 
 // GetHeadBlock rpc call
 func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error) {
 	hi := types.NewGetHeadInfoResponse()
-	hi.Height = k.Height
-	hi.ID = *k.getDummyBlockIDAtHeight(hi.Height)
+	hi.HeadTopology.Height = k.Height
+	hi.HeadTopology.ID = *k.getDummyBlockIDAtHeight(hi.HeadTopology.Height)
 	return hi, nil
 }
 
 // ApplyBlock rpc call
-func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error) {
+func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, error) {
 	// log.Printf("ApplyBlock %d\n", topology.Height)
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
 
 	k.BlocksApplied = append(k.BlocksApplied, block)
-	k.BlocksByID[util.MultihashToCmp(topology.ID)] = block
-	if topology.Height > k.Height {
-		k.Height = topology.Height
+	k.BlocksByID[util.MultihashToCmp(block.ID)] = block
+	if block.Header.Height > k.Height {
+		k.Height = block.Header.Height
 	}
 
 	return true, nil
@@ -94,15 +94,9 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultih
 		blockID := (*blockID)[i]
 		block, hasBlock := k.BlocksByID[util.MultihashToCmp(blockID)]
 		if hasBlock {
-			block.ActiveData.Unbox()
-			activeData, err := block.ActiveData.GetNative()
-			if err != nil {
-				return nil, err
-			}
-
 			item := types.NewBlockItem()
 			item.BlockID = blockID
-			item.BlockHeight = activeData.Height
+			item.BlockHeight = block.Header.Height
 			item.Block = *types.NewOpaqueBlockFromNative(*block)
 			resp.BlockItems = append(resp.BlockItems, *item)
 		}
@@ -173,14 +167,9 @@ func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *typ
 		if err != nil {
 			return nil, err
 		}
-		block.ActiveData.Unbox()
-		activeData, err := block.ActiveData.GetNative()
-		if err != nil {
-			return nil, err
-		}
 		result[i].ID = resp.BlockItems[0].BlockID
 		result[i].Height = resp.BlockItems[0].BlockHeight
-		result[i].Previous = activeData.PreviousBlock
+		result[i].Previous = block.Header.Previous
 	}
 
 	return result, nil

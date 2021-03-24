@@ -168,8 +168,6 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 			Err:      nil,
 		}
 
-		topo := util.BlockTopologyFromCmp(resp.Topology)
-
 		// TODO:  We should not unbox here, however for some reason the API requires Block not OpaqueBlock
 		resp.Block.Unbox()
 		block, err := resp.Block.GetNative()
@@ -177,7 +175,7 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 			applyResult.Err = err
 			log.Printf("Tried to apply block of height %d, got error %s\n", applyResult.Topology.Height, err.Error())
 		} else {
-			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block, &topo)
+			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
 		}
 
 		select {

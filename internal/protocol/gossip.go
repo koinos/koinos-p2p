@@ -139,7 +139,7 @@ func (kg *KoinosGossip) readBlocks(ctx context.Context) {
 
 		// TODO: Fix nil argument
 		// TODO: Perhaps this block should sent to the block cache instead?
-		if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block, &blockBroadcast.Topology); !ok || err != nil {
+		if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
 			log.Println("Gossiped block not applied")
 			continue
 		}
