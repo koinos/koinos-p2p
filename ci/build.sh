@@ -5,4 +5,4 @@ set -x
 
 go get ./...
 mkdir -p build
-go build -o build/koinos_p2p cmd/koinos_p2p/main.go
+go build -o build/koinos_p2p cmd/koinos-p2p/main.go
