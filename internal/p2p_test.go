@@ -262,7 +262,7 @@ func TestSyncNoError(t *testing.T) {
 		t.Error(err)
 	}
 
-	time.Sleep(time.Duration(2000) * time.Duration(time.Millisecond))
+	time.Sleep(time.Duration(3000) * time.Duration(time.Millisecond))
 
 	// SendRPC should have applied 123 blocks
 	if len(sendRPC.BlocksApplied) != 123 {
