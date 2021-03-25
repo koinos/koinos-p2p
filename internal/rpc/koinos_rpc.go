@@ -11,6 +11,7 @@ import (
 	types "github.com/koinos/koinos-types-golang"
 )
 
+// RPC service constants
 const (
 	ChainRPC      = "chain"
 	BlockStoreRPC = "block_store"
