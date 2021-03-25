@@ -11,6 +11,11 @@ import (
 	types "github.com/koinos/koinos-types-golang"
 )
 
+const (
+	ChainRPC      = "chain"
+	BlockStoreRPC = "block_store"
+)
+
 // KoinosRPC Implementation of RPC Interface
 type KoinosRPC struct {
 	mq *koinosmq.KoinosMQ
@@ -35,7 +40,7 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
 		return nil, err
@@ -81,7 +86,7 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, e
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
 		return false, err
@@ -127,7 +132,7 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMult
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "koinos_block", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +178,7 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multih
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "koinos_block", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
 
 	if err != nil {
 		return nil, err
@@ -242,7 +247,7 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 	// TODO:  Redo printf statement with proper logging
 	// log.Printf("GetChainID() response was %s\n", responseBytes)
 
@@ -288,7 +293,7 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsRespon
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
 		return nil, err
