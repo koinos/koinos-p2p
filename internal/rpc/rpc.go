@@ -1,14 +1,23 @@
 package rpc
 
 import (
-	koinos_types "github.com/koinos/koinos-types-golang"
+	"context"
+
+	types "github.com/koinos/koinos-types-golang"
 )
 
-// RPC Iterface for RPC methods required for koinos-p2p to function
+// RPC interface for RPC methods required for koinos-p2p to function
+// TODO:  Add context to all these functions
 type RPC interface {
-	GetHeadBlock() (*koinos_types.HeadInfo, error)
-	ApplyBlock(block *koinos_types.Block, topology ...*koinos_types.BlockTopology) (bool, error)
-	ApplyTransaction(block *koinos_types.Block) (bool, error)
-	GetBlocksByHeight(blockID *koinos_types.Multihash, height koinos_types.BlockHeightType, numBlocks koinos_types.UInt32) (*koinos_types.GetBlocksByHeightResponse, error)
-	GetChainID() (*koinos_types.GetChainIDResponse, error)
+	GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error)
+	ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error)
+	ApplyTransaction(ctx context.Context, block *types.Transaction) (bool, error)
+	GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error)
+	GetChainID(ctx context.Context) (*types.GetChainIDResponse, error)
+	SetBroadcastHandler(topic string, handler func(topic string, data []byte))
+	GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error)
+	GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error)
+	GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error)
+
+	GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error)
 }

@@ -3,59 +3,41 @@ package node
 import (
 	"context"
 	crand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	mrand "math/rand"
 	"time"
 
-	"github.com/koinos/koinos-p2p/internal/inventory"
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	types "github.com/koinos/koinos-types-golang"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
-	peerstore "github.com/libp2p/go-libp2p-core/peer"
-	gorpc "github.com/libp2p/go-libp2p-gorpc"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
-
-type nodeProtocols struct {
-	//Sync   protocol.SyncProtocol
-	Gossip protocol.GossipProtocol
-}
-
-// create new node protocol object
-func newNodeProtocols(node *KoinosP2PNode) *nodeProtocols {
-	np := new(nodeProtocols)
-
-	data := protocol.Data{Inventory: &node.Inventory, RPC: node.RPC, Host: node.Host}
-
-	//np.Sync = *protocol.NewSyncProtocol(&data)
-	//node.registerProtocol(np.Sync)
-
-	np.Gossip = *protocol.NewGossipProtocol(&data)
-	node.registerProtocol(&np.Gossip)
-
-	return np
-}
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
 	Host        host.Host
-	Inventory   inventory.Inventory
-	Protocols   nodeProtocols
 	RPC         rpc.RPC
-	SyncServer  *gorpc.Server
+	Gossip      *protocol.KoinosGossip
 	SyncManager *protocol.SyncManager
+
+	Options options.NodeOptions
 }
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use a negative number for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed int64) (*KoinosP2PNode, error) {
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed int64, config *options.Config) (*KoinosP2PNode, error) {
 	var r io.Reader
 	if seed == 0 {
 		r = crand.Reader
@@ -81,33 +63,101 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node := new(KoinosP2PNode)
 	node.Host = host
 	node.RPC = rpc
-	node.Protocols = *newNodeProtocols(node)
-	node.Inventory = *inventory.NewInventory(time.Minute * time.Duration(30))
-	node.SyncServer = gorpc.NewServer(host, protocol.SyncID)
-	err = node.SyncServer.Register(&protocol.SyncService{})
+
+	rpc.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
+	rpc.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
+
+	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, config)
+	node.Options = config.NodeOptions
+
+	// Create the pubsub gossip
+	if node.Options.EnableBootstrap {
+		// TODO:  When https://github.com/libp2p/go-libp2p-pubsub/issues/364 is fixed, don't monkey-patch global variables like this
+		log.Printf("Bootstrap node enabled\n")
+		pubsub.GossipSubD = 0
+		pubsub.GossipSubDlo = 0
+		pubsub.GossipSubDhi = 0
+		pubsub.GossipSubDscore = 0
+	} else {
+		pubsub.GossipSubD = 6
+		pubsub.GossipSubDlo = 5
+		pubsub.GossipSubDhi = 12
+		pubsub.GossipSubDscore = 4
+	}
+
+	if !node.Options.EnablePeerExchange {
+		pubsub.GossipSubPrunePeers = 0
+	} else {
+		pubsub.GossipSubPrunePeers = 16
+	}
+
+	ps, err := pubsub.NewGossipSub(
+		ctx, node.Host,
+		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	node.SyncManager = protocol.NewSyncManager(node.Host, node.RPC)
-	node.SyncManager.Start()
+	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.Host.ID())
 
 	return node, nil
 }
 
-func (n *KoinosP2PNode) registerProtocol(p protocol.Protocol) {
-	pid, handler := p.GetProtocolRegistration()
-	n.Host.SetStreamHandler(pid, handler)
+func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
+	vb := types.VariableBlob(data)
+	log.Printf("Received broadcast: %v", string(data))
+	switch topic {
+	case "koinos.block.accept":
+		blockBroadcast := types.NewBlockAccepted()
+		err := json.Unmarshal(data, blockBroadcast)
+		if err != nil {
+			return
+		}
+		binary := types.NewVariableBlob()
+		binary = blockBroadcast.Serialize(binary)
+		n.Gossip.Block.PublishMessage(context.Background(), binary)
+
+	case "koinos.transaction.accept":
+		n.Gossip.Transaction.PublishMessage(context.Background(), &vb)
+	}
+}
+
+func getChannelError(errs chan error) error {
+	select {
+	case err := <-errs:
+		return err
+	default:
+		return nil
+	}
+}
+
+func (n *KoinosP2PNode) connectInitialPeers() error {
+	// TODO: Return errors via channel instead of error
+	// TODO: Connect to peers simultaneously instead of sequentially
+	// TODO: Instead of calling InitiateProtocol() here, register a notify handler using host.Network().Notify(n),
+	//       then initiate the sync protocol in the notify handler's Connected() message.
+	//       See e.g. go-libp2p-pubsub newPeers for the way, it also contains a manager-like processLoop() function.
+	//
+	// Connect to a peer
+	for _, pid := range n.Options.InitialPeers {
+		if pid != "" {
+			log.Printf("Connecting to initial peer %s and sending broadcast\n", pid)
+			_, err := n.ConnectToPeer(pid)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // ConnectToPeer connects the node to the given peer
 func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
-
 	addr, err := multiaddr.NewMultiaddr(peerAddr)
 	if err != nil {
 		return nil, err
 	}
-	peer, err := peerstore.AddrInfoFromP2pAddr(addr)
+	peer, err := peer.AddrInfoFromP2pAddr(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -118,18 +168,7 @@ func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
 		return nil, err
 	}
 
-	err = n.SyncManager.AddPeer(peer.ID)
-	if err != nil {
-		return nil, err
-	}
-
 	return peer, nil
-}
-
-// MakeContext creates and returns the canonical context which should be used for peer connections
-// TODO: create this from configuration
-func (n *KoinosP2PNode) MakeContext() (ctx context.Context, cancel context.CancelFunc) {
-	return context.WithTimeout(context.Background(), 30*time.Second)
 }
 
 // GetListenAddress returns the multiaddress on which the node is listening
@@ -149,5 +188,18 @@ func (n *KoinosP2PNode) Close() error {
 		return err
 	}
 
+	return nil
+}
+
+// Start starts background goroutines
+func (n *KoinosP2PNode) Start(ctx context.Context) error {
+	err := n.connectInitialPeers()
+	if err != nil {
+		return err
+	}
+	if n.Options.ForceGossip {
+		n.Gossip.StartGossip(ctx)
+	}
+	n.SyncManager.Start(ctx)
 	return nil
 }
