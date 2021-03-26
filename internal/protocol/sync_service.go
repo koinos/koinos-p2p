@@ -137,8 +137,8 @@ func (s *SyncService) GetHeadBlock(ctx context.Context, request GetHeadBlockRequ
 		return err
 	}
 
-	response.ID = rpcResult.ID
-	response.Height = rpcResult.Height
+	response.ID = rpcResult.HeadTopology.ID
+	response.Height = rpcResult.HeadTopology.Height
 	return nil
 }
 

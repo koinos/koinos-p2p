@@ -11,6 +11,12 @@ import (
 	types "github.com/koinos/koinos-types-golang"
 )
 
+// RPC service constants
+const (
+	ChainRPC      = "chain"
+	BlockStoreRPC = "block_store"
+)
+
 // KoinosRPC Implementation of RPC Interface
 type KoinosRPC struct {
 	mq *koinosmq.KoinosMQ
@@ -35,7 +41,7 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
 		return nil, err
@@ -63,10 +69,9 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 
 // ApplyBlock rpc call
 // TODO:  Block should be OpaqueBlock - No it shouldn't
-func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error) {
+func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, error) {
 	blockSub := types.NewSubmitBlockRequest()
 	blockSub.Block = *block
-	blockSub.Topology = *topology
 
 	blockSub.VerifyPassiveData = true
 	blockSub.VerifyBlockSignature = true
@@ -82,7 +87,7 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block, topology
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
 		return false, err
@@ -128,7 +133,7 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMult
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "koinos_block", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +179,7 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multih
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "koinos_block", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
 
 	if err != nil {
 		return nil, err
@@ -222,13 +227,10 @@ func (k *KoinosRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *t
 			return nil, err
 		}
 		block.ActiveData.Unbox()
-		activeData, err := block.ActiveData.GetNative()
-		if err != nil {
-			return nil, err
-		}
+
 		result[i].ID = resp.BlockItems[0].BlockID
 		result[i].Height = resp.BlockItems[0].BlockHeight
-		result[i].Previous = activeData.PreviousBlock
+		result[i].Previous = block.Header.Previous
 	}
 
 	return result, nil
@@ -246,7 +248,7 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 	// TODO:  Redo printf statement with proper logging
 	// log.Printf("GetChainID() response was %s\n", responseBytes)
 
@@ -292,7 +294,7 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsRespon
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", "chain", data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
 		return nil, err
@@ -367,14 +369,7 @@ func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockH
 					return nil, nil, err
 				}
 
-				opaqueActive := block.ActiveData
-				opaqueActive.Unbox()
-				active, err := opaqueActive.GetNative()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				topology.Previous = active.PreviousBlock
+				topology.Previous = block.Header.Previous
 			}
 
 			// Add the topology to the set / slice if it's not already there

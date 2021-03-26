@@ -21,13 +21,13 @@ type TestRPC struct {
 // GetHeadBlock rpc call
 func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error) {
 	hi := types.NewGetHeadInfoResponse()
-	hi.Height = k.Height
-	hi.ID.ID = types.UInt64(k.Height) + k.HeadBlockIDDelta
+	hi.HeadTopology.Height = k.Height
+	hi.HeadTopology.ID.ID = types.UInt64(k.Height) + k.HeadBlockIDDelta
 	return hi, nil
 }
 
 // ApplyBlock rpc call
-func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block, topology *types.BlockTopology) (bool, error) {
+func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, error) {
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
