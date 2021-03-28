@@ -29,7 +29,6 @@ func main() {
 	flag.Parse()
 
 	mq := koinosmq.NewKoinosMQ(*amqpFlag)
-	mq.Start()
 
 	config := options.NewConfig()
 
@@ -50,6 +49,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	mq.Start()
 	log.Printf("Starting node at address: %s\n", node.GetPeerAddress())
 
 	// Wait for a SIGINT or SIGTERM signal
