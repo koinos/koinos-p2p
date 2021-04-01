@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
@@ -15,8 +17,11 @@ import (
 )
 
 func main() {
+	// Seed the random number generator
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	var addr = flag.StringP("listen", "l", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
-	var seed = flag.IntP("seed", "s", 0, "Random seed with which the node will generate an ID")
+	var seed = flag.Uint64P("seed", "s", 0, "Seed with which the node will generate an ID (use 0 for a randomized seed)")
 	var amqpFlag = flag.StringP("amqp", "a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
 	var peerFlags = flag.StringSliceP("peer", "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
 	var directFlags = flag.StringSliceP("direct", "d", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
@@ -41,7 +46,7 @@ func main() {
 	config.NodeOptions.InitialPeers = *peerFlags
 	config.NodeOptions.DirectPeers = *directFlags
 
-	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), int64(*seed), config)
+	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), *seed, config)
 	if err != nil {
 		panic(err)
 	}

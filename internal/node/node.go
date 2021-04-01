@@ -2,11 +2,11 @@ package node
 
 import (
 	"context"
-	crand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	mrand "math/rand"
 	"time"
 
@@ -36,14 +36,19 @@ type KoinosP2PNode struct {
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
-// seed is the random seed to use for key generation. Use a negative number for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed int64, config *options.Config) (*KoinosP2PNode, error) {
+// seed is the random seed to use for key generation. Use 0 for a random seed.
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed uint64, config *options.Config) (*KoinosP2PNode, error) {
 	var r io.Reader
+
 	if seed == 0 {
-		r = crand.Reader
-	} else {
-		r = mrand.New(mrand.NewSource(seed))
+		for seed == 0 {
+			seed = rand.Uint64()
+		}
+
+		log.Printf("Using random seed: %d", seed)
 	}
+
+	r = mrand.New(mrand.NewSource(int64(seed)))
 
 	privateKey, _, err := crypto.GenerateECDSAKeyPair(r)
 	if err != nil {
