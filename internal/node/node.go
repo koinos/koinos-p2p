@@ -45,7 +45,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 		r = mrand.New(mrand.NewSource(seed))
 	}
 
-	privateKey, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
+	privateKey, _, err := crypto.GenerateECDSAKeyPair(r)
 	if err != nil {
 		return nil, err
 	}
