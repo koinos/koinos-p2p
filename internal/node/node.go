@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"math/rand"
-	mrand "math/rand"
 	"time"
 
 	"github.com/koinos/koinos-p2p/internal/options"
@@ -48,7 +47,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 		log.Printf("Using random seed: %d", seed)
 	}
 
-	r = mrand.New(mrand.NewSource(int64(seed)))
+	r = rand.New(rand.NewSource(int64(seed)))
 
 	privateKey, _, err := crypto.GenerateECDSAKeyPair(r)
 	if err != nil {
