@@ -45,12 +45,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	mq.Start()
+
 	err = node.Start(context.Background())
 	if err != nil {
 		panic(err)
 	}
 
-	mq.Start()
 	log.Printf("Starting node at address: %s\n", node.GetPeerAddress())
 
 	// Wait for a SIGINT or SIGTERM signal
