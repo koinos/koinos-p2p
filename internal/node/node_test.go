@@ -104,7 +104,7 @@ func TestBasicNode(t *testing.T) {
 	rpc := NewTestRPC(128)
 
 	// With an explicit seed
-	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 1234, options.NewConfig())
+	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, "test1", options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -117,8 +117,8 @@ func TestBasicNode(t *testing.T) {
 
 	bn.Close()
 
-	// With 0 seed
-	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, 0, options.NewConfig())
+	// With blank seed
+	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, "", options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -126,7 +126,7 @@ func TestBasicNode(t *testing.T) {
 	bn.Close()
 
 	// Give an invalid listen address
-	bn, err = NewKoinosP2PNode(ctx, "---", rpc, 0, options.NewConfig())
+	bn, err = NewKoinosP2PNode(ctx, "---", rpc, "", options.NewConfig())
 	if err == nil {
 		bn.Close()
 		t.Error("Starting a node with an invalid address should give an error, but it did not")

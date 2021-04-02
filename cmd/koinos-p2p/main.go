@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
@@ -15,33 +17,36 @@ import (
 )
 
 func main() {
+	// Seed the random number generator
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	var addr = flag.StringP("listen", "l", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
-	var seed = flag.IntP("seed", "s", 0, "Random seed with which the node will generate an ID")
-	var amqpFlag = flag.StringP("amqp", "a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
-	var peerFlags = flag.StringSliceP("peer", "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
-	var directFlags = flag.StringSliceP("direct", "d", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
-	var pexFlag = flag.BoolP("pex", "x", true, "Exchange peers with other nodes")
-	var bootstrapFlag = flag.BoolP("bootstrap", "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
-	var gossipFlag = flag.BoolP("gossip", "g", true, "Enable gossip mode")
-	var forceGossipFlag = flag.BoolP("force-gossip", "G", false, "Force gossip mode")
-	var verboseFlag = flag.BoolP("verbose", "v", false, "Enable verbose debug messages")
+	var seed = flag.StringP("seed", "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
+	var amqp = flag.StringP("amqp", "a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
+	var peerAddresses = flag.StringSliceP("peer", "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
+	var directAddresses = flag.StringSliceP("direct", "d", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
+	var peerExchange = flag.BoolP("pex", "x", true, "Exchange peers with other nodes")
+	var bootstrap = flag.BoolP("bootstrap", "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
+	var gossip = flag.BoolP("gossip", "g", true, "Enable gossip mode")
+	var forceGossip = flag.BoolP("force-gossip", "G", false, "Force gossip mode")
+	var verbose = flag.BoolP("verbose", "v", false, "Enable verbose debug messages")
 
 	flag.Parse()
 
-	mq := koinosmq.NewKoinosMQ(*amqpFlag)
+	mq := koinosmq.NewKoinosMQ(*amqp)
 
 	config := options.NewConfig()
 
-	config.NodeOptions.EnablePeerExchange = *pexFlag
-	config.NodeOptions.EnableBootstrap = *bootstrapFlag
-	config.NodeOptions.EnableGossip = *gossipFlag
-	config.NodeOptions.EnableDebugMessages = *verboseFlag
-	config.NodeOptions.ForceGossip = *forceGossipFlag
+	config.NodeOptions.EnablePeerExchange = *peerExchange
+	config.NodeOptions.EnableBootstrap = *bootstrap
+	config.NodeOptions.EnableGossip = *gossip
+	config.NodeOptions.EnableDebugMessages = *verbose
+	config.NodeOptions.ForceGossip = *forceGossip
 
-	config.NodeOptions.InitialPeers = *peerFlags
-	config.NodeOptions.DirectPeers = *directFlags
+	config.NodeOptions.InitialPeers = *peerAddresses
+	config.NodeOptions.DirectPeers = *directAddresses
 
-	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), int64(*seed), config)
+	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), *seed, config)
 	if err != nil {
 		panic(err)
 	}
