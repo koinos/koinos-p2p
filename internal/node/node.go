@@ -2,6 +2,8 @@ package node
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,20 +38,8 @@ type KoinosP2PNode struct {
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use 0 for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed uint64, config *options.Config) (*KoinosP2PNode, error) {
-	var r io.Reader
-
-	if seed == 0 {
-		for seed == 0 {
-			seed = rand.Uint64()
-		}
-
-		log.Printf("Using random seed: %d", seed)
-	}
-
-	r = rand.New(rand.NewSource(int64(seed)))
-
-	privateKey, _, err := crypto.GenerateECDSAKeyPair(r)
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed string, config *options.Config) (*KoinosP2PNode, error) {
+	privateKey, err := generatePrivateKey(seed)
 	if err != nil {
 		return nil, err
 	}
@@ -206,4 +196,50 @@ func (n *KoinosP2PNode) Start(ctx context.Context) error {
 	}
 	n.SyncManager.Start(ctx)
 	return nil
+}
+
+// Utility Functions
+
+// generateNewSeed generates a random seed string
+func generateNewSeed(length int) string {
+	// Use the base-58 character set
+	var runes = []rune("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+
+	// Randomly choose up to the given length
+	seed := make([]rune, length)
+	for i := 0; i < length; i++ {
+		seed[i] = runes[rand.Intn(len(runes))]
+	}
+
+	return string(seed)
+}
+
+func seedStringToInt64(seed string) int64 {
+	// Hash the seed string
+	h := sha256.New()
+	h.Write([]byte(seed))
+	sum := h.Sum(nil)
+
+	return int64(binary.BigEndian.Uint64(sum[:8]))
+}
+
+func generatePrivateKey(seed string) (crypto.PrivKey, error) {
+	var r io.Reader
+
+	// If blank seed, generate a new randomized seed
+	if seed == "" {
+		seed = generateNewSeed(8)
+		log.Printf("Using random seed: %s", seed)
+	}
+
+	// Convert the seed to int64 and construct the random source
+	iseed := seedStringToInt64(seed)
+	r = rand.New(rand.NewSource(iseed))
+
+	privateKey, _, err := crypto.GenerateECDSAKeyPair(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return privateKey, nil
 }
