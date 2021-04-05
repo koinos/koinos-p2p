@@ -178,12 +178,16 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multih
 		return nil, err
 	}
 
+	log.Printf("GetBlocksByHeight req: %s\n", data)
+
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
 
 	if err != nil {
 		return nil, err
 	}
+
+	log.Printf("GetBlocksByHeight resp: %s\n", responseBytes)
 
 	responseVariant := types.NewBlockStoreResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
@@ -354,6 +358,7 @@ func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockH
 			return nil, nil, err
 		}
 
+		log.Printf("GetTopologyAtHeight(%d, %d) processing BlockItems of length %d\n", height, numBlocks, len(blocks.BlockItems))
 		// Go through each block and extract its topology
 		for _, blockItem := range blocks.BlockItems {
 			topology := types.BlockTopology{
@@ -381,5 +386,6 @@ func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockH
 		}
 	}
 
+	log.Printf("GetTopologyAtHeight(%d, %d) returning topologySlice of length %d\n", height, numBlocks, len(topologySlice))
 	return forkHeads, topologySlice, nil
 }
