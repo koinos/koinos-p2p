@@ -136,12 +136,6 @@ func (k *TestRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, er
 	return mh, nil
 }
 
-// SetBroadcastHandler
-func (k *TestRPC) SetBroadcastHandler(topic string, handler func(topic string, data []byte)) {
-	// No test currently needs an implementation of this function,
-	// but it has to be defined anyway to satisfy the RPC interface
-}
-
 func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error) {
 	resp := types.NewGetForkHeadsResponse()
 	if k.Height > 0 {

@@ -85,12 +85,6 @@ func (k *TestRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, er
 	return mh, nil
 }
 
-// SetBroadcastHandler
-func (k *TestRPC) SetBroadcastHandler(topic string, handler func(topic string, data []byte)) {
-	// No test currently needs an implementation of this function,
-	// but it has to be defined anyway to satisfy the RPC interface
-}
-
 func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	rpc := TestRPC{ChainID: 1, Height: height, HeadBlockIDDelta: 0, ApplyBlocks: -1}
 	rpc.BlocksApplied = make([]*types.Block, 0)

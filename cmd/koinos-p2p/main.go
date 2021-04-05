@@ -33,7 +33,8 @@ func main() {
 
 	flag.Parse()
 
-	mq := koinosmq.NewKoinosMQ(*amqp)
+	client := koinosmq.NewClient(*amqp)
+	requestHandler := koinosmq.NewRequestHandler(*amqp)
 
 	config := options.NewConfig()
 
@@ -46,12 +47,14 @@ func main() {
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
 
-	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), *seed, config)
+	client.Start()
+
+	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(client), requestHandler, *seed, config)
 	if err != nil {
 		panic(err)
 	}
 
-	mq.Start()
+	requestHandler.Start()
 
 	err = node.Start(context.Background())
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"time"
 
+	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -38,7 +39,7 @@ type KoinosP2PNode struct {
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use 0 for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed string, config *options.Config) (*KoinosP2PNode, error) {
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, requestHandler *koinosmq.RequestHandler, seed string, config *options.Config) (*KoinosP2PNode, error) {
 	privateKey, err := generatePrivateKey(seed)
 	if err != nil {
 		return nil, err
@@ -58,8 +59,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, seed 
 	node.Host = host
 	node.RPC = rpc
 
-	rpc.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
-	rpc.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
+	requestHandler.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
+	requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
 
 	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, config)
 	node.Options = config.NodeOptions

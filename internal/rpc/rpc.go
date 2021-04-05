@@ -14,7 +14,6 @@ type RPC interface {
 	ApplyTransaction(ctx context.Context, block *types.Transaction) (bool, error)
 	GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error)
 	GetChainID(ctx context.Context) (*types.GetChainIDResponse, error)
-	SetBroadcastHandler(topic string, handler func(topic string, data []byte))
 	GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error)
 	GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error)
 	GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error)
