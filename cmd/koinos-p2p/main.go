@@ -40,11 +40,12 @@ func main() {
 	config.NodeOptions.EnablePeerExchange = *peerExchange
 	config.NodeOptions.EnableBootstrap = *bootstrap
 	config.NodeOptions.EnableGossip = *gossip
-	config.NodeOptions.EnableDebugMessages = *verbose
 	config.NodeOptions.ForceGossip = *forceGossip
 
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
+
+	config.SetEnableDebugMessages(*verbose)
 
 	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(mq), *seed, config)
 	if err != nil {
