@@ -8,4 +8,4 @@ RUN go get ./... && \
 
 FROM alpine:latest
 COPY --from=builder /koinos-p2p/koinos_p2p /usr/local/bin
-CMD  /usr/local/bin/koinos_p2p
+ENTRYPOINT [ "/usr/local/bin/koinos_p2p" ]
