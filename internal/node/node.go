@@ -192,7 +192,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) error {
 		return err
 	}
 	if n.Options.ForceGossip {
-		n.Gossip.StartGossip(ctx)
+		n.Gossip.Start(ctx)
 	}
 	n.SyncManager.Start(ctx)
 	return nil

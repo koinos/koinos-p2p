@@ -32,7 +32,7 @@ func (gm *GossipManager) RegisterValidator(val interface{}) {
 }
 
 // StartGossip starts
-func (gm *GossipManager) StartGossip(ctx context.Context, ch chan<- types.VariableBlob) error {
+func (gm *GossipManager) Start(ctx context.Context, ch chan<- types.VariableBlob) error {
 	if gm.enabled {
 		return nil
 	}
@@ -57,7 +57,7 @@ func (gm *GossipManager) StartGossip(ctx context.Context, ch chan<- types.Variab
 }
 
 // StopGossip stops all gossiping on this topic
-func (gm *GossipManager) StopGossip() {
+func (gm *GossipManager) Stop() {
 	if !gm.enabled {
 		return
 	}
@@ -112,32 +112,34 @@ func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, id pee
 }
 
 // StartGossip enables gossip of blocks and transactions
-func (kg *KoinosGossip) StartGossip(ctx context.Context) {
-	go kg.readBlocks(ctx)
-	go kg.readTransactions(ctx)
+func (kg *KoinosGossip) Start(ctx context.Context) {
+	kg.startBlockGossip(ctx)
+	kg.startTransactionGossip(ctx)
 }
 
 // StopGossip stops gossiping on both block and transaction topics
-func (kg *KoinosGossip) StopGossip() {
-	kg.Block.StopGossip()
-	kg.Transaction.StopGossip()
+func (kg *KoinosGossip) Stop() {
+	kg.Block.Stop()
+	kg.Transaction.Stop()
 }
 
-func (kg *KoinosGossip) readBlocks(ctx context.Context) {
-	ch := make(chan types.VariableBlob, 8) // TODO: Magic number
-	kg.Block.RegisterValidator(kg.validateBlock)
-	kg.Block.StartGossip(ctx, ch)
-	log.Println("Started block gossip listener")
+func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
+	go func() {
+		ch := make(chan types.VariableBlob, 8) // TODO: Magic number
+		kg.Block.RegisterValidator(kg.validateBlock)
+		kg.Block.Start(ctx, ch)
+		log.Println("Started block gossip listener")
 
-	// A block that reaches here has already been applied
-	// Any postprocessing that might be needed would happen here
-	for {
-		_, ok := <-ch
-		if !ok {
-			close(ch)
-			return
+		// A block that reaches here has already been applied
+		// Any postprocessing that might be needed would happen here
+		for {
+			_, ok := <-ch
+			if !ok {
+				close(ch)
+				return
+			}
 		}
-	}
+	}()
 }
 
 func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
@@ -161,21 +163,23 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 	return true
 }
 
-func (kg *KoinosGossip) readTransactions(ctx context.Context) {
-	ch := make(chan types.VariableBlob, 32) // TODO: Magic number
-	kg.Transaction.RegisterValidator(kg.validateTransaction)
-	kg.Transaction.StartGossip(ctx, ch)
-	log.Println("Started transaction gossip listener")
+func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
+	go func() {
+		ch := make(chan types.VariableBlob, 32) // TODO: Magic number
+		kg.Transaction.RegisterValidator(kg.validateTransaction)
+		kg.Transaction.Start(ctx, ch)
+		log.Println("Started transaction gossip listener")
 
-	// A transaction that reaches here has already been applied
-	// Any postprocessing that might be needed would happen here
-	for {
-		_, ok := <-ch
-		if !ok {
-			close(ch)
-			return
+		// A transaction that reaches here has already been applied
+		// Any postprocessing that might be needed would happen here
+		for {
+			_, ok := <-ch
+			if !ok {
+				close(ch)
+				return
+			}
 		}
-	}
+	}()
 }
 
 func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
