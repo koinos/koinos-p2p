@@ -114,8 +114,47 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, e
 }
 
 // ApplyTransaction rpc call
-func (k *KoinosRPC) ApplyTransaction(ctx context.Context, block *types.Transaction) (bool, error) {
-	return true, nil
+func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction) (bool, error) {
+	trxSub := types.NewSubmitTransactionRequest()
+	trxSub.Transaction = *trx
+
+	trxSub.VerifyPassiveData = true
+	trxSub.VerifyTransactionSignatures = true
+
+	args := types.ChainRPCRequest{
+		Value: trxSub,
+	}
+	data, err := json.Marshal(args)
+
+	if err != nil {
+		return false, err
+	}
+
+	var responseBytes []byte
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
+
+	if err != nil {
+		return false, err
+	}
+
+	responseVariant := types.NewChainRPCResponse()
+	err = json.Unmarshal(responseBytes, responseVariant)
+	if err != nil {
+		return false, nil
+	}
+
+	response := false
+
+	switch t := responseVariant.Value.(type) {
+	case *types.SubmitTransactionResponse:
+		response = true
+	case *types.ChainErrorResponse:
+		err = errors.New(string(t.ErrorText))
+	default:
+		response = false
+	}
+
+	return response, err
 }
 
 // GetBlocksByID rpc call

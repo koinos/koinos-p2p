@@ -103,7 +103,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 }
 
 func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
-	vb := types.VariableBlob(data)
 	log.Printf("Received broadcast: %v", string(data))
 	switch topic {
 	case "koinos.block.accept":
@@ -117,7 +116,14 @@ func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
 		n.Gossip.Block.PublishMessage(context.Background(), binary)
 
 	case "koinos.transaction.accept":
-		n.Gossip.Transaction.PublishMessage(context.Background(), &vb)
+		trxBroadcast := types.NewTransactionAccepted()
+		err := json.Unmarshal(data, trxBroadcast)
+		if err != nil {
+			return
+		}
+		binary := types.NewVariableBlob()
+		binary = trxBroadcast.Serialize(binary)
+		n.Gossip.Transaction.PublishMessage(context.Background(), binary)
 	}
 }
 
