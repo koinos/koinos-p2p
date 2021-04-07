@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -31,7 +32,7 @@ func (gm *GossipManager) RegisterValidator(val interface{}) {
 	gm.ps.RegisterTopicValidator(gm.topicName, val)
 }
 
-// StartGossip starts
+// Start starts gossiping on this topic
 func (gm *GossipManager) Start(ctx context.Context, ch chan<- types.VariableBlob) error {
 	if gm.enabled {
 		return nil
@@ -56,7 +57,7 @@ func (gm *GossipManager) Start(ctx context.Context, ch chan<- types.VariableBlob
 	return nil
 }
 
-// StopGossip stops all gossiping on this topic
+// Stop stops all gossiping on this topic
 func (gm *GossipManager) Stop() {
 	if !gm.enabled {
 		return
@@ -111,13 +112,13 @@ func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, id pee
 	return &kg
 }
 
-// StartGossip enables gossip of blocks and transactions
+// Start enables gossip of blocks and transactions
 func (kg *KoinosGossip) Start(ctx context.Context) {
 	kg.startBlockGossip(ctx)
 	kg.startTransactionGossip(ctx)
 }
 
-// StopGossip stops gossiping on both block and transaction topics
+// Stop stops gossiping on both block and transaction topics
 func (kg *KoinosGossip) Stop() {
 	kg.Block.Stop()
 	kg.Transaction.Stop()
@@ -155,11 +156,11 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
-		log.Println("Gossiped block not applied")
+		log.Printf("Gossiped block not applied - %s\n", util.BlockString(&blockBroadcast.Block))
 		return false
 	}
 
-	log.Println("Gossiped block applied")
+	log.Printf("Gossiped block applied - %s\n", util.BlockString(&blockBroadcast.Block))
 	return true
 }
 
@@ -194,10 +195,10 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 
 	// TODO: Perhaps these should be cached?
 	if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
-		log.Println("Gossiped transaction not applied")
+		log.Printf("Gossiped transaction not applied - %s\n", util.TransactionString(transaction))
 		return false
 	}
 
-	log.Println("Gossiped transaction applied")
+	log.Printf("Gossiped transaction applied - %s\n", util.TransactionString(transaction))
 	return true
 }

@@ -270,6 +270,25 @@ func TestSyncNoError(t *testing.T) {
 	}
 }
 
+/*func TestGossip(t *testing.T) {
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(5)
+	listenNode, sendNode, _, _, err := createTestClients(listenRPC, sendRPC)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
+
+	listenNode.Gossip.Start(context.Background())
+
+	block := types.NewBlock()
+	block.Header.Height = 123
+	vb := types.NewVariableBlob()
+	vb = block.Serialize(vb)
+	listenNode.Gossip.Block.PublishMessage(context.Background(), vb)
+}*/
+
 // Test different chain IDs
 func TestSyncChainID(t *testing.T) {
 	listenRPC := NewTestRPC(128)
