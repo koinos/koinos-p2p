@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -115,7 +114,7 @@ func (p *BdmiProvider) RescanChan() <-chan bool {
 func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
 
 	if p.Options.EnableDebugMessages {
-		log.Printf("Downloading block %v from peer %v\n", req.Topology, req.PeerID)
+		log.Printf("Downloading block %s from peer %s\n", util.BlockTopologyCmpString(&req.Topology), req.PeerID)
 	}
 
 	resp := BlockDownloadResponse{
@@ -126,8 +125,8 @@ func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadReq
 
 	peerHandler, hasHandler := p.peerHandlers[req.PeerID]
 	if !hasHandler {
-		resp.Err = fmt.Errorf("Tried to download block %v from peer %v, but handler was not registered", req.Topology.ID, req.PeerID)
-		log.Printf("%v\n", resp.Err.Error())
+		resp.Err = fmt.Errorf("Tried to download block %s from peer %s, but handler was not registered", util.BlockTopologyCmpString(&req.Topology), req.PeerID)
+		log.Printf("%s\n", resp.Err.Error())
 	}
 
 	go func() {
@@ -173,7 +172,8 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		block, err := resp.Block.GetNative()
 		if err != nil {
 			applyResult.Err = err
-			log.Printf("Tried to apply block of height %d, got error %s\n", applyResult.Topology.Height, err.Error())
+			log.Printf("Downloaded block not applied - %s from peer %s - Error %s\n",
+				util.BlockTopologyCmpString(&applyResult.Topology), applyResult.PeerID, err.Error())
 		} else {
 			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
 		}
@@ -189,10 +189,8 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		// BlockDownloadManager will drain applyBlockResultChan
 		// BlockDownloadManager will call another peer to download if apply failed
 
-		topoStr, err := json.Marshal(util.BlockTopologyFromCmp(applyResult.Topology))
-		if err != nil {
-			log.Printf("Successfully applied block %v from peer %v\n", topoStr, applyResult.PeerID)
-		}
+		log.Printf("Downloaded block applied - %s from peer %s\n",
+			util.BlockTopologyCmpString(&applyResult.Topology), applyResult.PeerID, err.Error())
 	}()
 }
 
@@ -241,7 +239,7 @@ func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
 		err := p.pollMyTopologyCycle(ctx, &state)
 
 		if err != nil {
-			log.Printf("Error polling my topology: %v\n", err)
+			log.Printf("Error polling my topology: %s\n", err.Error())
 		}
 
 		select {

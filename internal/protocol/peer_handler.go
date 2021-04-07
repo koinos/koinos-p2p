@@ -65,7 +65,7 @@ type PeerHandler struct {
 func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequest) {
 	go func() {
 		if h.Options.EnableDebugMessages {
-			log.Printf("Getting block %d from peer %v using SyncService GetBlocksByID RPC\n", req.Topology.Height, req.PeerID)
+			log.Printf("Request block %s from peer %s\n", util.BlockTopologyCmpString(&req.Topology), h.peerID)
 		}
 		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{util.MultihashFromCmp(req.Topology.ID)}}
 		rpcResp := GetBlocksByIDResponse{}
@@ -78,7 +78,7 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		resp.Topology = req.Topology
 		resp.PeerID = h.peerID
 		if err != nil {
-			log.Printf("Error getting block %v from peer %v: error was %v", req.Topology.ID, h.peerID, err)
+			log.Printf("Error getting block %s from peer %s: error was %s", util.BlockTopologyCmpString(&req.Topology), h.peerID, err.Error())
 			resp.Err = err
 		} else if len(rpcResp.BlockItems) < 1 {
 			log.Printf("  - Got 0 blocks\n")
@@ -87,7 +87,6 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 			vbBlock := types.VariableBlob(rpcResp.BlockItems[0])
 			resp.Block = *types.NewOpaqueBlockFromBlob(&vbBlock)
 			if h.Options.EnableDebugMessages {
-				log.Printf("  - rpcResp value is: %v\n", rpcResp)
 				rpcRespStr, err := json.Marshal(rpcResp)
 				if err == nil {
 					log.Printf("  - Got block: %s\n", rpcRespStr)
@@ -129,8 +128,8 @@ func (h *PeerHandler) heightRangeUpdateLoop(ctx context.Context) {
 
 func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 	// Helper function to call peerHandlerCycle() and send any error to errChan
-	log.Printf("Start peer handler loop for peer %v\n", h.peerID)
-	defer log.Printf("Exit peer handler loop for peer %v\n", h.peerID)
+	log.Printf("Start peer handler loop for peer %s\n", h.peerID)
+	defer log.Printf("Exit peer handler loop for peer %s\n", h.peerID)
 
 	doPeerCycle := func() {
 		err := h.peerHandlerCycle(ctx)
@@ -170,7 +169,7 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//
 
 	if h.Options.EnableDebugMessages {
-		log.Printf("%v: Polling HeightRange{%d,%d}\n", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
+		log.Printf("%s: Polling HeightRange{%d,%d}\n", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
 	}
 
 	req := GetTopologyAtHeightRequest{
@@ -182,17 +181,14 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	defer cancel()
 	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, &resp)
 	if err != nil {
-		log.Printf("%v: error calling GetTopologyAtHeight, error was %v\n", h.peerID, err)
+		log.Printf("%s: error calling GetTopologyAtHeight, error was %s\n", h.peerID, err.Error())
 		return err
 	}
 
 	for _, b := range resp.BlockTopology {
 		hasBlockMsg := PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}
 		if h.Options.EnableDebugMessages {
-			topoStr, err := json.Marshal(b)
-			if err == nil {
-				log.Printf("%v: Sending PeerHasBlock message %s\n", h.peerID, topoStr)
-			}
+			log.Printf("%s: Sending PeerHasBlock message for block %s\n", h.peerID, util.BlockTopologyCmpString(&hasBlockMsg.Block))
 		}
 
 		select {
