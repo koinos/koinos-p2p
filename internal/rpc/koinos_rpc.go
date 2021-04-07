@@ -379,6 +379,8 @@ func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockH
 	return forkHeads, topologySlice, nil
 }
 
+// IsConnectedToBlockStore returns if the AMQP connection can currently communicate
+// with the block store microservice.
 func (k *KoinosRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 	args := types.BlockStoreRequest{
 		Value: &types.BlockStoreReservedRequest{},
@@ -406,6 +408,8 @@ func (k *KoinosRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// IsConnectedToChain returns if the AMQP connection can currently communicate
+// with the chain microservice.
 func (k *KoinosRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
 	args := types.ChainRPCRequest{
 		Value: &types.ChainReservedRequest{},
