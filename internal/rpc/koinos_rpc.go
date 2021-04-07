@@ -19,11 +19,11 @@ const (
 
 // KoinosRPC Implementation of RPC Interface
 type KoinosRPC struct {
-	mq *koinosmq.KoinosMQ
+	mq *koinosmq.Client
 }
 
 // NewKoinosRPC factory
-func NewKoinosRPC(mq *koinosmq.KoinosMQ) *KoinosRPC {
+func NewKoinosRPC(mq *koinosmq.Client) *KoinosRPC {
 	rpc := new(KoinosRPC)
 	rpc.mq = mq
 	return rpc
@@ -274,11 +274,6 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 	}
 
 	return response, err
-}
-
-// SetBroadcastHandler allows a function to be called for every broadcast block
-func (k *KoinosRPC) SetBroadcastHandler(topic string, handler func(topic string, data []byte)) {
-	k.mq.SetBroadcastHandler(topic, handler)
 }
 
 // GetForkHeads rpc call

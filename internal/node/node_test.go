@@ -85,12 +85,6 @@ func (k *TestRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, er
 	return mh, nil
 }
 
-// SetBroadcastHandler
-func (k *TestRPC) SetBroadcastHandler(topic string, handler func(topic string, data []byte)) {
-	// No test currently needs an implementation of this function,
-	// but it has to be defined anyway to satisfy the RPC interface
-}
-
 func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	rpc := TestRPC{ChainID: 1, Height: height, HeadBlockIDDelta: 0, ApplyBlocks: -1}
 	rpc.BlocksApplied = make([]*types.Block, 0)
@@ -104,7 +98,7 @@ func TestBasicNode(t *testing.T) {
 	rpc := NewTestRPC(128)
 
 	// With an explicit seed
-	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, "test1", options.NewConfig())
+	bn, err := NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, nil, "test1", options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -118,7 +112,7 @@ func TestBasicNode(t *testing.T) {
 	bn.Close()
 
 	// With blank seed
-	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, "", options.NewConfig())
+	bn, err = NewKoinosP2PNode(ctx, "/ip4/127.0.0.1/tcp/8765", rpc, nil, "", options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -126,7 +120,7 @@ func TestBasicNode(t *testing.T) {
 	bn.Close()
 
 	// Give an invalid listen address
-	bn, err = NewKoinosP2PNode(ctx, "---", rpc, "", options.NewConfig())
+	bn, err = NewKoinosP2PNode(ctx, "---", rpc, nil, "", options.NewConfig())
 	if err == nil {
 		bn.Close()
 		t.Error("Starting a node with an invalid address should give an error, but it did not")
