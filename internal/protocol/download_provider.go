@@ -190,7 +190,7 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		// BlockDownloadManager will call another peer to download if apply failed
 
 		log.Printf("Downloaded block applied - %s from peer %s\n",
-			util.BlockTopologyCmpString(&applyResult.Topology), applyResult.PeerID, err.Error())
+			util.BlockTopologyCmpString(&applyResult.Topology), applyResult.PeerID)
 	}()
 }
 
