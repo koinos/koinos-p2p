@@ -59,8 +59,12 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	node.Host = host
 	node.RPC = rpc
 
-	requestHandler.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
-	requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
+	if requestHandler != nil {
+		requestHandler.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
+		requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
+	} else {
+		log.Println("Starting P2P node without broadcast listeners")
+	}
 
 	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, config)
 	node.Options = config.NodeOptions

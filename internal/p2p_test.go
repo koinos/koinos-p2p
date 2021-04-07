@@ -219,7 +219,7 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 	config.DownloadManagerOptions.MaxDownloadDepth = 15
 	config.DownloadManagerOptions.MaxDownloadsInFlight = 25
 	config.SetEnableDebugMessages(false)
-	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, "test1", config)
+	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, nil, "test1", config)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -228,7 +228,7 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 		return nil, nil, nil, nil, err
 	}
 
-	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, "test2", config)
+	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, nil, "test2", config)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
