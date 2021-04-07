@@ -95,7 +95,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
 		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
-		pubsub.WithMessageIdFn(generateMessageId),
+		pubsub.WithMessageIdFn(generateMessageID),
 	)
 	if err != nil {
 		return nil, err
