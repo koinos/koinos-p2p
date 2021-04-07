@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
@@ -93,6 +95,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
 		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
+		pubsub.WithMessageIdFn(generateMessageId),
 	)
 	if err != nil {
 		return nil, err
@@ -253,4 +256,14 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 	}
 
 	return privateKey, nil
+}
+
+func generateMessageID(msg *pb.Message) string {
+	// Hash the data
+	h := sha256.New()
+	h.Write(msg.Data)
+	sum := h.Sum(nil)
+
+	// Base-64 encode it for compactness
+	return base64.RawStdEncoding.EncodeToString(sum)
 }
