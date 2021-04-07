@@ -50,6 +50,30 @@ func main() {
 
 	client.Start()
 
+	koinosRPC := rpc.NewKoinosRPC(client)
+
+	log.Println("Attemtping to connect to block_store...")
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		val, _ := koinosRPC.IsConnectedToBlockStore(ctx)
+		if val {
+			log.Println("Connected")
+			break
+		}
+	}
+
+	log.Println("Attempting to connect to chain...")
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		val, _ := koinosRPC.IsConnectedToChain(ctx)
+		if val {
+			log.Println("Connected")
+			break
+		}
+	}
+
 	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(client), requestHandler, *seed, config)
 	if err != nil {
 		panic(err)

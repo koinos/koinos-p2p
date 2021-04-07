@@ -378,3 +378,57 @@ func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockH
 
 	return forkHeads, topologySlice, nil
 }
+
+func (k *KoinosRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
+	args := types.BlockStoreRequest{
+		Value: &types.BlockStoreReservedRequest{},
+	}
+
+	data, err := json.Marshal(args)
+
+	if err != nil {
+		return false, err
+	}
+
+	var responseBytes []byte
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
+
+	if err != nil {
+		return false, err
+	}
+
+	responseVariant := types.NewBlockStoreResponse()
+	err = json.Unmarshal(responseBytes, responseVariant)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (k *KoinosRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
+	args := types.ChainRPCRequest{
+		Value: &types.ChainReservedRequest{},
+	}
+
+	data, err := json.Marshal(args)
+
+	if err != nil {
+		return false, err
+	}
+
+	var responseBytes []byte
+	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
+
+	if err != nil {
+		return false, err
+	}
+
+	responseVariant := types.NewChainRPCResponse()
+	err = json.Unmarshal(responseBytes, responseVariant)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
