@@ -56,7 +56,7 @@ func main() {
 
 	koinosRPC := rpc.NewKoinosRPC(client)
 
-	log.Println("Attemtping to connect to block_store...")
+	log.Println("Attempting to connect to block_store...")
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
