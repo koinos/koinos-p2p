@@ -11,6 +11,11 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 )
 
+const (
+	transactionBuffer int = 32
+	blockBuffer       int = 8
+)
+
 // GossipManager manages gossip on a given topic
 type GossipManager struct {
 	ps        *pubsub.PubSub
@@ -18,12 +23,11 @@ type GossipManager struct {
 	sub       *pubsub.Subscription
 	topicName string
 	enabled   bool
-	myPeerID  peer.ID
 }
 
 // NewGossipManager creates and returns a new instance of gossipManager
-func NewGossipManager(ps *pubsub.PubSub, topicName string, id peer.ID) *GossipManager {
-	gm := GossipManager{ps: ps, topicName: topicName, enabled: false, myPeerID: id}
+func NewGossipManager(ps *pubsub.PubSub, topicName string) *GossipManager {
+	gm := GossipManager{ps: ps, topicName: topicName, enabled: false}
 	return &gm
 }
 
@@ -89,9 +93,7 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.Varia
 			return
 		}
 
-		if msg.GetFrom() != gm.myPeerID {
-			ch <- types.VariableBlob(msg.Data)
-		}
+		ch <- types.VariableBlob(msg.Data)
 	}
 }
 
@@ -101,13 +103,14 @@ type KoinosGossip struct {
 	Block       *GossipManager
 	Transaction *GossipManager
 	PubSub      *pubsub.PubSub
+	myPeerID    peer.ID
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
 func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, id peer.ID) *KoinosGossip {
-	block := NewGossipManager(ps, "koinos.blocks", id)
-	transaction := NewGossipManager(ps, "koinos.transactions", id)
-	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, PubSub: ps}
+	block := NewGossipManager(ps, "koinos.blocks")
+	transaction := NewGossipManager(ps, "koinos.transactions")
+	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, PubSub: ps, myPeerID: id}
 
 	return &kg
 }
@@ -126,7 +129,7 @@ func (kg *KoinosGossip) Stop() {
 
 func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 	go func() {
-		ch := make(chan types.VariableBlob, 8) // TODO: Magic number
+		ch := make(chan types.VariableBlob, blockBuffer)
 		kg.Block.RegisterValidator(kg.validateBlock)
 		kg.Block.Start(ctx, ch)
 		log.Println("Started block gossip listener")
@@ -153,6 +156,11 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 		return false
 	}
 
+	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
+	if msg.GetFrom() != kg.myPeerID {
+		return true
+	}
+
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
@@ -166,7 +174,7 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 
 func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 	go func() {
-		ch := make(chan types.VariableBlob, 32) // TODO: Magic number
+		ch := make(chan types.VariableBlob, transactionBuffer)
 		kg.Transaction.RegisterValidator(kg.validateTransaction)
 		kg.Transaction.Start(ctx, ch)
 		log.Println("Started transaction gossip listener")
@@ -191,6 +199,11 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	if err != nil { // TODO: Bad message, assign naughty points
 		log.Println("Gossiped transaction is corrupt")
 		return false
+	}
+
+	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
+	if msg.GetFrom() != kg.myPeerID {
+		return true
 	}
 
 	// TODO: Perhaps these should be cached?
