@@ -16,6 +16,10 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
+const (
+	amqpConnectAttemptSeconds = 3
+)
+
 func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -54,7 +58,7 @@ func main() {
 
 	log.Println("Attemtping to connect to block_store...")
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToBlockStore(ctx)
 		if val {
@@ -65,7 +69,7 @@ func main() {
 
 	log.Println("Attempting to connect to chain...")
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToChain(ctx)
 		if val {
