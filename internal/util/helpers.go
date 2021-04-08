@@ -21,7 +21,7 @@ func BlockString(block *types.Block) string {
 	} else {
 		prevID = prevID[1 : len(prevID)-1]
 	}
-	return fmt.Sprintf("%d:%s---%s", block.Header.Height, string(id), string(prevID))
+	return fmt.Sprintf("Height:%d ID:%s Prev:%s", block.Header.Height, string(id), string(prevID))
 }
 
 // TransactionString returns a string containing the given transaction's ID
@@ -44,5 +44,5 @@ func BlockTopologyCmpString(topo *BlockTopologyCmp) string {
 	} else {
 		prevID = prevID[1 : len(prevID)-1]
 	}
-	return fmt.Sprintf("%d:%s---%s", topo.Height, string(id), string(prevID))
+	return fmt.Sprintf("Height:%d ID:%s Prev:%s", topo.Height, string(id), string(prevID))
 }
