@@ -183,6 +183,14 @@ func (k *TestRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHei
 	return forkHeads, result, nil
 }
 
+func (k *TestRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
+func (k *TestRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
 func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	rpc := TestRPC{ChainID: 1, Height: height, HeadBlockIDDelta: 0, ApplyBlocks: -1}
 	rpc.BlocksApplied = make([]*types.Block, 0)

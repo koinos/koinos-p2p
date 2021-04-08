@@ -85,6 +85,14 @@ func (k *TestRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, er
 	return mh, nil
 }
 
+func (k *TestRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
+func (k *TestRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
+	return true, nil
+}
+
 func NewTestRPC(height types.BlockHeightType) *TestRPC {
 	rpc := TestRPC{ChainID: 1, Height: height, HeadBlockIDDelta: 0, ApplyBlocks: -1}
 	rpc.BlocksApplied = make([]*types.Block, 0)
