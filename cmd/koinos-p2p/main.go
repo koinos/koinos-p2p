@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -14,6 +16,33 @@ import (
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	flag "github.com/spf13/pflag"
+	"gopkg.in/yaml.v3"
+)
+
+const (
+	baseDirOption      = "basedir"
+	amqpOption         = "amqp"
+	listenOption       = "listen"
+	seedOption         = "seed"
+	peerOption         = "peer"
+	directOption       = "direct"
+	peerExchangeOption = "pex"
+	bootstrapOption    = "bootstrap"
+	gossipOption       = "gossip"
+	forceGossipOption  = "forceGossip"
+	verboseOption      = "verbose"
+)
+
+const (
+	baseDirDefault      = ".koinos"
+	amqpDefault         = "amqp://guest.guest@localhost:5672/"
+	listenDefault       = "/ip4/127.0.0.1/tcp/8888"
+	seedDefault         = ""
+	peerExchangeDefault = true
+	bootstrapDefault    = false
+	gossipDefault       = true
+	forceGossipDefault  = false
+	verboseDefault      = false
 )
 
 const (
@@ -24,18 +53,56 @@ func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	var addr = flag.StringP("listen", "l", "/ip4/127.0.0.1/tcp/8888", "The multiaddress on which the node will listen")
-	var seed = flag.StringP("seed", "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
-	var amqp = flag.StringP("amqp", "a", "amqp://guest:guest@localhost:5672/", "AMQP server URL")
-	var peerAddresses = flag.StringSliceP("peer", "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
-	var directAddresses = flag.StringSliceP("direct", "d", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
-	var peerExchange = flag.BoolP("pex", "x", true, "Exchange peers with other nodes")
-	var bootstrap = flag.BoolP("bootstrap", "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
-	var gossip = flag.BoolP("gossip", "g", true, "Enable gossip mode")
-	var forceGossip = flag.BoolP("force-gossip", "G", false, "Force gossip mode")
-	var verbose = flag.BoolP("verbose", "v", false, "Enable verbose debug messages")
+	var baseDir = flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
+	var amqp = flag.StringP(amqpOption, "a", "", "AMQP server URL")
+	var addr = flag.StringP(listenOption, "l", "", "The multiaddress on which the node will listen")
+	var seed = flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
+	var peerAddresses = flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
+	var directAddresses = flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
+	var peerExchange = flag.BoolP(peerExchangeOption, "x", true, "Exchange peers with other nodes")
+	var bootstrap = flag.BoolP(bootstrapOption, "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
+	var gossip = flag.BoolP(gossipOption, "g", true, "Enable gossip mode")
+	var forceGossip = flag.BoolP(forceGossipOption, "G", false, "Force gossip mode")
+	var verbose = flag.BoolP(verboseOption, "v", false, "Enable verbose debug messages")
 
 	flag.Parse()
+
+	if !filepath.IsAbs(*baseDir) {
+		homedir, err := os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
+		*baseDir = filepath.Join(homedir, *baseDir)
+	}
+
+	ensureDir(*baseDir)
+
+	yamlConfigPath := filepath.Join(*baseDir, "config.yml")
+	if _, err := os.Stat(yamlConfigPath); os.IsNotExist(err) {
+		yamlConfigPath = filepath.Join(*baseDir, "config.yaml")
+	}
+
+	yamlConfig := yamlConfig{}
+	if _, err := os.Stat(yamlConfigPath); err == nil {
+		data, err := ioutil.ReadFile(yamlConfigPath)
+		if err != nil {
+			panic(err)
+		}
+
+		err = yaml.Unmarshal(data, &yamlConfig)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		yamlConfig.Global = make(map[string]interface{})
+		yamlConfig.P2P = make(map[string]interface{})
+	}
+
+	*amqp = getStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
+	*addr = getStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
+	*seed = getStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
+	*peerAddresses = getStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P)
+	*directAddresses = getStringSliceOption(directOption, *directAddresses, yamlConfig.P2P)
 
 	client := koinosmq.NewClient(*amqp)
 	requestHandler := koinosmq.NewRequestHandler(*amqp)
@@ -99,4 +166,49 @@ func main() {
 	log.Println("Shutting down node...")
 	// Shut the node down
 	node.Close()
+}
+
+type yamlConfig struct {
+	Global map[string]interface{} `yaml:"global,omitempty"`
+	P2P    map[string]interface{} `yaml:"p2p,omitempty"`
+}
+
+func getStringOption(key string, defaultValue string, cliArg string, configs ...map[string]interface{}) string {
+	if cliArg != "" {
+		return cliArg
+	}
+
+	for _, config := range configs {
+		if v, ok := config[key]; ok {
+			if option, ok := v.(string); ok {
+				return option
+			}
+		}
+	}
+
+	return defaultValue
+}
+
+func getStringSliceOption(key string, cliArg []string, configs ...map[string]interface{}) []string {
+	stringSlice := cliArg
+
+	for _, config := range configs {
+		if v, ok := config[key]; ok {
+			if slice, ok := v.([]interface{}); ok {
+				for _, option := range slice {
+					if str, ok := option.(string); ok {
+						stringSlice = append(stringSlice, str)
+					}
+				}
+			}
+		}
+	}
+
+	return stringSlice
+}
+
+func ensureDir(dir string) {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		os.MkdirAll(dir, os.ModePerm)
+	}
 }
