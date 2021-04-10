@@ -16,6 +16,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	flag "github.com/spf13/pflag"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -49,6 +50,38 @@ const (
 	amqpConnectAttemptSeconds = 3
 )
 
+func setupLogger() {
+	logger, _ := zap.NewDevelopment()
+	zap.ReplaceGlobals(logger)
+
+	zap.S().Infow("hallo")
+}
+
+func initYamlConfig(baseDir string) *yamlConfig {
+	yamlConfigPath := filepath.Join(baseDir, "config.yml")
+	if _, err := os.Stat(yamlConfigPath); os.IsNotExist(err) {
+		yamlConfigPath = filepath.Join(baseDir, "config.yaml")
+	}
+
+	yamlConfig := yamlConfig{}
+	if _, err := os.Stat(yamlConfigPath); err == nil {
+		data, err := ioutil.ReadFile(yamlConfigPath)
+		if err != nil {
+			panic(err)
+		}
+
+		err = yaml.Unmarshal(data, &yamlConfig)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		yamlConfig.Global = make(map[string]interface{})
+		yamlConfig.P2P = make(map[string]interface{})
+	}
+
+	return &yamlConfig
+}
+
 func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -77,26 +110,7 @@ func main() {
 
 	ensureDir(*baseDir)
 
-	yamlConfigPath := filepath.Join(*baseDir, "config.yml")
-	if _, err := os.Stat(yamlConfigPath); os.IsNotExist(err) {
-		yamlConfigPath = filepath.Join(*baseDir, "config.yaml")
-	}
-
-	yamlConfig := yamlConfig{}
-	if _, err := os.Stat(yamlConfigPath); err == nil {
-		data, err := ioutil.ReadFile(yamlConfigPath)
-		if err != nil {
-			panic(err)
-		}
-
-		err = yaml.Unmarshal(data, &yamlConfig)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		yamlConfig.Global = make(map[string]interface{})
-		yamlConfig.P2P = make(map[string]interface{})
-	}
+	yamlConfig := initYamlConfig(*baseDir)
 
 	*amqp = getStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
 	*addr = getStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
