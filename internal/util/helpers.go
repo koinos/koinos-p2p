@@ -48,7 +48,7 @@ func BlockTopologyCmpString(topo *BlockTopologyCmp) string {
 	return fmt.Sprintf("Height:%d ID:%s Prev:%s", topo.Height, string(id), string(prevID))
 }
 
-// generateNewSeed generates a random seed string
+// GenerateBase58ID generates a random seed string
 func GenerateBase58ID(length int) string {
 	// Use the base-58 character set
 	var runes = []rune("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")

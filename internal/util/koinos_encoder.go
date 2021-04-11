@@ -147,34 +147,34 @@ func (ke *KoinosEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) 
 }
 
 const (
-	Black Color = iota + 30
-	Red
-	Green
-	Yellow
-	Blue
-	Magenta
-	Cyan
-	White
+	black color = iota + 30
+	red
+	green
+	yellow
+	blue
+	magenta
+	cyan
+	white
 )
 
-type Color uint8
+type color uint8
 
 var (
-	_levelToColor = map[zapcore.Level]Color{
-		zapcore.DebugLevel:  Blue,
-		zapcore.InfoLevel:   Green,
-		zapcore.WarnLevel:   Yellow,
-		zapcore.ErrorLevel:  Red,
-		zapcore.DPanicLevel: Red,
-		zapcore.PanicLevel:  Red,
-		zapcore.FatalLevel:  Red,
+	_levelToColor = map[zapcore.Level]color{
+		zapcore.DebugLevel:  blue,
+		zapcore.InfoLevel:   green,
+		zapcore.WarnLevel:   yellow,
+		zapcore.ErrorLevel:  red,
+		zapcore.DPanicLevel: red,
+		zapcore.PanicLevel:  red,
+		zapcore.FatalLevel:  red,
 	}
-	_unknownLevelColor = Red
+	_unknownLevelColor = red
 
 	_koinosColorString = make(map[zapcore.Level]string, len(_levelToColor))
 )
 
-func (c Color) AddColor(s string) string {
+func (c color) AddColor(s string) string {
 	return fmt.Sprintf("\x1b[%dm%s\x1b[0m", uint8(c), s)
 }
 
@@ -184,10 +184,16 @@ func init() {
 	}
 }
 
+// KoinosColorLevelEncoder implements the Koinos log level color encoding standard
 func KoinosColorLevelEncoder(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	s, ok := _koinosColorString[l]
 	if !ok {
 		s = _unknownLevelColor.AddColor(l.String())
 	}
 	enc.AppendString(s)
+}
+
+// KoinosTimeEncoder encodes timestamps in the Koinos human-readable log standard
+func KoinosTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(t.Format("2006-01-02 15:04:05.000000"))
 }

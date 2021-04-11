@@ -257,7 +257,7 @@ func initBaseDir(baseDir string) string {
 func initLogger(level zapcore.Level, logFilename string, appID string) {
 	// Construct production encoder config, set time format
 	e := zap.NewDevelopmentEncoderConfig()
-	e.EncodeTime = KoinosTimeEncoder
+	e.EncodeTime = util.KoinosTimeEncoder
 	e.EncodeLevel = util.KoinosColorLevelEncoder
 
 	// Construct JSON encoder for file output
@@ -291,10 +291,6 @@ func initLogger(level zapcore.Level, logFilename string, appID string) {
 
 	// Set global logger
 	zap.ReplaceGlobals(logger)
-}
-
-func KoinosTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-	enc.AppendString(t.Format("2006-01-02 15:04:05.000000"))
 }
 
 func initYamlConfig(baseDir string) *yamlConfig {
