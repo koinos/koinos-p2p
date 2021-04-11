@@ -14,9 +14,6 @@ type NodeOptions struct {
 	// Set to true to enable gossip mode at all times
 	ForceGossip bool
 
-	// Set to true to enable verbose logging
-	EnableDebugMessages bool
-
 	// Peers to initially connect
 	InitialPeers []string
 
@@ -27,12 +24,11 @@ type NodeOptions struct {
 // NewNodeOptions creates a NodeOptions object which controls how p2p works
 func NewNodeOptions() *NodeOptions {
 	return &NodeOptions{
-		EnablePeerExchange:  true,
-		EnableBootstrap:     false,
-		EnableGossip:        true,
-		ForceGossip:         false,
-		EnableDebugMessages: false,
-		InitialPeers:        make([]string, 0),
-		DirectPeers:         make([]string, 0),
+		EnablePeerExchange: true,
+		EnableBootstrap:    false,
+		EnableGossip:       true,
+		ForceGossip:        false,
+		InitialPeers:       make([]string, 0),
+		DirectPeers:        make([]string, 0),
 	}
 }

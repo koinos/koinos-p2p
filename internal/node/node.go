@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
+	"go.uber.org/zap"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -65,7 +65,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 		requestHandler.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
 		requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
 	} else {
-		log.Println("Starting P2P node without broadcast listeners")
+		zap.L().Info("Starting P2P node without broadcast listeners")
 	}
 
 	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, config)
@@ -74,7 +74,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {
 		// TODO:  When https://github.com/libp2p/go-libp2p-pubsub/issues/364 is fixed, don't monkey-patch global variables like this
-		log.Printf("Bootstrap node enabled\n")
+		zap.L().Info("Bootstrap node enabled")
 		pubsub.GossipSubD = 0
 		pubsub.GossipSubDlo = 0
 		pubsub.GossipSubDhi = 0
@@ -106,7 +106,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 }
 
 func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
-	log.Printf("Received broadcast: %v", string(data))
+	zap.S().Debug("Received broadcast: %v", string(data))
 	switch topic {
 	case "koinos.block.accept":
 		blockBroadcast := types.NewBlockAccepted()
@@ -149,7 +149,7 @@ func (n *KoinosP2PNode) connectInitialPeers() error {
 	// Connect to a peer
 	for _, pid := range n.Options.InitialPeers {
 		if pid != "" {
-			log.Printf("Connecting to initial peer %s and sending broadcast\n", pid)
+			zap.S().Info("Connecting to initial peer %s and sending broadcast", pid)
 			_, err := n.ConnectToPeer(pid)
 			if err != nil {
 				return err
@@ -243,7 +243,7 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 	// If blank seed, generate a new randomized seed
 	if seed == "" {
 		seed = generateNewSeed(8)
-		log.Printf("Using random seed: %s", seed)
+		zap.S().Info("Using random seed: %s", seed)
 	}
 
 	// Convert the seed to int64 and construct the random source

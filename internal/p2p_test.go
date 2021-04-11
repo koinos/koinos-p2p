@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 	"github.com/multiformats/go-multiaddr"
+	"go.uber.org/zap"
 )
 
 // TestRPC implements dummy blockchain RPC.
@@ -70,7 +70,6 @@ func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse,
 
 // ApplyBlock rpc call
 func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, error) {
-	// log.Printf("ApplyBlock %d\n", topology.Height)
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
@@ -108,7 +107,7 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultih
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
 	if height+types.BlockHeightType(numBlocks) > k.Height+types.BlockHeightType(len(k.BlocksApplied)) {
-		log.Printf("Error in GetBlocksByHeight()\n")
+		zap.L().Error("Error in GetBlocksByHeight()")
 		return nil, fmt.Errorf("Requested block exceeded height")
 	}
 
@@ -141,7 +140,6 @@ func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse
 	if k.Height > 0 {
 		resp.ForkHeads = types.VectorBlockTopology{*k.getDummyTopologyAtHeight(k.Height)}
 		resp.LastIrreversibleBlock = *k.getDummyTopologyAtHeight(1)
-		// log.Printf("GetForkHeads() response: %v\n", resp.ForkHeads)
 	}
 	return resp, nil
 }
@@ -226,7 +224,6 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 	config.BdmiProviderOptions.HeightInterestReach = 50
 	config.DownloadManagerOptions.MaxDownloadDepth = 15
 	config.DownloadManagerOptions.MaxDownloadsInFlight = 25
-	config.SetEnableDebugMessages(false)
 	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, nil, "test1", config)
 	if err != nil {
 		return nil, nil, nil, nil, err
