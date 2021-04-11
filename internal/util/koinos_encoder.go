@@ -11,7 +11,7 @@ import (
 
 var (
 	_pool = buffer.NewPool()
-	// Get retrieves a buffer from the pool, creating one if necessary.
+	// GetPool retrieves a buffer from the pool, creating one if necessary.
 	GetPool = _pool.Get
 )
 
@@ -80,20 +80,24 @@ func putSliceEncoder(e *sliceArrayEncoder) {
 	_sliceEncoderPool.Put(e)
 }
 
+// KoinosEncoder implements custon koinos log formatting
 type KoinosEncoder struct {
 	*zapcore.MapObjectEncoder
 	*zapcore.EncoderConfig
 	ConsoleSeparator string
 }
 
+// NewKoinosEncoder creates and returns a new instance of KoinosEncoder
 func NewKoinosEncoder(cfg zapcore.EncoderConfig) zapcore.Encoder {
 	return &KoinosEncoder{EncoderConfig: &cfg, ConsoleSeparator: ""}
 }
 
+// Clone clones KoinosEncoder
 func (ke *KoinosEncoder) Clone() zapcore.Encoder {
 	return &KoinosEncoder{}
 }
 
+// EncodeEntry encodes the given entry data
 func (ke *KoinosEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	line := GetPool()
 
