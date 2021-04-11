@@ -99,6 +99,11 @@ func main() {
 	}
 	initLogger(level, logFilename)
 
+	zap.L().Debug("Debug message")
+	zap.L().Info("Info message")
+	zap.L().Warn("Warn message")
+	zap.L().Error("Error message")
+
 	*amqp = getStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
 	*addr = getStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
 	*seed = getStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
@@ -247,8 +252,8 @@ func initBaseDir(baseDir string) string {
 func initLogger(level zapcore.Level, logFilename string) {
 	// Construct production encoder config, set time format
 	e := zap.NewDevelopmentEncoderConfig()
-	e.EncodeTime = zapcore.ISO8601TimeEncoder
-	e.EncodeLevel = zapcore.LowercaseColorLevelEncoder
+	e.EncodeTime = KoinosTimeEncoder
+	e.EncodeLevel = util.KoinosColorLevelEncoder
 
 	// Construct JSON encoder for file output
 	fileEncoder := zapcore.NewJSONEncoder(e)
@@ -281,6 +286,10 @@ func initLogger(level zapcore.Level, logFilename string) {
 
 	// Set global logger
 	zap.ReplaceGlobals(logger)
+}
+
+func KoinosTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(t.Format("2006-01-02 15:04:05.000000"))
 }
 
 func initYamlConfig(baseDir string) *yamlConfig {
