@@ -17,6 +17,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-p2p/internal/util"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -247,12 +248,13 @@ func initLogger(level zapcore.Level, logFilename string) {
 	// Construct production encoder config, set time format
 	e := zap.NewDevelopmentEncoderConfig()
 	e.EncodeTime = zapcore.ISO8601TimeEncoder
+	e.EncodeLevel = zapcore.LowercaseColorLevelEncoder
 
 	// Construct JSON encoder for file output
 	fileEncoder := zapcore.NewJSONEncoder(e)
 
 	// Construct Console encoder for console output
-	consoleEncoder := zapcore.NewConsoleEncoder(e)
+	consoleEncoder := util.NewKoinosEncoder(e)
 
 	// Construct lumberjack log roller
 	lj := &lumberjack.Logger{
