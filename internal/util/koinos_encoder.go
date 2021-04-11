@@ -85,11 +85,12 @@ type KoinosEncoder struct {
 	*zapcore.MapObjectEncoder
 	*zapcore.EncoderConfig
 	ConsoleSeparator string
+	AppID            string
 }
 
 // NewKoinosEncoder creates and returns a new instance of KoinosEncoder
-func NewKoinosEncoder(cfg zapcore.EncoderConfig) zapcore.Encoder {
-	return &KoinosEncoder{EncoderConfig: &cfg, ConsoleSeparator: ""}
+func NewKoinosEncoder(cfg zapcore.EncoderConfig, appID string) zapcore.Encoder {
+	return &KoinosEncoder{EncoderConfig: &cfg, ConsoleSeparator: "", AppID: appID}
 }
 
 // Clone clones KoinosEncoder
@@ -105,6 +106,10 @@ func (ke *KoinosEncoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) 
 	if ke.TimeKey != "" && ke.EncodeTime != nil {
 		ke.EncodeTime(ent.Time, arr)
 	}
+
+	arr.AppendString(" (")
+	arr.AppendString(ke.AppID)
+	arr.AppendString(")")
 
 	arr.AppendString(" [")
 	if ent.Caller.Defined {

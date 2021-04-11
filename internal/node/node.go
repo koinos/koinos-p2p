@@ -15,6 +15,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/protocol"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 	"go.uber.org/zap"
 
@@ -212,21 +213,9 @@ func (n *KoinosP2PNode) Start(ctx context.Context) error {
 	return nil
 }
 
+// ----------------------------------------------------------------------------
 // Utility Functions
-
-// generateNewSeed generates a random seed string
-func generateNewSeed(length int) string {
-	// Use the base-58 character set
-	var runes = []rune("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
-
-	// Randomly choose up to the given length
-	seed := make([]rune, length)
-	for i := 0; i < length; i++ {
-		seed[i] = runes[rand.Intn(len(runes))]
-	}
-
-	return string(seed)
-}
+// ----------------------------------------------------------------------------
 
 func seedStringToInt64(seed string) int64 {
 	// Hash the seed string
@@ -242,7 +231,7 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 
 	// If blank seed, generate a new randomized seed
 	if seed == "" {
-		seed = generateNewSeed(8)
+		seed = util.GenerateBase58ID(8)
 		zap.S().Info("Using random seed: %s", seed)
 	}
 

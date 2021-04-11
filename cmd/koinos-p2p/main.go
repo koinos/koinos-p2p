@@ -37,6 +37,7 @@ const (
 	gossipOption       = "gossip"
 	forceGossipOption  = "forceGossip"
 	logLevelOption     = "log-level"
+	instanceIDOption   = "instance-id"
 )
 
 const (
@@ -50,6 +51,7 @@ const (
 	forceGossipDefault  = false
 	verboseDefault      = false
 	logLevelDefault     = "info"
+	instanceIDDefault   = ""
 )
 
 const (
@@ -84,6 +86,7 @@ func main() {
 	gossip := flag.BoolP(gossipOption, "g", true, "Enable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", false, "Force gossip mode")
 	logLevel := flag.StringP(logLevelOption, "v", logLevelDefault, "The log filtering level (debug, info, warn, error)")
+	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
 
 	flag.Parse()
 
@@ -91,13 +94,20 @@ func main() {
 	ensureDir(*baseDir)
 	yamlConfig := initYamlConfig(*baseDir)
 
+	// Generate Instance ID
+	if *instanceID == "" {
+		*instanceID = util.GenerateBase58ID(5)
+	}
+
+	appID := fmt.Sprintf("%s.%s", appName, *instanceID)
+
 	// Initialize logger
 	logFilename := path.Join(getAppDir(*baseDir, appName), logDir, "p2p.log")
 	level, err := stringToLogLevel(*logLevel)
 	if err != nil {
 		panic(fmt.Sprintf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel))
 	}
-	initLogger(level, logFilename)
+	initLogger(level, logFilename, appID)
 
 	zap.L().Debug("Debug message")
 	zap.L().Info("Info message")
@@ -249,7 +259,7 @@ func initBaseDir(baseDir string) string {
 	return baseDir
 }
 
-func initLogger(level zapcore.Level, logFilename string) {
+func initLogger(level zapcore.Level, logFilename string, appID string) {
 	// Construct production encoder config, set time format
 	e := zap.NewDevelopmentEncoderConfig()
 	e.EncodeTime = KoinosTimeEncoder
@@ -259,7 +269,7 @@ func initLogger(level zapcore.Level, logFilename string) {
 	fileEncoder := zapcore.NewJSONEncoder(e)
 
 	// Construct Console encoder for console output
-	consoleEncoder := util.NewKoinosEncoder(e)
+	consoleEncoder := util.NewKoinosEncoder(e, appID)
 
 	// Construct lumberjack log roller
 	lj := &lumberjack.Logger{
