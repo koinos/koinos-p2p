@@ -109,11 +109,6 @@ func main() {
 	}
 	initLogger(level, logFilename, appID)
 
-	zap.L().Debug("Debug message")
-	zap.L().Info("Info message")
-	zap.L().Warn("Warn message")
-	zap.L().Error("Error message")
-
 	*amqp = getStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
 	*addr = getStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
 	*seed = getStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
