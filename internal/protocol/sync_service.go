@@ -122,7 +122,7 @@ func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest,
 	}
 
 	response.ChainID = rpcResult.ChainID
-	zap.S().Debug("SyncService.ChainID() returning normally, chain ID is %v", response.ChainID)
+	zap.S().Debugf("SyncService.ChainID() returning normally, chain ID is %v", response.ChainID)
 	return nil
 }
 

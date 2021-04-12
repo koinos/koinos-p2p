@@ -113,10 +113,10 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *optio
 	zap.L().Debug("Registering SyncService")
 	err := manager.server.Register(NewSyncService(&rpc, config.SyncServiceOptions))
 	if err != nil {
-		zap.S().Error("Error registering sync service: %s", err.Error())
+		zap.S().Errorf("Error registering sync service: %s", err.Error())
 		panic(err)
 	}
-	zap.S().Debug("SyncService successfully registered")
+	zap.S().Debugf("SyncService successfully registered")
 
 	// TODO: What is context?
 	peerAdder := NewSyncManagerPeerAddr(ctx, h, &manager)
@@ -142,7 +142,7 @@ func (m *SyncManager) AddPeer(ctx context.Context, pid peer.ID) {
 func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 
 	err := func() error {
-		zap.S().Debug("connecting to peer for sync: %v", pid)
+		zap.S().Debugf("connecting to peer for sync: %v", pid)
 
 		peerChainID := GetChainIDResponse{}
 		{
@@ -151,19 +151,19 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 			defer cancel()
 			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, &peerChainID)
 			if err != nil {
-				zap.S().Warn("%v: error getting peer chain id, %v", pid, err)
+				zap.S().Warnf("%v: error getting peer chain id, %v", pid, err)
 				return err
 			}
 		}
 
 		chainID, err := m.rpc.GetChainID(ctx)
 		if err != nil {
-			zap.S().Error("%v: error getting chain id, %v", pid, err)
+			zap.S().Errorf("%v: error getting chain id, %v", pid, err)
 			return err
 		}
 
 		if !chainID.ChainID.Equals(&peerChainID.ChainID) {
-			zap.S().Warn("%v: peer's chain id %v does not match my chain ID %v", pid, peerChainID.ChainID, chainID.ChainID)
+			zap.S().Warnf("%v: peer's chain id %v does not match my chain ID %v", pid, peerChainID.ChainID, chainID.ChainID)
 			return fmt.Errorf("%v: peer's chain id does not match", pid)
 		}
 
@@ -172,7 +172,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 		case <-ctx.Done():
 		}
 
-		zap.S().Info("Connected to peer for sync: %v", pid)
+		zap.S().Infof("Connected to peer for sync: %v", pid)
 		return nil
 	}()
 

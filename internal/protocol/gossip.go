@@ -79,7 +79,7 @@ func (gm *GossipManager) PublishMessage(ctx context.Context, vb *types.VariableB
 		return false
 	}
 
-	zap.S().Debug("Publishing message")
+	zap.S().Debugf("Publishing message")
 	gm.topic.Publish(ctx, *vb)
 
 	return true
@@ -154,7 +154,7 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 	zap.L().Debug("Received block via gossip")
 	_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
 	if err != nil { // TODO: Bad message, assign naughty points
-		zap.S().Warn("Received a corrupt block via gossip from peer: %v", msg.ReceivedFrom)
+		zap.S().Warnf("Received a corrupt block via gossip from peer: %v", msg.ReceivedFrom)
 		return false
 	}
 
@@ -166,11 +166,11 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
-		zap.S().Debug("Gossiped block not applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+		zap.S().Debugf("Gossiped block not applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 		return false
 	}
 
-	zap.S().Info("Gossiped block applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+	zap.S().Infof("Gossiped block applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 	return true
 }
 
@@ -199,7 +199,7 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	zap.L().Debug("Received transaction via gossip")
 	_, transaction, err := types.DeserializeTransaction(&vb)
 	if err != nil { // TODO: Bad message, assign naughty points
-		zap.S().Warn("Received a corrupt transaction via gossip from peer: %v", msg.ReceivedFrom)
+		zap.S().Warnf("Received a corrupt transaction via gossip from peer: %v", msg.ReceivedFrom)
 		return false
 	}
 
@@ -209,10 +209,10 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	}
 
 	if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
-		zap.S().Debug("Gossiped transaction not applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+		zap.S().Debugf("Gossiped transaction not applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 		return false
 	}
 
-	zap.S().Info("Gossiped transaction applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+	zap.S().Infof("Gossiped transaction applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 	return true
 }

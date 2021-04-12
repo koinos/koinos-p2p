@@ -113,7 +113,7 @@ func (p *BdmiProvider) RescanChan() <-chan bool {
 // RequestDownload initiates a downlaod request
 func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
 
-	zap.S().Debug("Downloading block %s from peer %s", util.BlockTopologyCmpString(&req.Topology), req.PeerID)
+	zap.S().Debugf("Downloading block %s from peer %s", util.BlockTopologyCmpString(&req.Topology), req.PeerID)
 
 	resp := BlockDownloadResponse{
 		Topology: req.Topology,
@@ -170,7 +170,7 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		block, err := resp.Block.GetNative()
 		if err != nil {
 			applyResult.Err = err
-			zap.S().Warn("Downloaded block not applied - %s from peer %s - Error %s",
+			zap.S().Warnf("Downloaded block not applied - %s from peer %s - Error %s",
 				util.BlockTopologyCmpString(&applyResult.Topology), applyResult.PeerID, err.Error())
 		} else {
 			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
@@ -187,7 +187,7 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		// BlockDownloadManager will drain applyBlockResultChan
 		// BlockDownloadManager will call another peer to download if apply failed
 
-		zap.S().Info("Downloaded block applied - %s from peer %s",
+		zap.S().Infof("Downloaded block applied - %s from peer %s",
 			util.BlockTopologyCmpString(&applyResult.Topology), applyResult.PeerID)
 	}()
 }
@@ -217,7 +217,7 @@ func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange Height
 		go func(ph *PeerHandler) {
 			select {
 			case <-time.After(time.Duration(p.Options.HeightRangeTimeoutMs) * time.Millisecond):
-				zap.S().Warn("PeerHandler for peer %s did not timely service height range update %v",
+				zap.S().Warnf("PeerHandler for peer %s did not timely service height range update %v",
 					ph.peerID, heightRange)
 			case ph.heightRangeChan <- heightRange:
 			case <-ctx.Done():
@@ -237,7 +237,7 @@ func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
 		err := p.pollMyTopologyCycle(ctx, &state)
 
 		if err != nil {
-			zap.S().Error("Error polling my topology: %s", err.Error())
+			zap.S().Errorf("Error polling my topology: %s", err.Error())
 		}
 
 		select {
@@ -259,7 +259,7 @@ func getHeightInterestRange(forkHeads *types.GetForkHeadsResponse, heightInteres
 	longestForkHeight := forkHeads.ForkHeads[0].Height
 	for i := 1; i < len(forkHeads.ForkHeads); i++ {
 		if forkHeads.ForkHeads[i].Height > longestForkHeight {
-			zap.S().Warn("Best fork head was not returned first")
+			zap.S().Warnf("Best fork head was not returned first")
 			longestForkHeight = forkHeads.ForkHeads[i].Height
 		}
 	}
@@ -308,7 +308,7 @@ func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopolog
 
 	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
 	if newHeightRange != state.heightRange {
-		zap.S().Debug("My topology height range changed from %v to %v", state.heightRange, newHeightRange)
+		zap.S().Debugf("My topology height range changed from %v to %v", state.heightRange, newHeightRange)
 
 		state.heightRange = newHeightRange
 
