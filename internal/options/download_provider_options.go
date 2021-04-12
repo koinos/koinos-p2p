@@ -2,7 +2,6 @@ package options
 
 // BdmiProviderOptions is parameters that control the BdmiProvider
 type BdmiProviderOptions struct {
-	EnableDebugMessages  bool
 	PollMyTopologyMs     uint64
 	HeightRangeTimeoutMs uint64
 
@@ -15,7 +14,6 @@ type BdmiProviderOptions struct {
 // NewBdmiProviderOptions creates a BdmiProviderOptions with default field values
 func NewBdmiProviderOptions() *BdmiProviderOptions {
 	options := BdmiProviderOptions{
-		EnableDebugMessages:  false,
 		PollMyTopologyMs:     2000,
 		HeightRangeTimeoutMs: 10000,
 

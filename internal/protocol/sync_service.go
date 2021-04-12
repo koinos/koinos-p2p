@@ -2,9 +2,9 @@ package protocol
 
 import (
 	"context"
-	"log"
 
 	types "github.com/koinos/koinos-types-golang"
+	"go.uber.org/zap"
 
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -114,19 +114,15 @@ type SyncService struct {
 
 // GetChainID p2p rpc
 func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest, response *GetChainIDResponse) error {
-	if s.Options.EnableDebugMessages {
-		log.Printf("SyncService.ChainID() start\n")
-	}
+	zap.L().Debug("SyncService.ChainID() start")
 	rpcResult, err := s.RPC.GetChainID(ctx)
 	if err != nil {
-		log.Printf("SyncService.ChainID() returning error\n")
+		zap.L().Error("SyncService.ChainID() returning error")
 		return err
 	}
 
 	response.ChainID = rpcResult.ChainID
-	if s.Options.EnableDebugMessages {
-		log.Printf("SyncService.ChainID() returning normally, chain ID is %v\n", response.ChainID)
-	}
+	zap.S().Debug("SyncService.ChainID() returning normally, chain ID is %v", response.ChainID)
 	return nil
 }
 

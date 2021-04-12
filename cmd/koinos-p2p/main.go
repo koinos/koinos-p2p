@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"syscall"
 	"time"
@@ -15,7 +17,11 @@ import (
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-p2p/internal/util"
 	flag "github.com/spf13/pflag"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -30,7 +36,8 @@ const (
 	bootstrapOption    = "bootstrap"
 	gossipOption       = "gossip"
 	forceGossipOption  = "forceGossip"
-	verboseOption      = "verbose"
+	logLevelOption     = "log-level"
+	instanceIDOption   = "instance-id"
 )
 
 const (
@@ -43,60 +50,64 @@ const (
 	gossipDefault       = true
 	forceGossipDefault  = false
 	verboseDefault      = false
+	logLevelDefault     = "info"
+	instanceIDDefault   = ""
 )
 
 const (
 	amqpConnectAttemptSeconds = 3
 )
 
+const (
+	appName = "p2p"
+	logDir  = "logs"
+)
+
+// Log consts
+const (
+	maxSize         = 128
+	maxBackups      = 32
+	maxAge          = 64
+	compressBackups = true
+)
+
 func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	var baseDir = flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
-	var amqp = flag.StringP(amqpOption, "a", "", "AMQP server URL")
-	var addr = flag.StringP(listenOption, "l", "", "The multiaddress on which the node will listen")
-	var seed = flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
-	var peerAddresses = flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
-	var directAddresses = flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
-	var peerExchange = flag.BoolP(peerExchangeOption, "x", true, "Exchange peers with other nodes")
-	var bootstrap = flag.BoolP(bootstrapOption, "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
-	var gossip = flag.BoolP(gossipOption, "g", true, "Enable gossip mode")
-	var forceGossip = flag.BoolP(forceGossipOption, "G", false, "Force gossip mode")
-	var verbose = flag.BoolP(verboseOption, "v", false, "Enable verbose debug messages")
+	baseDir := flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
+	amqp := flag.StringP(amqpOption, "a", "", "AMQP server URL")
+	addr := flag.StringP(listenOption, "l", "", "The multiaddress on which the node will listen")
+	seed := flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
+	peerAddresses := flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
+	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
+	peerExchange := flag.BoolP(peerExchangeOption, "x", true, "Exchange peers with other nodes")
+	bootstrap := flag.BoolP(bootstrapOption, "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
+	gossip := flag.BoolP(gossipOption, "g", true, "Enable gossip mode")
+	forceGossip := flag.BoolP(forceGossipOption, "G", false, "Force gossip mode")
+	logLevel := flag.StringP(logLevelOption, "v", logLevelDefault, "The log filtering level (debug, info, warn, error)")
+	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
 
 	flag.Parse()
 
-	if !filepath.IsAbs(*baseDir) {
-		homedir, err := os.UserHomeDir()
-		if err != nil {
-			panic(err)
-		}
-		*baseDir = filepath.Join(homedir, *baseDir)
-	}
-
+	*baseDir = initBaseDir(*baseDir)
 	ensureDir(*baseDir)
+	yamlConfig := initYamlConfig(*baseDir)
 
-	yamlConfigPath := filepath.Join(*baseDir, "config.yml")
-	if _, err := os.Stat(yamlConfigPath); os.IsNotExist(err) {
-		yamlConfigPath = filepath.Join(*baseDir, "config.yaml")
+	// Generate Instance ID
+	if *instanceID == "" {
+		*instanceID = util.GenerateBase58ID(5)
 	}
 
-	yamlConfig := yamlConfig{}
-	if _, err := os.Stat(yamlConfigPath); err == nil {
-		data, err := ioutil.ReadFile(yamlConfigPath)
-		if err != nil {
-			panic(err)
-		}
+	appID := fmt.Sprintf("%s.%s", appName, *instanceID)
 
-		err = yaml.Unmarshal(data, &yamlConfig)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		yamlConfig.Global = make(map[string]interface{})
-		yamlConfig.P2P = make(map[string]interface{})
+	// Initialize logger
+	logFilename := path.Join(getAppDir(*baseDir, appName), logDir, "p2p.log")
+	level, err := stringToLogLevel(*logLevel)
+	if err != nil {
+		panic(fmt.Sprintf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel))
 	}
+	initLogger(level, false, logFilename, appID)
 
 	*amqp = getStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
 	*addr = getStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
@@ -117,30 +128,28 @@ func main() {
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
 
-	config.SetEnableDebugMessages(*verbose)
-
 	client.Start()
 
 	koinosRPC := rpc.NewKoinosRPC(client)
 
-	log.Println("Attempting to connect to block_store...")
+	zap.L().Info("Attempting to connect to block_store...")
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToBlockStore(ctx)
 		if val {
-			log.Println("Connected")
+			zap.L().Info("Connected")
 			break
 		}
 	}
 
-	log.Println("Attempting to connect to chain...")
+	zap.L().Info("Attempting to connect to chain...")
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToChain(ctx)
 		if val {
-			log.Println("Connected")
+			zap.L().Info("Connected")
 			break
 		}
 	}
@@ -157,13 +166,13 @@ func main() {
 		panic(err)
 	}
 
-	log.Printf("Starting node at address: %s\n", node.GetPeerAddress())
+	zap.S().Info("Starting node at address: %s", node.GetPeerAddress())
 
 	// Wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
-	log.Println("Shutting down node...")
+	zap.L().Info("Shutting down node...")
 	// Shut the node down
 	node.Close()
 }
@@ -207,8 +216,112 @@ func getStringSliceOption(key string, cliArg []string, configs ...map[string]int
 	return stringSlice
 }
 
+func stringToLogLevel(level string) (zapcore.Level, error) {
+	switch level {
+	case "debug":
+		return zapcore.DebugLevel, nil
+	case "info":
+		return zapcore.InfoLevel, nil
+	case "warn":
+		return zapcore.WarnLevel, nil
+	case "error":
+		return zapcore.ErrorLevel, nil
+	default:
+		return zapcore.InfoLevel, errors.New("")
+	}
+}
+
 func ensureDir(dir string) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		os.MkdirAll(dir, os.ModePerm)
 	}
+}
+
+func getAppDir(baseDir string, appName string) string {
+	return path.Join(baseDir, appName)
+}
+
+func initBaseDir(baseDir string) string {
+	if !filepath.IsAbs(baseDir) {
+		homedir, err := os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
+		baseDir = filepath.Join(homedir, baseDir)
+	}
+	ensureDir(baseDir)
+
+	return baseDir
+}
+
+func initLogger(level zapcore.Level, jsonFileOutput bool, logFilename string, appID string) {
+	// Construct production encoder config, set time format
+	e := zap.NewDevelopmentEncoderConfig()
+	e.EncodeTime = util.KoinosTimeEncoder
+	e.EncodeLevel = util.KoinosColorLevelEncoder
+
+	// Construct encoder for file output
+	var fileEncoder zapcore.Encoder
+	if jsonFileOutput { // Json encoder
+		fileEncoder = zapcore.NewJSONEncoder(e)
+	} else { // Console encoder, minus log-level coloration
+		fe := zap.NewDevelopmentEncoderConfig()
+		fe.EncodeTime = util.KoinosTimeEncoder
+		fe.EncodeLevel = zapcore.LowercaseLevelEncoder
+		fileEncoder = util.NewKoinosEncoder(fe, appID)
+	}
+
+	// Construct Console encoder for console output
+	consoleEncoder := util.NewKoinosEncoder(e, appID)
+
+	// Construct lumberjack log roller
+	lj := &lumberjack.Logger{
+		Filename:   logFilename,
+		MaxSize:    maxSize,
+		MaxBackups: maxBackups,
+		MaxAge:     maxAge,
+		Compress:   compressBackups,
+	}
+
+	// Construct core
+	coreFunc := zap.WrapCore(func(zapcore.Core) zapcore.Core {
+		return zapcore.NewTee(
+			zapcore.NewCore(fileEncoder, zapcore.AddSync(lj), level),
+			zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), level),
+		)
+	})
+
+	// Construct logger
+	logger, err := zap.NewProduction(coreFunc)
+	if err != nil {
+		panic(fmt.Sprintf("Error constructing logger: %v", err))
+	}
+
+	// Set global logger
+	zap.ReplaceGlobals(logger)
+}
+
+func initYamlConfig(baseDir string) *yamlConfig {
+	yamlConfigPath := filepath.Join(baseDir, "config.yml")
+	if _, err := os.Stat(yamlConfigPath); os.IsNotExist(err) {
+		yamlConfigPath = filepath.Join(baseDir, "config.yaml")
+	}
+
+	yamlConfig := yamlConfig{}
+	if _, err := os.Stat(yamlConfigPath); err == nil {
+		data, err := ioutil.ReadFile(yamlConfigPath)
+		if err != nil {
+			panic(err)
+		}
+
+		err = yaml.Unmarshal(data, &yamlConfig)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		yamlConfig.Global = make(map[string]interface{})
+		yamlConfig.P2P = make(map[string]interface{})
+	}
+
+	return &yamlConfig
 }

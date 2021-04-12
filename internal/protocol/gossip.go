@@ -2,13 +2,13 @@ package protocol
 
 import (
 	"context"
-	"log"
 
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"go.uber.org/zap"
 )
 
 const (
@@ -79,7 +79,7 @@ func (gm *GossipManager) PublishMessage(ctx context.Context, vb *types.VariableB
 		return false
 	}
 
-	log.Print("Publishing message")
+	zap.S().Debug("Publishing message")
 	gm.topic.Publish(ctx, *vb)
 
 	return true
@@ -117,12 +117,14 @@ func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, id pee
 
 // Start enables gossip of blocks and transactions
 func (kg *KoinosGossip) Start(ctx context.Context) {
+	zap.L().Info("Starting gossip mode")
 	kg.startBlockGossip(ctx)
 	kg.startTransactionGossip(ctx)
 }
 
 // Stop stops gossiping on both block and transaction topics
 func (kg *KoinosGossip) Stop() {
+	zap.L().Info("Stopping gossip mode")
 	kg.Block.Stop()
 	kg.Transaction.Stop()
 }
@@ -132,7 +134,7 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 		ch := make(chan types.VariableBlob, blockBuffer)
 		kg.Block.RegisterValidator(kg.validateBlock)
 		kg.Block.Start(ctx, ch)
-		log.Println("Started block gossip listener")
+		zap.L().Debug("Started block gossip listener")
 
 		// A block that reaches here has already been applied
 		// Any postprocessing that might be needed would happen here
@@ -149,10 +151,10 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
 	vb := types.VariableBlob(msg.Data)
 
-	log.Println("Received block via gossip")
+	zap.L().Debug("Received block via gossip")
 	_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
 	if err != nil { // TODO: Bad message, assign naughty points
-		log.Println("Gossiped block is corrupt")
+		zap.S().Warn("Received a corrupt block via gossip from peer: %v", msg.ReceivedFrom)
 		return false
 	}
 
@@ -164,11 +166,11 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
-		log.Printf("Gossiped block not applied - %s from peer %v\n", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+		zap.S().Debug("Gossiped block not applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 		return false
 	}
 
-	log.Printf("Gossiped block applied - %s from peer %v\n", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+	zap.S().Info("Gossiped block applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 	return true
 }
 
@@ -177,7 +179,7 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 		ch := make(chan types.VariableBlob, transactionBuffer)
 		kg.Transaction.RegisterValidator(kg.validateTransaction)
 		kg.Transaction.Start(ctx, ch)
-		log.Println("Started transaction gossip listener")
+		zap.L().Debug("Started transaction gossip listener")
 
 		// A transaction that reaches here has already been applied
 		// Any postprocessing that might be needed would happen here
@@ -194,10 +196,10 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
 	vb := types.VariableBlob(msg.Data)
 
-	log.Println("Received transaction via gossip")
+	zap.L().Debug("Received transaction via gossip")
 	_, transaction, err := types.DeserializeTransaction(&vb)
 	if err != nil { // TODO: Bad message, assign naughty points
-		log.Println("Gossiped transaction is corrupt")
+		zap.S().Warn("Received a corrupt transaction via gossip from peer: %v", msg.ReceivedFrom)
 		return false
 	}
 
@@ -206,12 +208,11 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 		return true
 	}
 
-	// TODO: Perhaps these should be cached?
 	if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
-		log.Printf("Gossiped transaction not applied - %s\n", util.TransactionString(transaction))
+		zap.S().Debug("Gossiped transaction not applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 		return false
 	}
 
-	log.Printf("Gossiped transaction applied - %s\n", util.TransactionString(transaction))
+	zap.S().Info("Gossiped transaction applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 	return true
 }

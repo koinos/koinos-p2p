@@ -2,13 +2,12 @@ package protocol
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"log"
 	"time"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
+	"go.uber.org/zap"
 
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/util"
@@ -64,9 +63,7 @@ type PeerHandler struct {
 
 func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequest) {
 	go func() {
-		if h.Options.EnableDebugMessages {
-			log.Printf("Request block %s from peer %s\n", util.BlockTopologyCmpString(&req.Topology), h.peerID)
-		}
+		zap.S().Debug("Request block %s from peer %s", util.BlockTopologyCmpString(&req.Topology), h.peerID)
 		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{util.MultihashFromCmp(req.Topology.ID)}}
 		rpcResp := GetBlocksByIDResponse{}
 		rpcResp.BlockItems = [][]byte{}
@@ -78,22 +75,14 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		resp.Topology = req.Topology
 		resp.PeerID = h.peerID
 		if err != nil {
-			log.Printf("Error getting block %s from peer %s: error was %s", util.BlockTopologyCmpString(&req.Topology), h.peerID, err.Error())
+			zap.S().Warn("Error getting block %s from peer %s: error was %s", util.BlockTopologyCmpString(&req.Topology), h.peerID, err.Error())
 			resp.Err = err
 		} else if len(rpcResp.BlockItems) < 1 {
-			log.Printf("  - Got 0 blocks\n")
+			zap.S().Warn("  - Got 0 block")
 			resp.Err = errors.New("Got 0 blocks from peer")
 		} else {
 			vbBlock := types.VariableBlob(rpcResp.BlockItems[0])
 			resp.Block = *types.NewOpaqueBlockFromBlob(&vbBlock)
-			if h.Options.EnableDebugMessages {
-				rpcRespStr, err := json.Marshal(rpcResp)
-				if err == nil {
-					log.Printf("  - Got block: %s\n", rpcRespStr)
-				} else {
-					log.Printf("  - Got unmarshalable block: %s\n", rpcRespStr)
-				}
-			}
 		}
 		select {
 		case h.downloadResponseChan <- *resp:
@@ -128,8 +117,8 @@ func (h *PeerHandler) heightRangeUpdateLoop(ctx context.Context) {
 
 func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 	// Helper function to call peerHandlerCycle() and send any error to errChan
-	log.Printf("Start peer handler loop for peer %s\n", h.peerID)
-	defer log.Printf("Exit peer handler loop for peer %s\n", h.peerID)
+	zap.S().Debug("Start peer handler loop for peer %s", h.peerID)
+	defer zap.S().Debug("Exit peer handler loop for peer %s", h.peerID)
 
 	doPeerCycle := func() {
 		err := h.peerHandlerCycle(ctx)
@@ -168,9 +157,7 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
-	if h.Options.EnableDebugMessages {
-		log.Printf("%s: Polling HeightRange{%d,%d}\n", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
-	}
+	zap.S().Debug("%s: Polling HeightRange{%d,%d}", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
 
 	req := GetTopologyAtHeightRequest{
 		BlockHeight: h.heightRange.Height,
@@ -181,15 +168,13 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	defer cancel()
 	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, &resp)
 	if err != nil {
-		log.Printf("%s: error calling GetTopologyAtHeight, error was %s\n", h.peerID, err.Error())
+		zap.S().Warn("%s: error calling GetTopologyAtHeight, error was %s", h.peerID, err.Error())
 		return err
 	}
 
 	for _, b := range resp.BlockTopology {
 		hasBlockMsg := PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}
-		if h.Options.EnableDebugMessages {
-			log.Printf("%s: Sending PeerHasBlock message for block %s\n", h.peerID, util.BlockTopologyCmpString(&hasBlockMsg.Block))
-		}
+		zap.S().Debug("%s: Sending PeerHasBlock message for block %s", h.peerID, util.BlockTopologyCmpString(&hasBlockMsg.Block))
 
 		select {
 		case h.peerHasBlockChan <- hasBlockMsg:

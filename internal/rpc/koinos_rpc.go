@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
+	"go.uber.org/zap"
 )
 
 // RPC service constants
@@ -177,8 +177,7 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMult
 		return nil, err
 	}
 
-	// TODO:  Redo printf statement with proper logging
-	// log.Printf("GetBlocksByID() response: %s\n", responseBytes)
+	zap.S().Debug("GetBlocksByID() response: %s", responseBytes)
 
 	responseVariant := types.NewBlockStoreResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
@@ -288,8 +287,7 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
-	// TODO:  Redo printf statement with proper logging
-	// log.Printf("GetChainID() response was %s\n", responseBytes)
+	zap.S().Debug("GetChainID() response was %s", responseBytes)
 
 	if err != nil {
 		return nil, err
@@ -364,7 +362,7 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsRespon
 func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
 	forkHeads, err := k.GetForkHeads(ctx)
 	if err != nil {
-		log.Printf("GetTopologyAtHeight(%d, %d) returned error %s after GetForkHeads()\n", height, numBlocks, err.Error())
+		zap.S().Warn("GetTopologyAtHeight(%d, %d) returned error %s after GetForkHeads()", height, numBlocks, err.Error())
 		return nil, nil, err
 	}
 	if numBlocks == 0 {
@@ -375,16 +373,14 @@ func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockH
 	topologySlice := make([]types.BlockTopology, 0, len(forkHeads.ForkHeads))
 
 	for _, head := range forkHeads.ForkHeads {
-		//var t types.BlockTopology
-		//t.
 		blocks, err := k.GetBlocksByHeight(ctx, &head.ID, height, numBlocks)
 		if err != nil {
 			headStr, err2 := json.Marshal(head)
 			if err2 != nil {
-				log.Printf("GetTopologyAtHeight(%d, %d) tried to print error %s but got another error %s\n", height, numBlocks, err, err2)
+				zap.S().Warn("GetTopologyAtHeight(%d, %d) tried to print error %s but got another error %s", height, numBlocks, err, err2)
 			}
 
-			log.Printf("GetTopologyAtHeight(%d, %d) returned error %s after GetBlocksByHeight(), head=%s\n", height, numBlocks, err, headStr)
+			zap.S().Warn("GetTopologyAtHeight(%d, %d) returned error %s after GetBlocksByHeight(), head=%s", height, numBlocks, err, headStr)
 			return nil, nil, err
 		}
 
