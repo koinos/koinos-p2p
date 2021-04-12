@@ -197,7 +197,7 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 			}
 		}
 
-		zap.S().Debug("GetInitialDownload() returned %d blocks", len(result))
+		zap.S().Debugf("GetInitialDownload() returned %d blocks", len(result))
 		return result
 	}
 
@@ -216,7 +216,7 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 		}
 	}
 
-	zap.S().Debug("GetInitialDownload() returned %d blocks", len(result))
+	zap.S().Debugf("GetInitialDownload() returned %d blocks", len(result))
 	return result
 }
 

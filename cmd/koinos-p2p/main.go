@@ -166,7 +166,7 @@ func main() {
 		panic(err)
 	}
 
-	zap.S().Info("Starting node at address: %s", node.GetPeerAddress())
+	zap.S().Infof("Starting node at address: %s", node.GetPeerAddress())
 
 	// Wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)

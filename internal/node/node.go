@@ -107,7 +107,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 }
 
 func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
-	zap.S().Debug("Received broadcast: %v", string(data))
+	zap.S().Debugf("Received broadcast: %v", string(data))
 	switch topic {
 	case "koinos.block.accept":
 		blockBroadcast := types.NewBlockAccepted()
@@ -150,7 +150,7 @@ func (n *KoinosP2PNode) connectInitialPeers() error {
 	// Connect to a peer
 	for _, pid := range n.Options.InitialPeers {
 		if pid != "" {
-			zap.S().Info("Connecting to initial peer %s and sending broadcast", pid)
+			zap.S().Infof("Connecting to initial peer %s and sending broadcast", pid)
 			_, err := n.ConnectToPeer(pid)
 			if err != nil {
 				return err
@@ -232,7 +232,7 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 	// If blank seed, generate a new randomized seed
 	if seed == "" {
 		seed = util.GenerateBase58ID(8)
-		zap.S().Info("Using random seed: %s", seed)
+		zap.S().Infof("Using random seed: %s", seed)
 	}
 
 	// Convert the seed to int64 and construct the random source
