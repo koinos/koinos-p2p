@@ -107,7 +107,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel))
 	}
-	initLogger(level, logFilename, appID)
+	initLogger(level, false, logFilename, appID)
 
 	*amqp = getStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
 	*addr = getStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
@@ -254,14 +254,22 @@ func initBaseDir(baseDir string) string {
 	return baseDir
 }
 
-func initLogger(level zapcore.Level, logFilename string, appID string) {
+func initLogger(level zapcore.Level, jsonFileOutput bool, logFilename string, appID string) {
 	// Construct production encoder config, set time format
 	e := zap.NewDevelopmentEncoderConfig()
 	e.EncodeTime = util.KoinosTimeEncoder
 	e.EncodeLevel = util.KoinosColorLevelEncoder
 
-	// Construct JSON encoder for file output
-	fileEncoder := zapcore.NewJSONEncoder(e)
+	// Construct encoder for file output
+	var fileEncoder zapcore.Encoder
+	if jsonFileOutput { // Json encoder
+		fileEncoder = zapcore.NewJSONEncoder(e)
+	} else { // Console encoder, minus log-level coloration
+		fe := zap.NewDevelopmentEncoderConfig()
+		fe.EncodeTime = util.KoinosTimeEncoder
+		fe.EncodeLevel = zapcore.LowercaseLevelEncoder
+		fileEncoder = util.NewKoinosEncoder(fe, appID)
+	}
 
 	// Construct Console encoder for console output
 	consoleEncoder := util.NewKoinosEncoder(e, appID)
