@@ -325,12 +325,3 @@ func TestApplyBlockFailure(t *testing.T) {
 		t.Errorf("Incorrect number of blocks applied")
 	}
 }
-
-func getChannelError(errs chan error) error {
-	select {
-	case err := <-errs:
-		return err
-	default:
-		return nil
-	}
-}
