@@ -6,8 +6,8 @@ import (
 	"errors"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
-	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
+	util "github.com/koinos/koinos-util-golang"
 	"go.uber.org/zap"
 )
 

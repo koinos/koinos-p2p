@@ -11,8 +11,8 @@ import (
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
+	util "github.com/koinos/koinos-util-golang"
 	"github.com/multiformats/go-multiaddr"
 	"go.uber.org/zap"
 )

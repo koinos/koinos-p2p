@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/koinos/koinos-mq-golang v0.0.0-20210405212343-46ea9f5ba3c1
 	github.com/koinos/koinos-types-golang v0.1.1-0.20210324201507-baf0615e8212
+	github.com/koinos/koinos-util-golang v0.0.0-20210413191402-8a985cb1d85b
 	github.com/libp2p/go-libp2p v0.13.0
 	github.com/libp2p/go-libp2p-core v0.8.5
 	github.com/libp2p/go-libp2p-gorpc v0.1.2

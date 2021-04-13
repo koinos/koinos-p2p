@@ -10,8 +10,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/koinos/koinos-p2p/internal/options"
-	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
+	util "github.com/koinos/koinos-util-golang"
 )
 
 // HeightRange is a message that specifies a peer should send topology updates for the given height range.

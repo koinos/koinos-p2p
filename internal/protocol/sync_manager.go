@@ -9,7 +9,7 @@ import (
 
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-p2p/internal/util"
+	util "github.com/koinos/koinos-util-golang"
 	"go.uber.org/zap"
 
 	types "github.com/koinos/koinos-types-golang"

@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
+	util "github.com/koinos/koinos-util-golang"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"go.uber.org/zap"

@@ -8,8 +8,8 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/koinos/koinos-p2p/internal/options"
-	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
+	util "github.com/koinos/koinos-util-golang"
 )
 
 // BlockDownloadRequest represents a block download request.

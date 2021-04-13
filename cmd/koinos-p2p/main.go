@@ -17,7 +17,8 @@ import (
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-p2p/internal/util"
+	log "github.com/koinos/koinos-p2p/internal/util"
+	util "github.com/koinos/koinos-util-golang"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -257,8 +258,8 @@ func initBaseDir(baseDir string) string {
 func initLogger(level zapcore.Level, jsonFileOutput bool, logFilename string, appID string) {
 	// Construct production encoder config, set time format
 	e := zap.NewDevelopmentEncoderConfig()
-	e.EncodeTime = util.KoinosTimeEncoder
-	e.EncodeLevel = util.KoinosColorLevelEncoder
+	e.EncodeTime = log.KoinosTimeEncoder
+	e.EncodeLevel = log.KoinosColorLevelEncoder
 
 	// Construct encoder for file output
 	var fileEncoder zapcore.Encoder
@@ -266,13 +267,13 @@ func initLogger(level zapcore.Level, jsonFileOutput bool, logFilename string, ap
 		fileEncoder = zapcore.NewJSONEncoder(e)
 	} else { // Console encoder, minus log-level coloration
 		fe := zap.NewDevelopmentEncoderConfig()
-		fe.EncodeTime = util.KoinosTimeEncoder
+		fe.EncodeTime = log.KoinosTimeEncoder
 		fe.EncodeLevel = zapcore.LowercaseLevelEncoder
-		fileEncoder = util.NewKoinosEncoder(fe, appID)
+		fileEncoder = log.NewKoinosEncoder(fe, appID)
 	}
 
 	// Construct Console encoder for console output
-	consoleEncoder := util.NewKoinosEncoder(e, appID)
+	consoleEncoder := log.NewKoinosEncoder(e, appID)
 
 	// Construct lumberjack log roller
 	lj := &lumberjack.Logger{
