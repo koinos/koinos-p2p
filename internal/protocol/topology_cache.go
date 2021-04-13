@@ -6,8 +6,8 @@ import (
 	"math/rand"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"go.uber.org/zap"
 
+	log "github.com/koinos/koinos-log-golang"
 	types "github.com/koinos/koinos-types-golang"
 	util "github.com/koinos/koinos-util-golang"
 )
@@ -189,7 +189,7 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 
 	// Special case:  A node that has no blocks is interested in blocks of height 1
 	if len(myTopo.ByTopology) == 0 {
-		zap.L().Debug("No blocks, so GetInitialDownload is looking for blocks of height 1")
+		log.Debug("No blocks, so GetInitialDownload is looking for blocks of height 1")
 		netNextBlocks, ok := netTopo.ByHeight[1]
 		if ok {
 			for nextBlock := range netNextBlocks {
@@ -197,7 +197,7 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 			}
 		}
 
-		zap.S().Debugf("GetInitialDownload() returned %d blocks", len(result))
+		log.Debugf("GetInitialDownload() returned %d blocks", len(result))
 		return result
 	}
 
@@ -216,7 +216,7 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 		}
 	}
 
-	zap.S().Debugf("GetInitialDownload() returned %d blocks", len(result))
+	log.Debugf("GetInitialDownload() returned %d blocks", len(result))
 	return result
 }
 

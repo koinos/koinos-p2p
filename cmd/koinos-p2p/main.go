@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -11,16 +10,13 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	log "github.com/koinos/koinos-p2p/internal/util"
 	util "github.com/koinos/koinos-util-golang"
 	flag "github.com/spf13/pflag"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
@@ -61,14 +57,6 @@ const (
 	logDir  = "logs"
 )
 
-// Log consts
-const (
-	maxSize         = 128
-	maxBackups      = 32
-	maxAge          = 64
-	compressBackups = true
-)
-
 func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -101,11 +89,10 @@ func main() {
 
 	// Initialize logger
 	logFilename := path.Join(util.GetAppDir(*baseDir, appName), logDir, "p2p.log")
-	level, err := stringToLogLevel(*logLevel)
+	err := log.InitLogger(*logLevel, false, logFilename, appID)
 	if err != nil {
 		panic(fmt.Sprintf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel))
 	}
-	initLogger(level, false, logFilename, appID)
 
 	*amqp = util.GetStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
 	*addr = util.GetStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
@@ -130,24 +117,24 @@ func main() {
 
 	koinosRPC := rpc.NewKoinosRPC(client)
 
-	zap.L().Info("Attempting to connect to block_store...")
+	log.Info("Attempting to connect to block_store...")
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToBlockStore(ctx)
 		if val {
-			zap.L().Info("Connected")
+			log.Info("Connected")
 			break
 		}
 	}
 
-	zap.L().Info("Attempting to connect to chain...")
+	log.Info("Attempting to connect to chain...")
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToChain(ctx)
 		if val {
-			zap.L().Info("Connected")
+			log.Info("Connected")
 			break
 		}
 	}
@@ -164,75 +151,13 @@ func main() {
 		panic(err)
 	}
 
-	zap.S().Infof("Starting node at address: %s", node.GetPeerAddress())
+	log.Infof("Starting node at address: %s", node.GetPeerAddress())
 
 	// Wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
-	zap.L().Info("Shutting down node...")
+	log.Info("Shutting down node...")
 	// Shut the node down
 	node.Close()
-}
-
-func stringToLogLevel(level string) (zapcore.Level, error) {
-	switch level {
-	case "debug":
-		return zapcore.DebugLevel, nil
-	case "info":
-		return zapcore.InfoLevel, nil
-	case "warn":
-		return zapcore.WarnLevel, nil
-	case "error":
-		return zapcore.ErrorLevel, nil
-	default:
-		return zapcore.InfoLevel, errors.New("")
-	}
-}
-
-func initLogger(level zapcore.Level, jsonFileOutput bool, logFilename string, appID string) {
-	// Construct production encoder config, set time format
-	e := zap.NewDevelopmentEncoderConfig()
-	e.EncodeTime = log.KoinosTimeEncoder
-	e.EncodeLevel = log.KoinosColorLevelEncoder
-
-	// Construct encoder for file output
-	var fileEncoder zapcore.Encoder
-	if jsonFileOutput { // Json encoder
-		fileEncoder = zapcore.NewJSONEncoder(e)
-	} else { // Console encoder, minus log-level coloration
-		fe := zap.NewDevelopmentEncoderConfig()
-		fe.EncodeTime = log.KoinosTimeEncoder
-		fe.EncodeLevel = zapcore.LowercaseLevelEncoder
-		fileEncoder = log.NewKoinosEncoder(fe, appID)
-	}
-
-	// Construct Console encoder for console output
-	consoleEncoder := log.NewKoinosEncoder(e, appID)
-
-	// Construct lumberjack log roller
-	lj := &lumberjack.Logger{
-		Filename:   logFilename,
-		MaxSize:    maxSize,
-		MaxBackups: maxBackups,
-		MaxAge:     maxAge,
-		Compress:   compressBackups,
-	}
-
-	// Construct core
-	coreFunc := zap.WrapCore(func(zapcore.Core) zapcore.Core {
-		return zapcore.NewTee(
-			zapcore.NewCore(fileEncoder, zapcore.AddSync(lj), level),
-			zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), level),
-		)
-	})
-
-	// Construct logger
-	logger, err := zap.NewProduction(coreFunc)
-	if err != nil {
-		panic(fmt.Sprintf("Error constructing logger: %v", err))
-	}
-
-	// Set global logger
-	zap.ReplaceGlobals(logger)
 }
