@@ -3,10 +3,10 @@ package protocol
 import (
 	"context"
 
+	log "github.com/koinos/koinos-log-golang"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	ma "github.com/multiformats/go-multiaddr"
-	"go.uber.org/zap"
 )
 
 // SyncManagerPeerAdder adds the existing peers and any new peers using the network.Notifiee interface.
@@ -37,13 +37,13 @@ func (peerAdder *SyncManagerPeerAdder) ClosedStream(n network.Network, s network
 
 // Connected is part of the libp2p network.Notifiee interface
 func (peerAdder *SyncManagerPeerAdder) Connected(n network.Network, c network.Conn) {
-	zap.S().Infof("Connected to peer %s", c.RemotePeer())
+	log.Infof("Connected to peer %s", c.RemotePeer())
 	peerAdder.syncManager.AddPeer(peerAdder.ctx, c.RemotePeer())
 }
 
 // Disconnected is part of the libp2p network.Notifiee interface
 func (peerAdder *SyncManagerPeerAdder) Disconnected(n network.Network, c network.Conn) {
-	zap.S().Infof("Disconnected from peer %s", c.RemotePeer())
+	log.Infof("Disconnected from peer %s", c.RemotePeer())
 }
 
 // Listen is part of the libp2p network.Notifiee interface

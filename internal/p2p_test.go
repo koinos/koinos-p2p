@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
+	util "github.com/koinos/koinos-util-golang"
 	"github.com/multiformats/go-multiaddr"
-	"go.uber.org/zap"
 )
 
 // TestRPC implements dummy blockchain RPC.
@@ -107,7 +107,7 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultih
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
 	if height+types.BlockHeightType(numBlocks) > k.Height+types.BlockHeightType(len(k.BlocksApplied)) {
-		zap.L().Error("Error in GetBlocksByHeight()")
+		log.Error("Error in GetBlocksByHeight()")
 		return nil, fmt.Errorf("Requested block exceeded height")
 	}
 
@@ -323,14 +323,5 @@ func TestApplyBlockFailure(t *testing.T) {
 	// SendRPC should have applied 18 blocks
 	if len(sendRPC.BlocksApplied) != 18 {
 		t.Errorf("Incorrect number of blocks applied")
-	}
-}
-
-func getChannelError(errs chan error) error {
-	select {
-	case err := <-errs:
-		return err
-	default:
-		return nil
 	}
 }

@@ -7,10 +7,10 @@ import (
 
 	"math/rand"
 
+	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-p2p/internal/util"
-	"go.uber.org/zap"
+	util "github.com/koinos/koinos-util-golang"
 
 	types "github.com/koinos/koinos-types-golang"
 
@@ -110,13 +110,13 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *optio
 	ticker := time.NewTicker(time.Duration(config.BlacklistOptions.BlacklistRescanMs) * time.Millisecond)
 	manager.rescanBlacklist = ticker.C
 
-	zap.L().Debug("Registering SyncService")
+	log.Debug("Registering SyncService")
 	err := manager.server.Register(NewSyncService(&rpc, config.SyncServiceOptions))
 	if err != nil {
-		zap.S().Errorf("Error registering sync service: %s", err.Error())
+		log.Errorf("Error registering sync service: %s", err.Error())
 		panic(err)
 	}
-	zap.S().Debugf("SyncService successfully registered")
+	log.Debugf("SyncService successfully registered")
 
 	// TODO: What is context?
 	peerAdder := NewSyncManagerPeerAddr(ctx, h, &manager)
@@ -142,7 +142,7 @@ func (m *SyncManager) AddPeer(ctx context.Context, pid peer.ID) {
 func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 
 	err := func() error {
-		zap.S().Debugf("connecting to peer for sync: %v", pid)
+		log.Debugf("connecting to peer for sync: %v", pid)
 
 		peerChainID := GetChainIDResponse{}
 		{
@@ -151,19 +151,19 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 			defer cancel()
 			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, &peerChainID)
 			if err != nil {
-				zap.S().Warnf("%v: error getting peer chain id, %v", pid, err)
+				log.Warnf("%v: error getting peer chain id, %v", pid, err)
 				return err
 			}
 		}
 
 		chainID, err := m.rpc.GetChainID(ctx)
 		if err != nil {
-			zap.S().Errorf("%v: error getting chain id, %v", pid, err)
+			log.Errorf("%v: error getting chain id, %v", pid, err)
 			return err
 		}
 
 		if !chainID.ChainID.Equals(&peerChainID.ChainID) {
-			zap.S().Warnf("%v: peer's chain id %v does not match my chain ID %v", pid, peerChainID.ChainID, chainID.ChainID)
+			log.Warnf("%v: peer's chain id %v does not match my chain ID %v", pid, peerChainID.ChainID, chainID.ChainID)
 			return fmt.Errorf("%v: peer's chain id does not match", pid)
 		}
 
@@ -172,7 +172,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 		case <-ctx.Done():
 		}
 
-		zap.S().Infof("Connected to peer for sync: %v", pid)
+		log.Infof("Connected to peer for sync: %v", pid)
 		return nil
 	}()
 

@@ -5,11 +5,11 @@ import (
 	"math/rand"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"go.uber.org/zap"
 
+	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
-	"github.com/koinos/koinos-p2p/internal/util"
 	types "github.com/koinos/koinos-types-golang"
+	util "github.com/koinos/koinos-util-golang"
 )
 
 // BlockDownloadRequest represents a block download request.
@@ -162,7 +162,7 @@ func (m *BlockDownloadManager) Start(ctx context.Context) {
 func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDownloadResponse) {
 	_, isAlreadyApplying := m.Applying[resp.Topology]
 	if isAlreadyApplying {
-		zap.S().Debugf("maybeApplyBlock() could not apply block %s from peer %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
+		log.Debugf("maybeApplyBlock() could not apply block %s from peer %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
 		return
 	}
 
@@ -174,13 +174,13 @@ func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDo
 	}
 
 	if hasPrev {
-		zap.S().Debugf("maybeApplyBlock() entering hasPrev case for block %s from peer %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
+		log.Debugf("maybeApplyBlock() entering hasPrev case for block %s from peer %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
 		delete(m.Downloading, resp.Topology)
 		delete(m.WaitingToApply, resp.Topology)
 		m.Applying[resp.Topology] = resp
 		m.iface.ApplyBlock(ctx, resp)
 	} else {
-		zap.S().Debugf("maybeApplyBlock() entering !hasPrev case for block %s from peer %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
+		log.Debugf("maybeApplyBlock() entering !hasPrev case for block %s from peer %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
 
 		delete(m.Downloading, resp.Topology)
 		m.WaitingToApply[resp.Topology] = resp
@@ -188,10 +188,10 @@ func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDo
 }
 
 func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp BlockDownloadResponse) {
-	zap.S().Debugf("Got BlockDownloadResponse for block %s from peer %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
+	log.Debugf("Got BlockDownloadResponse for block %s from peer %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
 	_, hasDownloading := m.Downloading[resp.Topology]
 	if !hasDownloading {
-		zap.S().Warnf("Got BlockDownloadResponse for block %s from peer %s, but it was unexpectedly not tracked in the Downloading map",
+		log.Warnf("Got BlockDownloadResponse for block %s from peer %s, but it was unexpectedly not tracked in the Downloading map",
 			util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
 	} else {
 		delete(m.Downloading, resp.Topology)
@@ -199,13 +199,13 @@ func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp 
 
 	alreadyApplying, hasAlreadyApplying := m.Applying[resp.Topology]
 	if hasAlreadyApplying {
-		zap.S().Warnf("Discarded block response for block %s from peer %s:  Already applying from peer %s",
+		log.Warnf("Discarded block response for block %s from peer %s:  Already applying from peer %s",
 			util.BlockTopologyCmpString(&resp.Topology), resp.PeerID, alreadyApplying.PeerID)
 		return
 	}
 	alreadyWaiting, hasAlreadyWaiting := m.WaitingToApply[resp.Topology]
 	if hasAlreadyWaiting {
-		zap.S().Warnf("Discarded block response for block %s from peer %s:  Already waiting to apply from peer %s",
+		log.Warnf("Discarded block response for block %s from peer %s:  Already waiting to apply from peer %s",
 			util.BlockTopologyCmpString(&resp.Topology), resp.PeerID, alreadyWaiting.PeerID)
 		return
 	}
@@ -250,29 +250,29 @@ func ConvertPeerSetToSlice(m map[peer.ID]util.Void) []peer.ID {
 }
 
 func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.BlockTopologyCmp) {
-	zap.S().Debugf("startDownload() on block %s", util.BlockTopologyCmpString(&download))
+	log.Debugf("startDownload() on block %s", util.BlockTopologyCmpString(&download))
 
 	// If the download's already gotten in, no-op
 	_, isDownloading := m.Downloading[download]
 	if isDownloading {
-		zap.S().Debugf("  - Bail, already downloading %s", util.BlockTopologyCmpString(&download))
+		log.Debugf("  - Bail, already downloading %s", util.BlockTopologyCmpString(&download))
 		return
 	}
 	_, isApplying := m.Applying[download]
 	if isApplying {
-		zap.S().Debugf("  - Bail, already applying %s", util.BlockTopologyCmpString(&download))
+		log.Debugf("  - Bail, already applying %s", util.BlockTopologyCmpString(&download))
 		return
 	}
 	waitingResp, isWaiting := m.WaitingToApply[download]
 	if isWaiting {
 		m.maybeApplyBlock(ctx, waitingResp)
-		zap.S().Debugf("  - Bail, already waiting to apply %s", util.BlockTopologyCmpString(&download))
+		log.Debugf("  - Bail, already waiting to apply %s", util.BlockTopologyCmpString(&download))
 		return
 	}
 
 	peers, hasPeers := m.TopoCache.ByTopology[download]
 	if (!hasPeers) || (len(peers) < 1) {
-		zap.S().Warnf("Could not find download %s in TopoCache", util.BlockTopologyCmpString(&download))
+		log.Warnf("Could not find download %s in TopoCache", util.BlockTopologyCmpString(&download))
 		return
 	}
 
@@ -280,7 +280,7 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 	// TODO:  Add constraint to bound the number of in-flight downloads sent to a single peer
 	peer, err := m.TopoCache.PickPeer(download, m.rng)
 	if err != nil {
-		zap.S().Warnf("Got an error trying to pick a peer to download block %s", util.BlockTopologyCmpString(&download))
+		log.Warnf("Got an error trying to pick a peer to download block %s", util.BlockTopologyCmpString(&download))
 		return
 	}
 
@@ -289,13 +289,13 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 		PeerID:   peer,
 	}
 
-	zap.S().Debugf("  - Downloading block %s from peer %s", util.BlockTopologyCmpString(&download), req.PeerID)
+	log.Debugf("  - Downloading block %s from peer %s", util.BlockTopologyCmpString(&download), req.PeerID)
 	m.Downloading[download] = req
 	m.iface.RequestDownload(ctx, req)
 }
 
 func (m *BlockDownloadManager) rescan(ctx context.Context) {
-	zap.L().Debug("Rescanning downloads")
+	log.Debug("Rescanning downloads")
 
 	for _, resp := range m.WaitingToApply {
 		m.maybeApplyBlock(ctx, resp)
@@ -303,12 +303,12 @@ func (m *BlockDownloadManager) rescan(ctx context.Context) {
 
 	// Figure out the blocks we'd ideally be downloading
 	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.Options.MaxDownloadsInFlight, m.Options.MaxDownloadDepth)
-	zap.S().Debugf("GetDownloads() suggests %d eligible downloads", len(downloadList))
+	log.Debugf("GetDownloads() suggests %d eligible downloads", len(downloadList))
 
 	for _, download := range downloadList {
 		// If we can't support additional downloads, bail
 		if len(m.Downloading)+len(m.Applying)+len(m.WaitingToApply) >= m.Options.MaxDownloadsInFlight {
-			zap.S().Debugf("No more downloads will be initiated, as this would exceed %d in-flight downloads", m.Options.MaxDownloadsInFlight)
+			log.Debugf("No more downloads will be initiated, as this would exceed %d in-flight downloads", m.Options.MaxDownloadsInFlight)
 			break
 		}
 
@@ -336,7 +336,7 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 			m.TopoCache.SetLastIrr(c)
 			m.needRescan = true
 		case peerHasBlock := <-m.iface.PeerHasBlockChan():
-			zap.S().Debugf("%v: Service PeerHasBlock message %s", peerHasBlock.PeerID, util.BlockTopologyCmpString(&peerHasBlock.Block))
+			log.Debugf("%v: Service PeerHasBlock message %s", peerHasBlock.PeerID, util.BlockTopologyCmpString(&peerHasBlock.Block))
 			added := m.TopoCache.Add(peerHasBlock)
 			m.needRescan = m.needRescan || added
 		case downloadResponse := <-m.iface.DownloadResponseChan():
