@@ -13,6 +13,10 @@ jobs:
   include:
   - os: linux
     dist: focal
+  - os: linux
+    dist: focal
+    env:
+      - BUILD_DOCKER=1
 
 install:
 - source ci/install.sh
