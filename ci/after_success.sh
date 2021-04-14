@@ -9,6 +9,6 @@ else
    fi
 
    echo "$DOCKER_PASSWORD" | docker login -u $DOCKER_USERNAME --password-stdin
-   docker tag koinos-p2p koinos/p2p:$TAG
+   docker tag koinos-p2p koinos/koinos-p2p:$TAG
    docker push koinos/koinos-p2p:$TAG
 fi
