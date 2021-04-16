@@ -85,11 +85,9 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 			resp.Block = *types.NewOpaqueBlockFromBlob(&vbBlock)
 		}
 		// TODO: Add better error handling on other end of channel
-		if resp.Err != nil {
-			select {
-			case h.downloadResponseChan <- *resp:
-			case <-ctx.Done():
-			}
+		select {
+		case h.downloadResponseChan <- *resp:
+		case <-ctx.Done():
 		}
 	}()
 }
@@ -126,11 +124,11 @@ func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 	doPeerCycle := func() {
 		err := h.peerHandlerCycle(ctx)
 		if err != nil {
-			select {
 			//TODO: Handle h.errChan or else the loop blocks
+			//select {
 			//case h.errChan <- PeerError{h.peerID, err}:
-			case <-ctx.Done():
-			}
+			//case <-ctx.Done():
+			//}
 			return
 		}
 	}
