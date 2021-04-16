@@ -36,7 +36,7 @@ const (
 
 const (
 	baseDirDefault      = ".koinos"
-	amqpDefault         = "amqp://guest.guest@localhost:5672/"
+	amqpDefault         = "amqp://guest:guest@localhost:5672/"
 	listenDefault       = "/ip4/127.0.0.1/tcp/8888"
 	seedDefault         = ""
 	peerExchangeDefault = true
