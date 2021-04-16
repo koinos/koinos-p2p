@@ -228,19 +228,13 @@ func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode,
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	err = listenNode.Start(context.Background())
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
+	listenNode.Start(context.Background())
 
 	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, nil, "test2", config)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	err = sendNode.Start(context.Background())
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
+	sendNode.Start(context.Background())
 
 	return listenNode, sendNode, listenNode.GetPeerAddress(), listenNode.GetPeerAddress(), nil
 }
