@@ -80,10 +80,13 @@ func main() {
 	util.EnsureDir(*baseDir)
 	yamlConfig := util.InitYamlConfig(*baseDir)
 
-	// Generate Instance ID
-	if *instanceID == "" {
-		*instanceID = util.GenerateBase58ID(5)
-	}
+	*amqp = util.GetStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
+	*addr = util.GetStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
+	*seed = util.GetStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
+	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P)
+	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P)
+	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
+	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 
 	appID := fmt.Sprintf("%s.%s", appName, *instanceID)
 
@@ -93,12 +96,6 @@ func main() {
 	if err != nil {
 		panic(fmt.Sprintf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel))
 	}
-
-	*amqp = util.GetStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
-	*addr = util.GetStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P)
-	*seed = util.GetStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
-	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P)
-	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P)
 
 	client := koinosmq.NewClient(*amqp)
 	requestHandler := koinosmq.NewRequestHandler(*amqp)
