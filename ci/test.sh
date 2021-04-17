@@ -23,7 +23,7 @@ else
 
    git clone https://github.com/koinos/koinos-integration-tests.git
 
-   cd koinos-integration_tests
+   cd koinos-integration-tests
    go get ./...
    cd tests
    ./run.sh
