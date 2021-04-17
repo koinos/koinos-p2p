@@ -21,7 +21,7 @@ else
 
    export P2P_TAG=$TAG
 
-   git clone git@github.com:koinos/koinos-integration-tests.git
+   git clone https://github.com/koinos/koinos-integration-tests.git
 
    cd koinos-integration_tests
    go get ./...
