@@ -143,10 +143,7 @@ func main() {
 
 	requestHandler.Start()
 
-	err = node.Start(context.Background())
-	if err != nil {
-		panic(err)
-	}
+	node.Start(context.Background())
 
 	log.Infof("Starting node at address: %s", node.GetPeerAddress())
 

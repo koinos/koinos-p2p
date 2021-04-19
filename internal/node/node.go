@@ -140,26 +140,6 @@ func getChannelError(errs chan error) error {
 	}
 }
 
-func (n *KoinosP2PNode) connectInitialPeers() error {
-	// TODO: Return errors via channel instead of error
-	// TODO: Connect to peers simultaneously instead of sequentially
-	// TODO: Instead of calling InitiateProtocol() here, register a notify handler using host.Network().Notify(n),
-	//       then initiate the sync protocol in the notify handler's Connected() message.
-	//       See e.g. go-libp2p-pubsub newPeers for the way, it also contains a manager-like processLoop() function.
-	//
-	// Connect to a peer
-	for _, pid := range n.Options.InitialPeers {
-		if pid != "" {
-			log.Infof("Connecting to initial peer %s and sending broadcast", pid)
-			_, err := n.ConnectToPeer(pid)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // ConnectToPeer connects the node to the given peer
 func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
 	addr, err := multiaddr.NewMultiaddr(peerAddr)
@@ -201,16 +181,15 @@ func (n *KoinosP2PNode) Close() error {
 }
 
 // Start starts background goroutines
-func (n *KoinosP2PNode) Start(ctx context.Context) error {
-	err := n.connectInitialPeers()
-	if err != nil {
-		return err
-	}
+func (n *KoinosP2PNode) Start(ctx context.Context) {
+	connectionManager := NewPeerConnectionManager(n, n.Options.InitialPeers)
+	n.Host.Network().Notify(connectionManager)
+
 	if n.Options.ForceGossip {
 		n.Gossip.Start(ctx)
 	}
 	n.SyncManager.Start(ctx)
-	return nil
+	go connectionManager.ConnectInitialPeers()
 }
 
 // ----------------------------------------------------------------------------

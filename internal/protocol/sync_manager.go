@@ -119,7 +119,7 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *optio
 	log.Debugf("SyncService successfully registered")
 
 	// TODO: What is context?
-	peerAdder := NewSyncManagerPeerAddr(ctx, h, &manager)
+	peerAdder := NewSyncManagerPeerAdder(ctx, h, &manager)
 	h.Network().Notify(&peerAdder)
 
 	return &manager

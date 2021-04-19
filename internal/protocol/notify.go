@@ -20,8 +20,8 @@ type SyncManagerPeerAdder struct {
 	syncManager *SyncManager
 }
 
-// NewSyncManagerPeerAddr creates a new SyncManagerPeerAdder object
-func NewSyncManagerPeerAddr(ctx context.Context, host host.Host, syncManager *SyncManager) SyncManagerPeerAdder {
+// NewSyncManagerPeerAdder creates a new SyncManagerPeerAdder object
+func NewSyncManagerPeerAdder(ctx context.Context, host host.Host, syncManager *SyncManager) SyncManagerPeerAdder {
 	peerAdder := SyncManagerPeerAdder{ctx, host, syncManager}
 	peerAdder.addCurrentPeers()
 	return peerAdder
