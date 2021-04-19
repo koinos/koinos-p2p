@@ -13,4 +13,18 @@ if [[ -z $BUILD_DOCKER ]]; then
    lcov -a ./build/internal.info -a ./build/node.info -o ./build/merged.info
 
    golint -set_exit_status ./...
+else
+   TAG="$TRAVIS_BRANCH"
+   if [ "$TAG" = "master" ]; then
+      TAG="latest"
+   fi
+
+   export P2P_TAG=$TAG
+
+   git clone https://github.com/koinos/koinos-integration-tests.git
+
+   cd koinos-integration-tests
+   go get ./...
+   cd tests
+   ./run.sh
 fi
