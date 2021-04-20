@@ -45,17 +45,6 @@ const (
 	DifferentFork
 )
 
-// GetForkStatusRequest args
-type GetForkStatusRequest struct {
-	HeadID     types.Multihash
-	HeadHeight types.BlockHeightType
-}
-
-// GetForkStatusResponse return
-type GetForkStatusResponse struct {
-	Status forkStatus
-}
-
 // GetBlocksRequest args
 type GetBlocksRequest struct {
 	HeadBlockID      types.Multihash
@@ -147,26 +136,6 @@ func (s *SyncService) GetForkHeads(ctx context.Context, request GetForkHeadsRequ
 
 	response.ForkHeads = rpcResult.ForkHeads
 	response.LastIrr = rpcResult.LastIrreversibleBlock
-	return nil
-}
-
-// GetForkStatus p2p rpc
-func (s *SyncService) GetForkStatus(ctx context.Context, request GetForkStatusRequest, response *GetForkStatusResponse) error {
-	response.Status = SameFork
-
-	// If peer is not in genesis state, check if they are on an ancestor chain of our's
-	if request.HeadHeight > 0 {
-		ancestor, err := s.RPC.GetBlocksByHeight(ctx, &request.HeadID, request.HeadHeight, 1)
-
-		if err != nil { // Should not happen, requested blocks from ID that we do not have
-			return err
-		}
-
-		if !ancestor.BlockItems[0].BlockID.Equals(&request.HeadID) { // Different fork
-			response.Status = DifferentFork
-		}
-	}
-
 	return nil
 }
 

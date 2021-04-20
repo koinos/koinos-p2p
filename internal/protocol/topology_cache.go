@@ -71,6 +71,7 @@ func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
 		}
 		m[block] = util.Void{}
 	}
+
 	return true
 }
 
@@ -255,6 +256,7 @@ func ConvertBlockTopologySetToSlice(m map[util.BlockTopologyCmp]util.Void) []uti
 //
 // This function could likely be optimized by adding additional indexing.
 func GetDownloads(myTopo *MyTopologyCache, netTopo *TopologyCache, maxCount int, maxDepth int) []util.BlockTopologyCmp {
+	fmt.Printf("%v %v\n", len(myTopo.ByHeight), len(netTopo.ByHeight))
 	nextSet := GetInitialDownload(myTopo, netTopo)
 	resultSet := make(map[util.BlockTopologyCmp]util.Void)
 

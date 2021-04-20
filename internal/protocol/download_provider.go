@@ -70,16 +70,16 @@ func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, opts options.BdmiProvide
 		Options:            opts,
 		PeerHandlerOptions: phopts,
 
-		newPeerChan:     make(chan peer.ID),
-		peerErrChan:     make(chan PeerError),
-		heightRangeChan: make(chan HeightRange),
+		newPeerChan:     make(chan peer.ID, 1),
+		peerErrChan:     make(chan PeerError, 1),
+		heightRangeChan: make(chan HeightRange, 1),
 
-		myBlockTopologyChan:  make(chan types.BlockTopology),
-		myLastIrrChan:        make(chan types.BlockTopology),
+		myBlockTopologyChan:  make(chan types.BlockTopology, 1),
+		myLastIrrChan:        make(chan types.BlockTopology, 1),
 		peerHasBlockChan:     make(chan PeerHasBlock, opts.PeerHasBlockQueueSize),
-		downloadResponseChan: make(chan BlockDownloadResponse),
-		applyBlockResultChan: make(chan BlockDownloadApplyResult),
-		rescanChan:           make(chan bool),
+		downloadResponseChan: make(chan BlockDownloadResponse, 1),
+		applyBlockResultChan: make(chan BlockDownloadApplyResult, 1),
+		rescanChan:           make(chan bool, 1),
 	}
 }
 
@@ -207,8 +207,20 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 
 	p.heightRange = getHeightInterestRange(p.forkHeads, p.Options.HeightInterestReach)
 
+	select {
+	case p.heightRangeChan <- p.heightRange:
+	case <-ctx.Done():
+		return
+	}
+
+	select {
+	case p.myLastIrrChan <- p.forkHeads.LastIrreversibleBlock:
+	case <-ctx.Done():
+		return
+	}
+
 	for _, head := range p.forkHeads.ForkHeads {
-		response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, p.heightRange.Height, types.UInt32(p.forkHeads.ForkHeads[0].Height-p.heightRange.Height))
+		response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, p.heightRange.Height, types.UInt32(p.heightRange.NumBlocks))
 		if err != nil {
 			log.Warnf("Could not get initial blocks: %v", err)
 		}
@@ -218,15 +230,16 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 			block, err := opaqueBlock.Block.GetNative()
 			if err != nil {
 				log.Warnf("Could not unbox initial block: %v", err)
-				select {
-				case p.myBlockTopologyChan <- types.BlockTopology{
-					ID:       block.ID,
-					Height:   block.Header.Height,
-					Previous: block.Header.Previous,
-				}:
-				case <-ctx.Done():
-					return
-				}
+			}
+
+			select {
+			case p.myBlockTopologyChan <- types.BlockTopology{
+				ID:       block.ID,
+				Height:   block.Header.Height,
+				Previous: block.Header.Previous,
+			}:
+			case <-ctx.Done():
+				return
 			}
 		}
 	}
@@ -240,10 +253,10 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 		client:                  p.client,
 		Options:                 p.PeerHandlerOptions,
 		errChan:                 p.peerErrChan,
-		heightRangeChan:         make(chan HeightRange),
-		internalHeightRangeChan: make(chan HeightRange),
+		heightRangeChan:         make(chan HeightRange, 1),
+		internalHeightRangeChan: make(chan HeightRange, 1),
 		peerHasBlockChan:        p.peerHasBlockChan,
-		downloadRequestChan:     make(chan BlockDownloadRequest),
+		downloadRequestChan:     make(chan BlockDownloadRequest, 1),
 		downloadResponseChan:    p.downloadResponseChan,
 	}
 	p.peerHandlers[newPeer] = h
@@ -316,10 +329,16 @@ func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.Fork
 		p.heightRange = newHeightRange
 
 		select {
-		case p.heightRangeChan <- newHeightRange:
+		case p.heightRangeChan <- p.heightRange:
 		case <-ctx.Done():
 			return
 		}
+	}
+
+	select {
+	case p.myLastIrrChan <- p.forkHeads.LastIrreversibleBlock:
+	case <-ctx.Done():
+		return
 	}
 }
 
@@ -385,7 +404,7 @@ func (p *BdmiProvider) triggerRescanCycle(ctx context.Context, state *RescanLoop
 
 // Start starts the Bdmi provider
 func (p *BdmiProvider) Start(ctx context.Context) {
-	p.initialize(ctx)
+	go p.initialize(ctx)
 	go p.providerLoop(ctx)
 	go p.triggerRescanLoop(ctx)
 }
