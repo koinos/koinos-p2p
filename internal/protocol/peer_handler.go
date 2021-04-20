@@ -14,11 +14,16 @@ import (
 	util "github.com/koinos/koinos-util-golang"
 )
 
-// HeightRange is a message that specifies a peer should send topology updates for the given height range.
-// TODO: Refactor to have height, blocks
-type HeightRange struct {
-	Height    types.BlockHeightType
-	NumBlocks types.UInt32
+// NodeUpdate is a message that updates PeerHandlers about changes to the local node.
+type NodeUpdate struct {
+	// NodeHeight specifies the height of the local node.
+	NodeHeight types.BlockHeightType
+
+	// InterestStartHeight specifies the oldest block we will download.
+	InterestStartHeight types.BlockHeightType
+
+	// InterestNumBlocks specifies the height difference between InterestStartHeight and the newest block we will download.
+	InterestNumBlocks types.UInt32
 }
 
 // PeerHandler is created by BdmiProvider to handle communications with a single peer.
@@ -27,7 +32,7 @@ type PeerHandler struct {
 	peerID peer.ID
 
 	// Current height range
-	heightRange HeightRange
+	lastNodeUpdate NodeUpdate
 
 	// RPC client
 	client *gorpc.Client
@@ -39,13 +44,13 @@ type PeerHandler struct {
 	// All PeerHandlers send their errors to a common channel.
 	errChan chan<- PeerError
 
-	// Channel for receiving height range updates.
-	// Each PeerHandler has its own heightRangeChan.
+	// Channel for receiving NodeUpdate.
+	// Each PeerHandler has its own nodeUpdateChan.
 	// It is filled by BdmiProvider and drained by PeerHandler.
-	heightRangeChan chan HeightRange
+	nodeUpdateChan chan NodeUpdate
 
-	// Channel for sending height updates from heightRangeUpdateLoop to peerHandlerLoop.
-	internalHeightRangeChan chan HeightRange
+	// Channel for sending height updates from nodeUpdateLoop to peerHandlerLoop.
+	internalNodeUpdateChan chan NodeUpdate
 
 	// Channel for sending your topology updates.
 	// All PeerHandlers send PeerHasBlock messages to a common channel.
@@ -92,22 +97,29 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 	}()
 }
 
-func (h *PeerHandler) heightRangeUpdateLoop(ctx context.Context) {
-	var value HeightRange
+func (h *PeerHandler) nodeUpdateLoop(ctx context.Context) {
+	//
+	// We only care about the last update.  So if multiple updates are
+	// enqueued without being serviced, we can simply throw away all but the
+	// last update.
+	//
+	// This simple goroutine implements the throwaway logic.
+	//
+	var value NodeUpdate
 	hasValue := false
 
 	for {
 		if hasValue {
 			select {
-			case value = <-h.heightRangeChan:
-			case h.internalHeightRangeChan <- value:
+			case value = <-h.nodeUpdateChan:
+			case h.internalNodeUpdateChan <- value:
 				hasValue = false
 			case <-ctx.Done():
 				return
 			}
 		} else {
 			select {
-			case value = <-h.heightRangeChan:
+			case value = <-h.nodeUpdateChan:
 				hasValue = true
 			case <-ctx.Done():
 				return
@@ -139,7 +151,7 @@ func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 		case <-nextPollTime:
 			doPeerCycle()
 			nextPollTime = time.After(time.Duration(h.Options.HeightRangePollTimeMs) * time.Millisecond)
-		case h.heightRange = <-h.internalHeightRangeChan:
+		case h.lastNodeUpdate = <-h.internalNodeUpdateChan:
 		case req := <-h.downloadRequestChan:
 			h.requestDownload(ctx, req)
 		case <-ctx.Done():
@@ -159,11 +171,11 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
-	log.Debugf("%s: Polling HeightRange{%d,%d}", h.peerID, h.heightRange.Height, h.heightRange.NumBlocks)
+	log.Debugf("%s: Polling HeightRange{%d,%d}", h.peerID, h.lastNodeUpdate.InterestStartHeight, h.lastNodeUpdate.InterestNumBlocks)
 
 	req := GetTopologyAtHeightRequest{
-		BlockHeight: h.heightRange.Height,
-		NumBlocks:   h.heightRange.NumBlocks,
+		BlockHeight: h.lastNodeUpdate.InterestStartHeight,
+		NumBlocks:   h.lastNodeUpdate.InterestNumBlocks,
 	}
 	resp := NewGetTopologyAtHeightResponse()
 	subctx, cancel := context.WithTimeout(ctx, time.Duration(h.Options.RPCTimeoutMs)*time.Millisecond)
