@@ -264,9 +264,11 @@ func TestSyncNoError(t *testing.T) {
 
 	time.Sleep(time.Duration(3000) * time.Duration(time.Millisecond))
 
-	// SendRPC should have applied 123 blocks
-	if len(sendRPC.BlocksApplied) != 123 {
-		t.Errorf("Incorrect number of blocks applied. Exepcted 123, was %v", len(sendRPC.BlocksApplied))
+	// SendRPC should have applied 49 blocks
+	// A real node would have synced 123, but is event driven from chain broadcasts
+	// This is far as the node will sync without handling broadcasts
+	if len(sendRPC.BlocksApplied) != 49 {
+		t.Errorf("Incorrect number of blocks applied. Exepcted 49, was %v", len(sendRPC.BlocksApplied))
 	}
 }
 
