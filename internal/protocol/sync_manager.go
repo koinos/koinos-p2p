@@ -222,3 +222,11 @@ func (m *SyncManager) Start(ctx context.Context) {
 	m.bdmiProvider.Start(ctx)
 	go m.run(ctx)
 }
+
+func (m *SyncManager) HandleBlockBroadcast(ctx context.Context, blockBroadcast *types.BlockAccepted) {
+	m.bdmiProvider.HandleBlockBroadcast(ctx, blockBroadcast)
+}
+
+func (m *SyncManager) HandleForkHeads(ctx context.Context, forkHeads *types.ForkHeads) {
+	m.bdmiProvider.HandleForkHeads(ctx, forkHeads)
+}

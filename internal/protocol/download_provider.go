@@ -35,6 +35,7 @@ type BdmiProvider struct {
 	client *gorpc.Client
 	rpc    rpc.RPC
 
+	forkHeads   *types.ForkHeads
 	heightRange HeightRange
 
 	Options            options.BdmiProviderOptions
@@ -62,7 +63,9 @@ func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, opts options.BdmiProvide
 		peerHandlers: make(map[peer.ID]*PeerHandler),
 		client:       client,
 		rpc:          rpc,
-		heightRange:  HeightRange{0, 0},
+
+		forkHeads:   types.NewForkHeads(),
+		heightRange: HeightRange{0, 0},
 
 		Options:            opts,
 		PeerHandlerOptions: phopts,
@@ -192,6 +195,43 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 	}()
 }
 
+func (p *BdmiProvider) initialize(ctx context.Context) {
+	heads, err := p.rpc.GetForkHeads(ctx)
+	if err != nil {
+		log.Warnf("Could not get initial fork heads: %v", err)
+		return
+	}
+
+	p.forkHeads.ForkHeads = heads.ForkHeads
+	p.forkHeads.LastIrreversibleBlock = heads.LastIrreversibleBlock
+
+	p.heightRange = getHeightInterestRange(p.forkHeads, p.Options.HeightInterestReach)
+
+	for _, head := range p.forkHeads.ForkHeads {
+		response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, p.heightRange.Height, types.UInt32(p.forkHeads.ForkHeads[0].Height-p.heightRange.Height))
+		if err != nil {
+			log.Warnf("Could not get initial blocks: %v", err)
+		}
+
+		for _, opaqueBlock := range response.BlockItems {
+			opaqueBlock.Block.Unbox()
+			block, err := opaqueBlock.Block.GetNative()
+			if err != nil {
+				log.Warnf("Could not unbox initial block: %v", err)
+				select {
+				case p.myBlockTopologyChan <- types.BlockTopology{
+					ID:       block.ID,
+					Height:   block.Header.Height,
+					Previous: block.Header.Previous,
+				}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}
+}
+
 func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 	// TODO handle case where peer already exists
 	h := &PeerHandler{
@@ -212,7 +252,6 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 }
 
 func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange HeightRange) {
-	p.heightRange = heightRange
 	for _, peerHandler := range p.peerHandlers {
 		go func(ph *PeerHandler) {
 			select {
@@ -226,30 +265,8 @@ func (p *BdmiProvider) handleHeightRange(ctx context.Context, heightRange Height
 	}
 }
 
-// MyTopologyLoopState represents that state of a topology loop
-type MyTopologyLoopState struct {
-	heightRange HeightRange
-}
-
-func (p *BdmiProvider) pollMyTopologyLoop(ctx context.Context) {
-	state := MyTopologyLoopState{heightRange: HeightRange{0, 0}}
-	for {
-		err := p.pollMyTopologyCycle(ctx, &state)
-
-		if err != nil {
-			log.Errorf("Error polling my topology: %s", err.Error())
-		}
-
-		select {
-		case <-time.After(time.Duration(p.Options.PollMyTopologyMs) * time.Millisecond):
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
 // getHeightInterestRange computes the heights of interest for a given GetForkHeadsResponse
-func getHeightInterestRange(forkHeads *types.GetForkHeadsResponse, heightInterestReach uint64) HeightRange {
+func getHeightInterestRange(forkHeads *types.ForkHeads, heightInterestReach uint64) HeightRange {
 	if len(forkHeads.ForkHeads) == 0 {
 		// Zero ForkHeads means we're spinning up a brand-new node that doesn't have any blocks yet.
 		// In this case we simply ask for the first few blocks.
@@ -287,52 +304,35 @@ func getHeightInterestRange(forkHeads *types.GetForkHeadsResponse, heightInteres
 	return newHeightRange
 }
 
-func (p *BdmiProvider) pollMyTopologyCycle(ctx context.Context, state *MyTopologyLoopState) error {
-	//
-	// TODO:  Currently this code has the client poll for blocks in the height range.
-	//        This is inefficient, we should instead have the server pro-actively send
-	//        blocks within the requested height range.  This way both client and server
-	//        are properly event-driven rather than polling.
-	//
-	//        We will need some means to feed height range, this may require modification to
-	//        libp2p-gorpc to support passing the peer ID into the caller.
-	//
+func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.ForkHeads) {
+	p.forkHeads = newHeads
 
-	forkHeads, blockTopology, err := p.rpc.GetTopologyAtHeight(ctx, state.heightRange.Height, state.heightRange.NumBlocks)
-
-	if err != nil {
-		return err
-	}
-
-	newHeightRange := getHeightInterestRange(forkHeads, p.Options.HeightInterestReach)
+	newHeightRange := getHeightInterestRange(newHeads, p.Options.HeightInterestReach)
 
 	// Any changes to heightRange get sent to the main loop for broadcast to PeerHandlers
-	if newHeightRange != state.heightRange {
-		log.Debugf("My topology height range changed from %v to %v", state.heightRange, newHeightRange)
+	if newHeightRange != p.heightRange {
+		log.Debugf("My topology height range changed from %v to %v", p.heightRange, newHeightRange)
 
-		state.heightRange = newHeightRange
+		p.heightRange = newHeightRange
 
 		select {
 		case p.heightRangeChan <- newHeightRange:
 		case <-ctx.Done():
-			return nil
+			return
 		}
 	}
+}
 
+func (p *BdmiProvider) HandleBlockBroadcast(ctx context.Context, blockBroadcast *types.BlockAccepted) {
 	select {
-	case p.myLastIrrChan <- forkHeads.LastIrreversibleBlock:
+	case p.myBlockTopologyChan <- types.BlockTopology{
+		ID:       blockBroadcast.Block.ID,
+		Height:   blockBroadcast.Block.Header.Height,
+		Previous: blockBroadcast.Block.Header.Previous,
+	}:
 	case <-ctx.Done():
-		return nil
+		return
 	}
-
-	for _, topo := range blockTopology {
-		select {
-		case p.myBlockTopologyChan <- topo:
-		case <-ctx.Done():
-			return nil
-		}
-	}
-	return nil
 }
 
 func (p *BdmiProvider) providerLoop(ctx context.Context) {
@@ -385,7 +385,7 @@ func (p *BdmiProvider) triggerRescanCycle(ctx context.Context, state *RescanLoop
 
 // Start starts the Bdmi provider
 func (p *BdmiProvider) Start(ctx context.Context) {
-	go p.pollMyTopologyLoop(ctx)
+	p.initialize(ctx)
 	go p.providerLoop(ctx)
 	go p.triggerRescanLoop(ctx)
 }

@@ -245,10 +245,6 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multih
 
 // GetAncestorTopologyAtHeights rpc call
 func (k *KoinosRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
-
-	// TODO:  Implement this properly in the block store.
-	// This implementation is an inefficient, abstraction-breaking hack that unboxes stuff in the p2p code (where it definitely shouldn't be unboxed).
-
 	result := make([]types.BlockTopology, len(heights))
 
 	for i, h := range heights {
@@ -264,7 +260,6 @@ func (k *KoinosRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *t
 		if err != nil {
 			return nil, err
 		}
-		block.ActiveData.Unbox()
 
 		result[i].ID = resp.BlockItems[0].BlockID
 		result[i].Height = resp.BlockItems[0].BlockHeight
