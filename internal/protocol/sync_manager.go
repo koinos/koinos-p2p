@@ -125,6 +125,11 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *optio
 	return &manager
 }
 
+// SetGossipEnableHandler adds a handler to receive enable/disable gossip.
+func (m *SyncManager) SetGossipEnableHandler(geh GossipEnableHandler) {
+	m.bdmiProvider.GossipEnableHandler = geh
+}
+
 // AddPeer adds a peer to the SyncManager.
 // Will connect to the peer in the background.
 func (m *SyncManager) AddPeer(ctx context.Context, pid peer.ID) {

@@ -41,6 +41,8 @@ type BdmiProvider struct {
 	Options            options.BdmiProviderOptions
 	PeerHandlerOptions options.PeerHandlerOptions
 
+	GossipEnableHandler GossipEnableHandler
+
 	newPeerChan    chan peer.ID
 	peerErrChan    chan PeerError
 	nodeUpdateChan chan NodeUpdate
@@ -59,7 +61,12 @@ type BdmiProvider struct {
 var _ BlockDownloadManagerInterface = (*BdmiProvider)(nil)
 
 // NewBdmiProvider creates a new instance of BdmiProvider
-func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, opts options.BdmiProviderOptions, phopts options.PeerHandlerOptions) *BdmiProvider {
+func NewBdmiProvider(
+	client *gorpc.Client,
+	rpc rpc.RPC,
+	opts options.BdmiProviderOptions,
+	phopts options.PeerHandlerOptions) *BdmiProvider {
+
 	return &BdmiProvider{
 		peerHandlers: make(map[peer.ID]*PeerHandler),
 		client:       client,
@@ -68,8 +75,9 @@ func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, opts options.BdmiProvide
 		forkHeads:   types.NewForkHeads(),
 		lastNodeUpdate: NodeUpdate{0, 0, 0},
 
-		Options:            opts,
-		PeerHandlerOptions: phopts,
+		Options:             opts,
+		PeerHandlerOptions:  phopts,
+		GossipEnableHandler: nil,
 
 		newPeerChan:     make(chan peer.ID, 1),
 		peerErrChan:     make(chan PeerError, 1),
@@ -255,7 +263,9 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 
 // EnableGossip enables or disables gossip mode
 func (p *BdmiProvider) EnableGossip(ctx context.Context, enableGossip bool) {
-	// TODO
+	if p.GossipEnableHandler != nil {
+		p.GossipEnableHandler.EnableGossip(ctx, enableGossip)
+	}
 }
 
 func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
