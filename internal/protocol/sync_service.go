@@ -97,8 +97,10 @@ type GetBlocksByIDResponse struct {
 // SyncService handles broadcasting inventory to peers
 // TODO: Rename RPC (to what?)
 type SyncService struct {
-	RPC     rpc.RPC
-	Options options.SyncServiceOptions
+	RPC      rpc.RPC
+	Provider *BdmiProvider
+	MyTopo   *MyTopologyCache
+	Options  options.SyncServiceOptions
 }
 
 // GetChainID p2p rpc
@@ -170,18 +172,60 @@ func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRe
 
 // GetTopologyAtHeight p2p rpc
 func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopologyAtHeightRequest, response *GetTopologyAtHeightResponse) error {
-	forkHeads, blockTopology, err := s.RPC.GetTopologyAtHeight(ctx, request.BlockHeight, request.NumBlocks)
-	if err != nil {
-		return err
+	response.ForkHeads = (*types.GetForkHeadsResponse)(s.Provider.forkHeads)
+
+	for _, head := range response.ForkHeads.ForkHeads {
+		lastBlock := request.BlockHeight + types.BlockHeightType(request.NumBlocks)
+		if head.Height < lastBlock {
+			lastBlock = head.Height
+		}
+
+		for i := request.BlockHeight; i < lastBlock; i++ {
+			if topos, ok := s.MyTopo.ByHeight[i]; ok {
+				for key := range topos {
+					response.BlockTopology = append(response.BlockTopology, types.BlockTopology{
+						ID: types.Multihash{
+							ID:     key.ID.ID,
+							Digest: types.VariableBlob(key.ID.Digest),
+						},
+						Previous: types.Multihash{
+							ID:     key.Previous.ID,
+							Digest: types.VariableBlob(key.Previous.Digest),
+						},
+						Height: key.Height,
+					})
+				}
+			} else {
+				resp, err := s.RPC.GetBlocksByHeight(ctx, &head.ID, i, 1)
+				if err != nil {
+					return err
+				}
+				for _, blockItem := range resp.BlockItems {
+					topology := types.BlockTopology{
+						ID:     blockItem.BlockID,
+						Height: blockItem.BlockHeight,
+					}
+
+					if blockItem.BlockHeight != 0 {
+						opaqueBlock := blockItem.Block
+						opaqueBlock.Unbox()
+						block, err := opaqueBlock.GetNative()
+						if err != nil {
+							return err
+						}
+
+						topology.Previous = block.Header.Previous
+					}
+				}
+			}
+		}
 	}
 
-	response.ForkHeads = forkHeads
-	response.BlockTopology = blockTopology
 	return nil
 }
 
 // NewSyncService constructs a new broadcast protocol object
-func NewSyncService(rpc *rpc.RPC, opts options.SyncServiceOptions) *SyncService {
-	p := &SyncService{RPC: *rpc, Options: opts}
+func NewSyncService(rpc *rpc.RPC, provider *BdmiProvider, myTopo *MyTopologyCache, opts options.SyncServiceOptions) *SyncService {
+	p := &SyncService{RPC: *rpc, Provider: provider, MyTopo: myTopo, Options: opts}
 	return p
 }

@@ -111,7 +111,7 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *optio
 	manager.rescanBlacklist = ticker.C
 
 	log.Debug("Registering SyncService")
-	err := manager.server.Register(NewSyncService(&rpc, config.SyncServiceOptions))
+	err := manager.server.Register(NewSyncService(&rpc, manager.bdmiProvider, &manager.downloadManager.MyTopoCache, config.SyncServiceOptions))
 	if err != nil {
 		log.Errorf("Error registering sync service: %s", err.Error())
 		panic(err)
@@ -223,10 +223,12 @@ func (m *SyncManager) Start(ctx context.Context) {
 	go m.run(ctx)
 }
 
+// HandleBlockBroadcast handles block broadcast
 func (m *SyncManager) HandleBlockBroadcast(ctx context.Context, blockBroadcast *types.BlockAccepted) {
 	m.bdmiProvider.HandleBlockBroadcast(ctx, blockBroadcast)
 }
 
+// HandleForkHeads handles fork heads broadcast
 func (m *SyncManager) HandleForkHeads(ctx context.Context, forkHeads *types.ForkHeads) {
 	m.bdmiProvider.HandleForkHeads(ctx, forkHeads)
 }

@@ -174,20 +174,6 @@ func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *typ
 	return result, nil
 }
 
-func (k *TestRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
-	forkHeads, _ := k.GetForkHeads(ctx)
-	result := make([]types.BlockTopology, 0)
-	for i := types.UInt32(0); i < numBlocks; i++ {
-		h := height + types.BlockHeightType(i)
-		if h > k.Height {
-			break
-		}
-		result = append(result, *k.getDummyTopologyAtHeight(h))
-	}
-
-	return forkHeads, result, nil
-}
-
 func (k *TestRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 	return true, nil
 }

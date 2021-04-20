@@ -52,10 +52,6 @@ func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *typ
 	return nil, nil
 }
 
-func (k *TestRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
-	return nil, nil, nil
-}
-
 func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
 	return nil, nil
 }

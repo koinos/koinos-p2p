@@ -317,6 +317,7 @@ func getHeightInterestRange(forkHeads *types.ForkHeads, heightInterestReach uint
 	return newHeightRange
 }
 
+// HandleForkHeads handles fork broadcast
 func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.ForkHeads) {
 	p.forkHeads = newHeads
 
@@ -342,6 +343,7 @@ func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.Fork
 	}
 }
 
+// HandleBlockBroadcast handles block broadcast
 func (p *BdmiProvider) HandleBlockBroadcast(ctx context.Context, blockBroadcast *types.BlockAccepted) {
 	select {
 	case p.myBlockTopologyChan <- types.BlockTopology{
@@ -400,6 +402,11 @@ func (p *BdmiProvider) triggerRescanCycle(ctx context.Context, state *RescanLoop
 	case <-ctx.Done():
 		return
 	}
+}
+
+// GetForkHeads returns current Fork Heads
+func (p *BdmiProvider) GetForkHeads() types.ForkHeads {
+	return *p.forkHeads
 }
 
 // Start starts the Bdmi provider
