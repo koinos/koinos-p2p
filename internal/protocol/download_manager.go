@@ -42,6 +42,12 @@ type BlockDownloadApplyResult struct {
 	Err error
 }
 
+// PeerIsContemporary is a message that specifies a peer is / is not contemporary.
+type PeerIsContemporary struct {
+	PeerID         peer.ID
+	IsContemporary bool
+}
+
 // BlockDownloadManagerInterface is an abstraction of the methods a BlockDownloadManager should contain
 type BlockDownloadManagerInterface interface {
 	// RequestDownload is called by the BlockDownloadManager to request a download to begin.
@@ -57,6 +63,12 @@ type BlockDownloadManagerInterface interface {
 	// Any goroutines launched should respect the passed-in context.
 	// When the block succeeds or fails to apply, the implementation should send it to ApplyBlockResultChan().
 	ApplyBlock(context.Context, BlockDownloadResponse)
+
+	// EnableGossip is called by the BlockDownloadManager to request gossip mode to be enabled / disabled.
+	//
+	// The implementation should use a goroutine to handle any blocking operations.
+	// Any goroutines launched should respect the passed-in context.
+	EnableGossip(context.Context, bool)
 
 	// MyBlockTopologyChan values are supplied by the user to inform the BlockDownloadManager of
 	// blocks that have been successfully applied to the local node.
@@ -78,6 +90,12 @@ type BlockDownloadManagerInterface interface {
 	//
 	// Normally the user would give this channel to each peer's PeerHandler.
 	PeerHasBlockChan() <-chan PeerHasBlock
+
+	// PeerIsContemporaryChan values are supplied by the user to inform the BlockDownloadManager if the peer is contemporary.
+	// Contemporary peers are peers that have nearby heads and can participate in gossip.
+	//
+	// Normally the user would give this channel to each peer's PeerHandler.
+	PeerIsContemporaryChan() <-chan PeerIsContemporary
 
 	// DownloadResponseChan values are supplied by the user to inform the BlockDownloadManager when
 	// a download is complete.
@@ -121,6 +139,7 @@ type BlockDownloadManager struct {
 	Applying       map[util.BlockTopologyCmp]BlockDownloadResponse
 	WaitingToApply map[util.BlockTopologyCmp]BlockDownloadResponse
 	Options        options.DownloadManagerOptions
+	GossipVoter    GossipVoter
 
 	needRescan bool
 	rng        *rand.Rand
@@ -146,6 +165,7 @@ func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface
 		Applying:       make(map[util.BlockTopologyCmp]BlockDownloadResponse),
 		WaitingToApply: make(map[util.BlockTopologyCmp]BlockDownloadResponse),
 		Options:        opt,
+		GossipVoter:    *NewGossipVoter(opt.GossipDisableBp, opt.GossipEnableBp),
 
 		needRescan: false,
 		rng:        rng,
@@ -339,6 +359,15 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 			log.Debugf("%v: Service PeerHasBlock message %s", peerHasBlock.PeerID, util.BlockTopologyCmpString(&peerHasBlock.Block))
 			added := m.TopoCache.Add(peerHasBlock)
 			m.needRescan = m.needRescan || added
+		case peerIsContemporary := <-m.iface.PeerIsContemporaryChan():
+			log.Debugf("%v: Service PeerIsContemporary message %s", peerIsContemporary.PeerID, peerIsContemporary.IsContemporary)
+			// TODO:  Remove disconnected peers from GossipVoter, topoCache
+			oldFlag := m.GossipVoter.EnableGossip
+			m.GossipVoter.Vote(peerIsContemporary)
+			if m.GossipVoter.EnableGossip != oldFlag {
+				log.Infof("EnableGossip set to %s", m.GossipVoter.EnableGossip)
+				m.iface.EnableGossip(ctx, m.GossipVoter.EnableGossip)
+			}
 		case downloadResponse := <-m.iface.DownloadResponseChan():
 			m.handleDownloadResponse(ctx, downloadResponse)
 		case applyBlockResult := <-m.iface.ApplyBlockResultChan():

@@ -47,12 +47,13 @@ type BdmiProvider struct {
 
 	// Below channels are drained by DownloadManager
 
-	myBlockTopologyChan  chan types.BlockTopology
-	myLastIrrChan        chan types.BlockTopology
-	peerHasBlockChan     chan PeerHasBlock
-	downloadResponseChan chan BlockDownloadResponse
-	applyBlockResultChan chan BlockDownloadApplyResult
-	rescanChan           chan bool
+	myBlockTopologyChan    chan types.BlockTopology
+	myLastIrrChan          chan types.BlockTopology
+	peerHasBlockChan       chan PeerHasBlock
+	peerIsContemporaryChan chan PeerIsContemporary
+	downloadResponseChan   chan BlockDownloadResponse
+	applyBlockResultChan   chan BlockDownloadApplyResult
+	rescanChan             chan bool
 }
 
 var _ BlockDownloadManagerInterface = (*BdmiProvider)(nil)
@@ -74,12 +75,13 @@ func NewBdmiProvider(client *gorpc.Client, rpc rpc.RPC, opts options.BdmiProvide
 		peerErrChan:     make(chan PeerError, 1),
 		nodeUpdateChan:  make(chan NodeUpdate, 1),
 
-		myBlockTopologyChan:  make(chan types.BlockTopology, 1),
-		myLastIrrChan:        make(chan types.BlockTopology, 1),
-		peerHasBlockChan:     make(chan PeerHasBlock, opts.PeerHasBlockQueueSize),
-		downloadResponseChan: make(chan BlockDownloadResponse, 1),
-		applyBlockResultChan: make(chan BlockDownloadApplyResult, 1),
-		rescanChan:           make(chan bool, 1),
+		myBlockTopologyChan:    make(chan types.BlockTopology),
+		myLastIrrChan:          make(chan types.BlockTopology),
+		peerHasBlockChan:       make(chan PeerHasBlock, opts.PeerHasBlockQueueSize),
+		peerIsContemporaryChan: make(chan PeerIsContemporary, 1),
+		downloadResponseChan:   make(chan BlockDownloadResponse, 1),
+		applyBlockResultChan:   make(chan BlockDownloadApplyResult, 1),
+		rescanChan:             make(chan bool, 1),
 	}
 }
 
@@ -91,6 +93,11 @@ func (p *BdmiProvider) MyBlockTopologyChan() <-chan types.BlockTopology {
 // MyLastIrrChan is a getter for myLastIrrChan
 func (p *BdmiProvider) MyLastIrrChan() <-chan types.BlockTopology {
 	return p.myLastIrrChan
+}
+
+// PeerIsContemporaryChan is a getter for peerIsContemporaryChan
+func (p *BdmiProvider) PeerIsContemporaryChan() <-chan PeerIsContemporary {
+	return p.peerIsContemporaryChan
 }
 
 // PeerHasBlockChan is a getter for peerHasBlockChan
@@ -246,6 +253,11 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 	}
 }
 
+// EnableGossip enables or disables gossip mode
+func (p *BdmiProvider) EnableGossip(ctx context.Context, enableGossip bool) {
+	// TODO
+}
+
 func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 	// TODO handle case where peer already exists
 	h := &PeerHandler{
@@ -371,6 +383,7 @@ func (p *BdmiProvider) providerLoop(ctx context.Context) {
 			p.handleNewPeer(ctx, newPeer)
 		case nodeUpdate := <-p.nodeUpdateChan:
 			p.handleNodeUpdate(ctx, nodeUpdate)
+
 		case <-ctx.Done():
 			return
 		}
