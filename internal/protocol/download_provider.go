@@ -35,7 +35,7 @@ type BdmiProvider struct {
 	client *gorpc.Client
 	rpc    rpc.RPC
 
-	forkHeads   *types.ForkHeads
+	forkHeads      *types.ForkHeads
 	lastNodeUpdate NodeUpdate
 
 	Options            options.BdmiProviderOptions
@@ -72,16 +72,16 @@ func NewBdmiProvider(
 		client:       client,
 		rpc:          rpc,
 
-		forkHeads:   types.NewForkHeads(),
+		forkHeads:      types.NewForkHeads(),
 		lastNodeUpdate: NodeUpdate{0, 0, 0},
 
 		Options:             opts,
 		PeerHandlerOptions:  phopts,
 		GossipEnableHandler: nil,
 
-		newPeerChan:     make(chan peer.ID, 1),
-		peerErrChan:     make(chan PeerError, 1),
-		nodeUpdateChan:  make(chan NodeUpdate, 1),
+		newPeerChan:    make(chan peer.ID, 1),
+		peerErrChan:    make(chan PeerError, 1),
+		nodeUpdateChan: make(chan NodeUpdate, 1),
 
 		myBlockTopologyChan:    make(chan types.BlockTopology),
 		myLastIrrChan:          make(chan types.BlockTopology),
