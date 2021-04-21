@@ -210,55 +210,28 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 	}()
 }
 
+func toForkHeads(resp *types.GetForkHeadsResponse) *types.ForkHeads {
+	// TODO Change GetForkHeadsResponse in koinos-types to avoid the necessity for this method
+	fh := types.NewForkHeads()
+	fh.ForkHeads = resp.ForkHeads
+	fh.LastIrreversibleBlock = resp.LastIrreversibleBlock
+	return fh
+}
+
 func (p *BdmiProvider) initialize(ctx context.Context) {
-	heads, err := p.rpc.GetForkHeads(ctx)
+	headsResp, err := p.rpc.GetForkHeads(ctx)
 	if err != nil {
 		log.Warnf("Could not get initial fork heads: %v", err)
 		return
 	}
 
-	p.forkHeads.ForkHeads = heads.ForkHeads
-	p.forkHeads.LastIrreversibleBlock = heads.LastIrreversibleBlock
+	heads := toForkHeads(headsResp)
 
-	p.heightRange = getHeightInterestRange(p.forkHeads, p.Options.HeightInterestReach)
+	newNodeUpdate := getNodeUpdate(heads, p.Options.HeightInterestReach)
 
-	select {
-	case p.heightRangeChan <- p.heightRange:
-	case <-ctx.Done():
-		return
-	}
-
-	select {
-	case p.myLastIrrChan <- p.forkHeads.LastIrreversibleBlock:
-	case <-ctx.Done():
-		return
-	}
-
-	for _, head := range p.forkHeads.ForkHeads {
-		response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, p.heightRange.Height, types.UInt32(p.heightRange.NumBlocks))
-		if err != nil {
-			log.Warnf("Could not get initial blocks: %v", err)
-		} else {
-			for _, opaqueBlock := range response.BlockItems {
-				opaqueBlock.Block.Unbox()
-				block, err := opaqueBlock.Block.GetNative()
-				if err != nil {
-					log.Warnf("Could not unbox initial block: %v", err)
-					return
-				}
-
-				select {
-				case p.myBlockTopologyChan <- types.BlockTopology{
-					ID:       block.ID,
-					Height:   block.Header.Height,
-					Previous: block.Header.Previous,
-				}:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}
+	// TODO move HandleForkHeads() functionality into handleNodeUpdate()
+	p.handleNodeUpdate(ctx, newNodeUpdate)
+	p.HandleForkHeads(ctx, heads)
 }
 
 // EnableGossip enables or disables gossip mode
