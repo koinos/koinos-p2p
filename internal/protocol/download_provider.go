@@ -415,7 +415,9 @@ func (p *BdmiProvider) GetForkHeads() types.ForkHeads {
 
 // Start starts the Bdmi provider
 func (p *BdmiProvider) Start(ctx context.Context) {
-	go p.initialize(ctx)
-	go p.providerLoop(ctx)
-	go p.triggerRescanLoop(ctx)
+	go func() {
+		p.initialize(ctx)
+		go p.providerLoop(ctx)
+		go p.triggerRescanLoop(ctx)
+	}()
 }
