@@ -230,16 +230,16 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 				if err != nil {
 					log.Warnf("Could not unbox initial block: %v", err)
 					return
-				} else {
-					select {
-					case p.myBlockTopologyChan <- types.BlockTopology{
-						ID:       block.ID,
-						Height:   block.Header.Height,
-						Previous: block.Header.Previous,
-					}:
-					case <-ctx.Done():
-						return
-					}
+				}
+
+				select {
+				case p.myBlockTopologyChan <- types.BlockTopology{
+					ID:       block.ID,
+					Height:   block.Header.Height,
+					Previous: block.Header.Previous,
+				}:
+				case <-ctx.Done():
+					return
 				}
 			}
 		}
