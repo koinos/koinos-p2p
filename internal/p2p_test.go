@@ -151,29 +151,6 @@ func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse
 	return resp, nil
 }
 
-func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
-	result := make([]types.BlockTopology, len(heights))
-	for i, h := range heights {
-		resp, err := k.GetBlocksByHeight(ctx, blockID, h, 1)
-		if err != nil {
-			return nil, err
-		}
-		if len(resp.BlockItems) != 1 {
-			return nil, errors.New("Unexpected multiple blocks returned")
-		}
-		resp.BlockItems[0].Block.Unbox()
-		block, err := resp.BlockItems[0].Block.GetNative()
-		if err != nil {
-			return nil, err
-		}
-		result[i].ID = resp.BlockItems[0].BlockID
-		result[i].Height = resp.BlockItems[0].BlockHeight
-		result[i].Previous = block.Header.Previous
-	}
-
-	return result, nil
-}
-
 func (k *TestRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 	return true, nil
 }

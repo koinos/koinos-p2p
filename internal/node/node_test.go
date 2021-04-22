@@ -48,10 +48,6 @@ func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse
 	return nil, nil
 }
 
-func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
-	return nil, nil
-}
-
 func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
 	return nil, nil
 }
