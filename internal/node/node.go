@@ -65,7 +65,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	if requestHandler != nil {
 		requestHandler.SetBroadcastHandler("koinos.block.accept", node.handleBlockBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.handleTransactionBroadcast)
-		requestHandler.SetBroadcastHandler("koinos.forks.update", node.handleForkUpdate)
+		requestHandler.SetBroadcastHandler("koinos.block.forks", node.handleForkUpdate)
 	} else {
 		log.Info("Starting P2P node without broadcast listeners")
 	}
@@ -133,7 +133,7 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 }
 
 func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
-	log.Debugf("Received koinos.fork.update broadcast: %v", string(data))
+	log.Debugf("Received koinos.block.forks broadcast: %v", string(data))
 	forkHeads := types.NewForkHeads()
 	err := json.Unmarshal(data, forkHeads)
 	if err != nil {

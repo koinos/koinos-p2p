@@ -223,23 +223,24 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 		response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, p.heightRange.Height, types.UInt32(p.heightRange.NumBlocks))
 		if err != nil {
 			log.Warnf("Could not get initial blocks: %v", err)
-		}
-
-		for _, opaqueBlock := range response.BlockItems {
-			opaqueBlock.Block.Unbox()
-			block, err := opaqueBlock.Block.GetNative()
-			if err != nil {
-				log.Warnf("Could not unbox initial block: %v", err)
-			}
-
-			select {
-			case p.myBlockTopologyChan <- types.BlockTopology{
-				ID:       block.ID,
-				Height:   block.Header.Height,
-				Previous: block.Header.Previous,
-			}:
-			case <-ctx.Done():
-				return
+		} else {
+			for _, opaqueBlock := range response.BlockItems {
+				opaqueBlock.Block.Unbox()
+				block, err := opaqueBlock.Block.GetNative()
+				if err != nil {
+					log.Warnf("Could not unbox initial block: %v", err)
+					return
+				} else {
+					select {
+					case p.myBlockTopologyChan <- types.BlockTopology{
+						ID:       block.ID,
+						Height:   block.Header.Height,
+						Previous: block.Header.Previous,
+					}:
+					case <-ctx.Done():
+						return
+					}
+				}
 			}
 		}
 	}
