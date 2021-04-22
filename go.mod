@@ -13,6 +13,7 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.4.1
 	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/spf13/pflag v1.0.5
+	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2 // indirect
 	golang.org/x/sys v0.0.0-20210304203840-7b4935edff86 // indirect
