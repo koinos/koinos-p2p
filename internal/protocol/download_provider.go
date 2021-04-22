@@ -320,8 +320,55 @@ func getNodeUpdate(forkHeads *types.ForkHeads, heightInterestReach uint64) NodeU
 	return newNodeUpdate
 }
 
+// forkHeadConnects returns true if b connects to some existing fork head, false otherwise
+func (p *BdmiProvider) forkHeadConnects(b types.BlockTopology) bool {
+	for _, h := range p.forkHeads.ForkHeads {
+		if h.ID.Equals(&b.ID) {
+			return true
+		}
+		if h.ID.Equals(&b.Previous) {
+			return true
+		}
+	}
+	return false
+}
+
+// connectForkHead connects the fork head
+func (p *BdmiProvider) connectForkHead(ctx context.Context, lib types.BlockTopology, head types.BlockTopology) {
+	response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, lib.Height, types.UInt32(1+head.Height-lib.Height))
+	if err != nil {
+		log.Warnf("Could not connect fork head: %v", err)
+	}
+
+	for _, opaqueBlock := range response.BlockItems {
+		opaqueBlock.Block.Unbox()
+		block, err := opaqueBlock.Block.GetNative()
+		if err != nil {
+			log.Warnf("Could not unbox connecting block: %v", err)
+		}
+
+		select {
+		case p.myBlockTopologyChan <- types.BlockTopology{
+			ID:       block.ID,
+			Height:   block.Header.Height,
+			Previous: block.Header.Previous,
+		}:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 // HandleForkHeads handles fork broadcast
 func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.ForkHeads) {
+	// TODO:  This loop could be improved if we make p.forkHeads a dictionary
+	for _, fh := range newHeads.ForkHeads {
+		if !p.forkHeadConnects(fh) {
+			log.Infof("Connecting disconnected fork head %s", fh.ID)
+			p.connectForkHead(ctx, newHeads.LastIrreversibleBlock, fh)
+		}
+	}
+
 	p.forkHeads = newHeads
 
 	newNodeUpdate := getNodeUpdate(newHeads, p.Options.HeightInterestReach)

@@ -285,8 +285,10 @@ func TestApplyBlockFailure(t *testing.T) {
 
 	time.Sleep(time.Duration(800) * time.Duration(time.Millisecond))
 
+	expectedBlocksApplied := 18
+
 	// SendRPC should have applied 18 blocks
-	if len(sendRPC.BlocksApplied) != 18 {
-		t.Errorf("Incorrect number of blocks applied")
+	if len(sendRPC.BlocksApplied) != expectedBlocksApplied {
+		t.Errorf("Incorrect number of blocks applied, expected %d, got %d", expectedBlocksApplied, len(sendRPC.BlocksApplied))
 	}
 }
