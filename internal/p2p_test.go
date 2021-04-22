@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 	"testing"
