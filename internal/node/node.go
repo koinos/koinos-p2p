@@ -112,6 +112,7 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	blockBroadcast := types.NewBlockAccepted()
 	err := json.Unmarshal(data, blockBroadcast)
 	if err != nil {
+		log.Warnf("Unable to parse koinos.block.accept broadcast: %v", string(data))
 		return
 	}
 	binary := types.NewVariableBlob()
@@ -125,6 +126,7 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 	trxBroadcast := types.NewTransactionAccepted()
 	err := json.Unmarshal(data, trxBroadcast)
 	if err != nil {
+		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", string(data))
 		return
 	}
 	binary := types.NewVariableBlob()
@@ -137,6 +139,7 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 	forkHeads := types.NewForkHeads()
 	err := json.Unmarshal(data, forkHeads)
 	if err != nil {
+		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", string(data))
 		return
 	}
 	n.SyncManager.HandleForkHeads(context.Background(), forkHeads)
