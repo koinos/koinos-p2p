@@ -338,6 +338,7 @@ func (p *BdmiProvider) connectForkHead(ctx context.Context, lib types.BlockTopol
 	response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, lib.Height, types.UInt32(1+head.Height-lib.Height))
 	if err != nil {
 		log.Warnf("Could not connect fork head: %v", err)
+		return
 	}
 
 	for _, opaqueBlock := range response.BlockItems {
