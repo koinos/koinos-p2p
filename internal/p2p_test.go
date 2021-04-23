@@ -2,13 +2,11 @@ package protocol
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -28,6 +26,7 @@ type TestRPC struct {
 	ApplyBlocks      int          // Number of blocks to apply before failure. < 0 = always apply
 	BlocksApplied    []*types.Block
 	BlocksByID       map[util.MultihashCmp]*types.Block
+	Mutex            sync.Mutex
 }
 
 // getDummyBlockIDAtHeight() gets the ID of the dummy block at the given height
@@ -53,6 +52,7 @@ func (k *TestRPC) createDummyBlock(height types.BlockHeightType) *types.Block {
 	topo := k.getDummyTopologyAtHeight(height)
 
 	block := types.NewBlock()
+	block.ID = topo.ID
 	block.Header.Previous = topo.Previous
 	block.Header.Height = height
 	block.ActiveData = *types.NewOpaqueActiveBlockData()
@@ -65,6 +65,9 @@ func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse,
 	hi := types.NewGetHeadInfoResponse()
 	hi.HeadTopology.Height = k.Height
 	hi.HeadTopology.ID = *k.getDummyBlockIDAtHeight(hi.HeadTopology.Height)
+	if k.Height > 0 {
+		hi.HeadTopology.Previous = *k.getDummyBlockIDAtHeight(hi.HeadTopology.Height)
+	}
 	return hi, nil
 }
 
@@ -73,6 +76,9 @@ func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, err
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
 		return false, nil
 	}
+
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
 
 	k.BlocksApplied = append(k.BlocksApplied, block)
 	k.BlocksByID[util.MultihashToCmp(block.ID)] = block
@@ -106,21 +112,21 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultih
 
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
-	if height+types.BlockHeightType(numBlocks) > k.Height+types.BlockHeightType(len(k.BlocksApplied)) {
-		log.Error("Error in GetBlocksByHeight()")
-		return nil, fmt.Errorf("Requested block exceeded height")
-	}
-
 	blocks := types.NewGetBlocksByHeightResponse()
 	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
-		blockItem := types.NewBlockItem()
-		blockItem.BlockHeight = height + types.BlockHeightType(i)
-		blockItem.BlockID = *k.getDummyBlockIDAtHeight(blockItem.BlockHeight)
+		if height+types.BlockHeightType(i) > k.Height {
+			break
+		}
+
+		block := k.createDummyBlock(height + types.BlockHeightType(i))
+
 		vb := types.NewVariableBlob()
-		block := types.NewBlock()
-		activeData := types.NewActiveBlockData()
-		block.ActiveData = *types.NewOpaqueActiveBlockDataFromNative(*activeData)
 		vb = block.Serialize(vb)
+
+		blockItem := types.NewBlockItem()
+		blockItem.BlockHeight = block.Header.Height
+		blockItem.BlockID = block.ID
+
 		blockItem.Block = *types.NewOpaqueBlockFromBlob(vb)
 		blocks.BlockItems = append(blocks.BlockItems, *blockItem)
 	}
@@ -142,43 +148,6 @@ func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse
 		resp.LastIrreversibleBlock = *k.getDummyTopologyAtHeight(1)
 	}
 	return resp, nil
-}
-
-func (k *TestRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
-	result := make([]types.BlockTopology, len(heights))
-	for i, h := range heights {
-		resp, err := k.GetBlocksByHeight(ctx, blockID, h, 1)
-		if err != nil {
-			return nil, err
-		}
-		if len(resp.BlockItems) != 1 {
-			return nil, errors.New("Unexpected multiple blocks returned")
-		}
-		resp.BlockItems[0].Block.Unbox()
-		block, err := resp.BlockItems[0].Block.GetNative()
-		if err != nil {
-			return nil, err
-		}
-		result[i].ID = resp.BlockItems[0].BlockID
-		result[i].Height = resp.BlockItems[0].BlockHeight
-		result[i].Previous = block.Header.Previous
-	}
-
-	return result, nil
-}
-
-func (k *TestRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
-	forkHeads, _ := k.GetForkHeads(ctx)
-	result := make([]types.BlockTopology, 0)
-	for i := types.UInt32(0); i < numBlocks; i++ {
-		h := height + types.BlockHeightType(i)
-		if h > k.Height {
-			break
-		}
-		result = append(result, *k.getDummyTopologyAtHeight(h))
-	}
-
-	return forkHeads, result, nil
 }
 
 func (k *TestRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
@@ -257,9 +226,11 @@ func TestSyncNoError(t *testing.T) {
 
 	time.Sleep(time.Duration(3000) * time.Duration(time.Millisecond))
 
-	// SendRPC should have applied 123 blocks
-	if len(sendRPC.BlocksApplied) != 123 {
-		t.Errorf("Incorrect number of blocks applied")
+	// SendRPC should have applied 49 blocks
+	// A real node would have synced 123, but is event driven from chain broadcasts
+	// This is far as the node will sync without handling broadcasts
+	if len(sendRPC.BlocksApplied) != 49 {
+		t.Errorf("Incorrect number of blocks applied. Exepcted 49, was %v", len(sendRPC.BlocksApplied))
 	}
 }
 

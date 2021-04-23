@@ -71,6 +71,7 @@ func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
 		}
 		m[block] = util.Void{}
 	}
+
 	return true
 }
 

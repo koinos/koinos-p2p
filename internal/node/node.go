@@ -63,8 +63,9 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	node.RPC = rpc
 
 	if requestHandler != nil {
-		requestHandler.SetBroadcastHandler("koinos.block.accept", node.mqBroadcastHandler)
-		requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.mqBroadcastHandler)
+		requestHandler.SetBroadcastHandler("koinos.block.accept", node.handleBlockBroadcast)
+		requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.handleTransactionBroadcast)
+		requestHandler.SetBroadcastHandler("koinos.block.forks", node.handleForkUpdate)
 	} else {
 		log.Info("Starting P2P node without broadcast listeners")
 	}
@@ -106,29 +107,39 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	return node, nil
 }
 
-func (n *KoinosP2PNode) mqBroadcastHandler(topic string, data []byte) {
-	log.Debugf("Received broadcast: %v", string(data))
-	switch topic {
-	case "koinos.block.accept":
-		blockBroadcast := types.NewBlockAccepted()
-		err := json.Unmarshal(data, blockBroadcast)
-		if err != nil {
-			return
-		}
-		binary := types.NewVariableBlob()
-		binary = blockBroadcast.Serialize(binary)
-		n.Gossip.Block.PublishMessage(context.Background(), binary)
-
-	case "koinos.transaction.accept":
-		trxBroadcast := types.NewTransactionAccepted()
-		err := json.Unmarshal(data, trxBroadcast)
-		if err != nil {
-			return
-		}
-		binary := types.NewVariableBlob()
-		binary = trxBroadcast.Serialize(binary)
-		n.Gossip.Transaction.PublishMessage(context.Background(), binary)
+func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
+	log.Debugf("Received koinos.block.accept broadcast: %v", string(data))
+	blockBroadcast := types.NewBlockAccepted()
+	err := json.Unmarshal(data, blockBroadcast)
+	if err != nil {
+		return
 	}
+	binary := types.NewVariableBlob()
+	binary = blockBroadcast.Serialize(binary)
+	n.Gossip.Block.PublishMessage(context.Background(), binary)
+	n.SyncManager.HandleBlockBroadcast(context.Background(), blockBroadcast)
+}
+
+func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
+	log.Debugf("Received koinos.transction.accept broadcast: %v", string(data))
+	trxBroadcast := types.NewTransactionAccepted()
+	err := json.Unmarshal(data, trxBroadcast)
+	if err != nil {
+		return
+	}
+	binary := types.NewVariableBlob()
+	binary = trxBroadcast.Serialize(binary)
+	n.Gossip.Transaction.PublishMessage(context.Background(), binary)
+}
+
+func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
+	log.Debugf("Received koinos.block.forks broadcast: %v", string(data))
+	forkHeads := types.NewForkHeads()
+	err := json.Unmarshal(data, forkHeads)
+	if err != nil {
+		return
+	}
+	n.SyncManager.HandleForkHeads(context.Background(), forkHeads)
 }
 
 func getChannelError(errs chan error) error {

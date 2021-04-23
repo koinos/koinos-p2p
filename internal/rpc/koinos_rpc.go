@@ -8,7 +8,6 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	types "github.com/koinos/koinos-types-golang"
-	util "github.com/koinos/koinos-util-golang"
 )
 
 // RPC service constants
@@ -243,37 +242,6 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multih
 	return response, err
 }
 
-// GetAncestorTopologyAtHeights rpc call
-func (k *KoinosRPC) GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error) {
-
-	// TODO:  Implement this properly in the block store.
-	// This implementation is an inefficient, abstraction-breaking hack that unboxes stuff in the p2p code (where it definitely shouldn't be unboxed).
-
-	result := make([]types.BlockTopology, len(heights))
-
-	for i, h := range heights {
-		resp, err := k.GetBlocksByHeight(ctx, blockID, h, 1)
-		if err != nil {
-			return nil, err
-		}
-		if len(resp.BlockItems) != 1 {
-			return nil, errors.New("Unexpected multiple blocks returned")
-		}
-		resp.BlockItems[0].Block.Unbox()
-		block, err := resp.BlockItems[0].Block.GetNative()
-		if err != nil {
-			return nil, err
-		}
-		block.ActiveData.Unbox()
-
-		result[i].ID = resp.BlockItems[0].BlockID
-		result[i].Height = resp.BlockItems[0].BlockHeight
-		result[i].Previous = block.Header.Previous
-	}
-
-	return result, nil
-}
-
 // GetChainID rpc call
 func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, error) {
 	args := types.ChainRPCRequest{
@@ -350,68 +318,6 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsRespon
 	}
 
 	return response, err
-}
-
-// GetTopologyAtHeight finds the blocks at the given height range.
-//
-// Three steps:
-// - (1) Call GetForkHeads() to get the fork heads and LIB from koinosd
-// - (2) For each fork, call GetBlocksByHeight() with the given height bounds to get the blocks in that height range on that fork.
-// - (3) Finally, do some purely computational cleanup:  Extract the BlockTopology and de-duplicate multiple instances of the same block.
-//
-func (k *KoinosRPC) GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error) {
-	forkHeads, err := k.GetForkHeads(ctx)
-	if err != nil {
-		log.Warnf("GetTopologyAtHeight(%d, %d) returned error %s after GetForkHeads()", height, numBlocks, err.Error())
-		return nil, nil, err
-	}
-	if numBlocks == 0 {
-		return forkHeads, []types.BlockTopology{}, nil
-	}
-
-	topologySet := make(map[util.BlockTopologyCmp]util.Void)
-	topologySlice := make([]types.BlockTopology, 0, len(forkHeads.ForkHeads))
-
-	for _, head := range forkHeads.ForkHeads {
-		blocks, err := k.GetBlocksByHeight(ctx, &head.ID, height, numBlocks)
-		if err != nil {
-			headStr, err2 := json.Marshal(head)
-			if err2 != nil {
-				log.Warnf("GetTopologyAtHeight(%d, %d) tried to print error %s but got another error %s", height, numBlocks, err, err2)
-			}
-
-			log.Warnf("GetTopologyAtHeight(%d, %d) returned error %s after GetBlocksByHeight(), head=%s", height, numBlocks, err, headStr)
-			return nil, nil, err
-		}
-
-		// Go through each block and extract its topology
-		for _, blockItem := range blocks.BlockItems {
-			topology := types.BlockTopology{
-				ID:     blockItem.BlockID,
-				Height: blockItem.BlockHeight,
-			}
-
-			if blockItem.BlockHeight != 0 {
-				opaqueBlock := blockItem.Block
-				opaqueBlock.Unbox()
-				block, err := opaqueBlock.GetNative()
-				if err != nil {
-					return nil, nil, err
-				}
-
-				topology.Previous = block.Header.Previous
-			}
-
-			// Add the topology to the set / slice if it's not already there
-			cmp := util.BlockTopologyToCmp(topology)
-			if _, ok := topologySet[cmp]; !ok {
-				topologySet[cmp] = util.Void{}
-				topologySlice = append(topologySlice, topology)
-			}
-		}
-	}
-
-	return forkHeads, topologySlice, nil
 }
 
 // IsConnectedToBlockStore returns if the AMQP connection can currently communicate

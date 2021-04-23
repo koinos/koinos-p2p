@@ -15,9 +15,7 @@ type RPC interface {
 	GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error)
 	GetChainID(ctx context.Context) (*types.GetChainIDResponse, error)
 	GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error)
-	GetAncestorTopologyAtHeights(ctx context.Context, blockID *types.Multihash, heights []types.BlockHeightType) ([]types.BlockTopology, error)
 	GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error)
-	GetTopologyAtHeight(ctx context.Context, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetForkHeadsResponse, []types.BlockTopology, error)
 
 	IsConnectedToBlockStore(ctx context.Context) (bool, error)
 	IsConnectedToChain(ctx context.Context) (bool, error)

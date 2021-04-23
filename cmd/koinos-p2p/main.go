@@ -123,6 +123,7 @@ func main() {
 			log.Info("Connected")
 			break
 		}
+		time.Sleep(amqpConnectAttemptSeconds * time.Second)
 	}
 
 	log.Info("Attempting to connect to chain...")
@@ -134,6 +135,7 @@ func main() {
 			log.Info("Connected")
 			break
 		}
+		time.Sleep(amqpConnectAttemptSeconds * time.Second)
 	}
 
 	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(client), requestHandler, *seed, config)
