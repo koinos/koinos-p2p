@@ -97,7 +97,7 @@ func main() {
 		panic(fmt.Sprintf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel))
 	}
 
-	client := koinosmq.NewClient(*amqp)
+	client := koinosmq.NewClient(*amqp, koinosmq.ExponentialBackoff)
 	requestHandler := koinosmq.NewRequestHandler(*amqp)
 
 	config := options.NewConfig()
