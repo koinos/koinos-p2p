@@ -165,7 +165,7 @@ func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface
 		Applying:       make(map[util.BlockTopologyCmp]BlockDownloadResponse),
 		WaitingToApply: make(map[util.BlockTopologyCmp]BlockDownloadResponse),
 		Options:        opt,
-		GossipVoter:    *NewGossipVoter(opt.GossipDisableBp, opt.GossipEnableBp),
+		GossipVoter:    *NewGossipVoter(opt.GossipDisableBp, opt.GossipEnableBp, opt.GossipAlwaysDisable, opt.GossipAlwaysEnable),
 
 		needRescan: false,
 		rng:        rng,

@@ -12,10 +12,12 @@ type GossipVoter struct {
 	EnableGossip    bool
 	GossipDisableBp int
 	GossipEnableBp  int
+	AlwaysDisable   bool
+	AlwaysEnable    bool
 }
 
 // NewGossipVoter creates a GossipVoter object
-func NewGossipVoter(d int, e int) *GossipVoter {
+func NewGossipVoter(d int, e int, alwaysDisable bool, alwaysEnable bool) *GossipVoter {
 	v := GossipVoter{
 		ByPeer:          make(map[peer.ID]bool),
 		YesCount:        0,
@@ -23,6 +25,8 @@ func NewGossipVoter(d int, e int) *GossipVoter {
 		EnableGossip:    false,
 		GossipDisableBp: d,
 		GossipEnableBp:  e,
+		AlwaysDisable:   alwaysDisable,
+		AlwaysEnable:    alwaysEnable,
 	}
 	return &v
 }
@@ -53,6 +57,12 @@ func (gv *GossipVoter) Vote(v PeerIsContemporary) {
 }
 
 func (gv *GossipVoter) computeEnableGossip() bool {
+	if gv.AlwaysDisable {
+		return false
+	}
+	if gv.AlwaysEnable {
+		return true
+	}
 	n := gv.YesCount + gv.NoCount
 
 	// All no's always returns false.  This also handles n == 0 case.
