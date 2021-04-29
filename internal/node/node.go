@@ -104,6 +104,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	}
 	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.Host.ID())
 
+	node.SyncManager.SetGossipEnableHandler(node.Gossip)
+
 	return node, nil
 }
 
@@ -198,10 +200,6 @@ func (n *KoinosP2PNode) Close() error {
 func (n *KoinosP2PNode) Start(ctx context.Context) {
 	connectionManager := NewPeerConnectionManager(n, n.Options.InitialPeers)
 	n.Host.Network().Notify(connectionManager)
-
-	if n.Options.ForceGossip {
-		n.Gossip.Start(ctx)
-	}
 	n.SyncManager.Start(ctx)
 	go connectionManager.ConnectInitialPeers()
 }

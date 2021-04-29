@@ -104,11 +104,16 @@ func main() {
 
 	config.NodeOptions.EnablePeerExchange = *peerExchange
 	config.NodeOptions.EnableBootstrap = *bootstrap
-	config.NodeOptions.EnableGossip = *gossip
-	config.NodeOptions.ForceGossip = *forceGossip
 
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
+
+	if !(*gossip) {
+		config.DownloadManagerOptions.GossipAlwaysDisable = true
+	}
+	if *forceGossip {
+		config.DownloadManagerOptions.GossipAlwaysEnable = true
+	}
 
 	client.Start()
 

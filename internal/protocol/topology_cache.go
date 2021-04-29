@@ -88,6 +88,7 @@ type TopologyCache struct {
 	ByPrevious map[util.MultihashCmp]map[util.BlockTopologyCmp]map[peer.ID]util.Void
 	ByHeight   map[types.BlockHeightType]map[PeerHasBlock]util.Void
 	ByPeer     map[peer.ID]map[PeerHasBlock]util.Void
+	PeerHeight map[peer.ID]types.BlockHeightType
 }
 
 // NewTopologyCache instantiates a new TopologyCache
@@ -98,6 +99,7 @@ func NewTopologyCache() *TopologyCache {
 		ByPrevious: make(map[util.MultihashCmp]map[util.BlockTopologyCmp]map[peer.ID]util.Void),
 		ByHeight:   make(map[types.BlockHeightType]map[PeerHasBlock]util.Void),
 		ByPeer:     make(map[peer.ID]map[PeerHasBlock]util.Void),
+		PeerHeight: make(map[peer.ID]types.BlockHeightType),
 	}
 }
 
@@ -149,6 +151,14 @@ func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) bool {
 		}
 		m[peerHasBlock] = util.Void{}
 	}
+
+	{
+		height, hasHeight := c.PeerHeight[peerHasBlock.PeerID]
+		if (!hasHeight) || (height < peerHasBlock.Block.Height) {
+			c.PeerHeight[peerHasBlock.PeerID] = peerHasBlock.Block.Height
+		}
+	}
+
 	return true
 }
 

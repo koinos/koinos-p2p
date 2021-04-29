@@ -8,12 +8,6 @@ type NodeOptions struct {
 	// Set to true to enable bootstrap mode, where incoming connections are referred to other nodes
 	EnableBootstrap bool
 
-	// Set to true to enable gossip mode at all times
-	EnableGossip bool
-
-	// Set to true to enable gossip mode at all times
-	ForceGossip bool
-
 	// Peers to initially connect
 	InitialPeers []string
 
@@ -26,8 +20,6 @@ func NewNodeOptions() *NodeOptions {
 	return &NodeOptions{
 		EnablePeerExchange: true,
 		EnableBootstrap:    false,
-		EnableGossip:       true,
-		ForceGossip:        false,
 		InitialPeers:       make([]string, 0),
 		DirectPeers:        make([]string, 0),
 	}

@@ -97,6 +97,11 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.Varia
 	}
 }
 
+// GossipEnableHandler is an interface for handling enable/disable gossip requests
+type GossipEnableHandler interface {
+	EnableGossip(context.Context, bool)
+}
+
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
 	rpc         rpc.RPC
@@ -113,6 +118,15 @@ func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, id pee
 	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, PubSub: ps, myPeerID: id}
 
 	return &kg
+}
+
+// EnableGossip satisfies GossipEnableHandler interface
+func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
+	if enable {
+		kg.Start(ctx)
+	} else {
+		kg.Stop()
+	}
 }
 
 // Start enables gossip of blocks and transactions
