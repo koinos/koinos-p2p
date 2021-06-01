@@ -67,7 +67,6 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 }
 
 // ApplyBlock rpc call
-// TODO:  Block should be OpaqueBlock - No it shouldn't
 func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, error) {
 	blockSub := types.NewSubmitBlockRequest()
 	blockSub.Block = *block

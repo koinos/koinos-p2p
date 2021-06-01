@@ -29,7 +29,7 @@ type BlockDownloadResponse struct {
 	Topology util.BlockTopologyCmp
 	PeerID   peer.ID
 
-	Block types.OpaqueBlock
+	Block types.OptionalBlock
 	Err   error
 }
 
@@ -149,7 +149,7 @@ type BlockDownloadManager struct {
 // NewBlockDownloadResponse creates a new instance of BlockDownloadResponse
 func NewBlockDownloadResponse() *BlockDownloadResponse {
 	// It is okay to default-initialize all fields except Block
-	block := types.NewOpaqueBlock()
+	block := types.NewOptionalBlock()
 	resp := BlockDownloadResponse{
 		Block: *block,
 	}

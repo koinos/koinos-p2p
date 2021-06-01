@@ -60,7 +60,7 @@ func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihas
 		blockItem.BlockHeight = height + types.BlockHeightType(i)
 		blockItem.BlockID = *types.NewMultihash()
 		blockItem.BlockID.ID = types.UInt64(blockItem.BlockHeight) + k.HeadBlockIDDelta
-		blockItem.Block = *types.NewOpaqueBlock()
+		blockItem.Block = *types.NewOptionalBlock()
 		//vb := types.NewVariableBlob()
 		//block := types.NewBlock()
 		//blockItem.BlockBlob = *block.Serialize(vb)

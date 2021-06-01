@@ -71,7 +71,6 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		log.Debugf("Request block %s from peer %s", util.BlockTopologyCmpString(&req.Topology), h.peerID)
 		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{util.MultihashFromCmp(req.Topology.ID)}}
 		rpcResp := GetBlocksByIDResponse{}
-		rpcResp.BlockItems = [][]byte{}
 
 		subctx, cancel := context.WithTimeout(ctx, time.Duration(h.Options.DownloadTimeoutMs)*time.Millisecond)
 		defer cancel()
@@ -85,9 +84,8 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		} else if len(rpcResp.BlockItems) < 1 {
 			log.Warnf("  - Got 0 block")
 			resp.Err = errors.New("Got 0 blocks from peer")
-		} else {
-			vbBlock := types.VariableBlob(rpcResp.BlockItems[0])
-			resp.Block = *types.NewOpaqueBlockFromBlob(&vbBlock)
+		} else if rpcResp.BlockItems[0].HasValue() {
+			resp.Block = rpcResp.BlockItems[0]
 		}
 		// TODO: Add better error handling on other end of channel
 		select {

@@ -5,8 +5,8 @@ go 1.15
 require (
 	github.com/koinos/koinos-log-golang v0.0.0-20210413225320-69e5d4a4c6c2
 	github.com/koinos/koinos-mq-golang v0.0.0-20210424202816-d2bd4d1894d1
-	github.com/koinos/koinos-types-golang v0.1.1-0.20210419161614-0752fa7fb33a
-	github.com/koinos/koinos-util-golang v0.0.0-20210413195128-e62178ad66d0
+	github.com/koinos/koinos-types-golang v0.0.0-20210526205640-7768b9840fe1
+	github.com/koinos/koinos-util-golang v0.0.0-20210601175130-50a337109792 // indirect
 	github.com/libp2p/go-libp2p v0.13.0
 	github.com/libp2p/go-libp2p-core v0.8.5
 	github.com/libp2p/go-libp2p-gorpc v0.1.2

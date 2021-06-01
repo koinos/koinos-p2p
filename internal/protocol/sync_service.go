@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"errors"
 
 	log "github.com/koinos/koinos-log-golang"
 	types "github.com/koinos/koinos-types-golang"
@@ -91,7 +92,7 @@ type GetBlocksByIDRequest struct {
 
 // GetBlocksByIDResponse return
 type GetBlocksByIDResponse struct {
-	BlockItems [][]byte
+	BlockItems []types.OptionalBlock
 }
 
 // SyncService handles broadcasting inventory to peers
@@ -163,9 +164,9 @@ func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRe
 		return err
 	}
 
-	response.BlockItems = make([][]byte, len(blocks.BlockItems))
+	response.BlockItems = make([]types.OptionalBlock, len(blocks.BlockItems))
 	for i := 0; i < len(blocks.BlockItems); i++ {
-		response.BlockItems[i] = *blocks.BlockItems[i].Block.GetBlob()
+		response.BlockItems[i] = blocks.BlockItems[i].Block
 	}
 	return nil
 }
@@ -207,14 +208,11 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 					}
 
 					if blockItem.BlockHeight != 0 {
-						opaqueBlock := blockItem.Block
-						opaqueBlock.Unbox()
-						block, err := opaqueBlock.GetNative()
-						if err != nil {
-							return err
+						if !blockItem.Block.HasValue() {
+							return errors.New("Optional block not present")
 						}
 
-						topology.Previous = block.Header.Previous
+						topology.Previous = blockItem.Block.Value.Header.Previous
 					}
 				}
 			}
