@@ -84,7 +84,9 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		} else if len(rpcResp.BlockItems) < 1 {
 			log.Warnf("  - Got 0 block")
 			resp.Err = errors.New("Got 0 blocks from peer")
-		} else if rpcResp.BlockItems[0].HasValue() {
+		} else if !rpcResp.BlockItems[0].HasValue() {
+			resp.Err = errors.New("Optional block was not present")
+		} else {
 			resp.Block = rpcResp.BlockItems[0]
 		}
 		// TODO: Add better error handling on other end of channel
