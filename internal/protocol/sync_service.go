@@ -177,12 +177,12 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 	response.ForkHeads = (*types.GetForkHeadsResponse)(s.Provider.forkHeads)
 
 	for _, head := range response.ForkHeads.ForkHeads {
-		lastBlock := request.BlockHeight + types.BlockHeightType(request.NumBlocks)
+		lastBlock := request.BlockHeight + types.BlockHeightType(request.NumBlocks) - 1
 		if head.Height < lastBlock {
 			lastBlock = head.Height
 		}
 
-		for i := request.BlockHeight; i < lastBlock; i++ {
+		for i := request.BlockHeight; i <= lastBlock; i++ {
 			if topos, ok := s.MyTopo.ByHeight[i]; ok {
 				for key := range topos {
 					response.BlockTopology = append(response.BlockTopology, types.BlockTopology{
@@ -215,6 +215,8 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 
 						topology.Previous = blockItem.Block.Value.Header.Previous
 					}
+
+					response.BlockTopology = append(response.BlockTopology, topology)
 				}
 			}
 		}

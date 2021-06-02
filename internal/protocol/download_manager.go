@@ -315,7 +315,7 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 }
 
 func (m *BlockDownloadManager) rescan(ctx context.Context) {
-	log.Debug("Rescanning downloads")
+	//log.Debug("Rescanning downloads")
 
 	for _, resp := range m.WaitingToApply {
 		m.maybeApplyBlock(ctx, resp)
@@ -323,7 +323,7 @@ func (m *BlockDownloadManager) rescan(ctx context.Context) {
 
 	// Figure out the blocks we'd ideally be downloading
 	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.Options.MaxDownloadsInFlight, m.Options.MaxDownloadDepth)
-	log.Debugf("GetDownloads() suggests %d eligible downloads", len(downloadList))
+	//log.Debugf("GetDownloads() suggests %d eligible downloads", len(downloadList))
 
 	for _, download := range downloadList {
 		// If we can't support additional downloads, bail
