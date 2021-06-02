@@ -84,10 +84,18 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		} else if len(rpcResp.BlockItems) < 1 {
 			log.Warnf("  - Got 0 block")
 			resp.Err = errors.New("Got 0 blocks from peer")
-		} else if !rpcResp.BlockItems[0].HasValue() {
-			resp.Err = errors.New("Optional block was not present")
 		} else {
-			resp.Block = rpcResp.BlockItems[0]
+			optBlock := types.NewOptionalBlock()
+			bytes, optBlock, err := types.DeserializeOptionalBlock((*types.VariableBlob)(&rpcResp.BlockItems[0]))
+			if err != nil {
+				resp.Err = err
+			} else if int(bytes) != len(rpcResp.BlockItems[0]) {
+				resp.Err = errors.New("Received extra bytes at the end of optional block")
+			} else if !optBlock.HasValue() {
+				resp.Err = errors.New("Optional block was not present")
+			} else {
+				resp.Block = *optBlock
+			}
 		}
 		// TODO: Add better error handling on other end of channel
 		select {

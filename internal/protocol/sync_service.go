@@ -92,7 +92,7 @@ type GetBlocksByIDRequest struct {
 
 // GetBlocksByIDResponse return
 type GetBlocksByIDResponse struct {
-	BlockItems []types.OptionalBlock
+	BlockItems [][]byte
 }
 
 // SyncService handles broadcasting inventory to peers
@@ -164,9 +164,10 @@ func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRe
 		return err
 	}
 
-	response.BlockItems = make([]types.OptionalBlock, len(blocks.BlockItems))
+	response.BlockItems = make([][]byte, len(blocks.BlockItems))
 	for i := 0; i < len(blocks.BlockItems); i++ {
-		response.BlockItems[i] = blocks.BlockItems[i].Block
+		vb := types.NewVariableBlob()
+		response.BlockItems[i] = *blocks.BlockItems[i].Block.Serialize(vb)
 	}
 	return nil
 }
