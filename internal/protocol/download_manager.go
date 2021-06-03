@@ -254,6 +254,7 @@ func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadA
 
 	// Failure.
 	// TODO:  Handle block that fails to apply.
+	log.Infof("Error applying block %s", applyResult.Err)
 }
 
 // ConvertPeerSetToSlice converts a set (a map from PeerCmp to void) to a slice.

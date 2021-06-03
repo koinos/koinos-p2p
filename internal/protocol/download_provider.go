@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -186,10 +187,10 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 
 		if !resp.Block.HasValue() {
 			applyResult.Err = errors.New("Downloaded block not applied - from peer %s - Optional block not present")
+		} else {
+			block := resp.Block.Value
+			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
 		}
-
-		block := resp.Block.Value
-		applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
 
 		select {
 		case p.applyBlockResultChan <- applyResult:
@@ -362,7 +363,8 @@ func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.Fork
 	// TODO:  This loop could be improved if we make p.forkHeads a dictionary
 	for _, fh := range newHeads.ForkHeads {
 		if !p.forkHeadConnects(fh) {
-			log.Infof("Connecting disconnected fork head %s", fh.ID)
+			id, _ := json.Marshal(fh.ID)
+			log.Infof("Connecting disconnected fork head %s", string(id))
 			p.connectForkHead(ctx, newHeads.LastIrreversibleBlock, fh)
 		}
 	}
