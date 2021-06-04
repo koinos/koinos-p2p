@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"errors"
 
 	log "github.com/koinos/koinos-log-golang"
 	types "github.com/koinos/koinos-types-golang"
@@ -165,7 +166,8 @@ func (s *SyncService) GetBlocksByID(ctx context.Context, request GetBlocksByIDRe
 
 	response.BlockItems = make([][]byte, len(blocks.BlockItems))
 	for i := 0; i < len(blocks.BlockItems); i++ {
-		response.BlockItems[i] = *blocks.BlockItems[i].Block.GetBlob()
+		vb := types.NewVariableBlob()
+		response.BlockItems[i] = *blocks.BlockItems[i].Block.Serialize(vb)
 	}
 	return nil
 }
@@ -175,12 +177,12 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 	response.ForkHeads = (*types.GetForkHeadsResponse)(s.Provider.forkHeads)
 
 	for _, head := range response.ForkHeads.ForkHeads {
-		lastBlock := request.BlockHeight + types.BlockHeightType(request.NumBlocks)
+		lastBlock := request.BlockHeight + types.BlockHeightType(request.NumBlocks) - 1
 		if head.Height < lastBlock {
 			lastBlock = head.Height
 		}
 
-		for i := request.BlockHeight; i < lastBlock; i++ {
+		for i := request.BlockHeight; i <= lastBlock; i++ {
 			if topos, ok := s.MyTopo.ByHeight[i]; ok {
 				for key := range topos {
 					response.BlockTopology = append(response.BlockTopology, types.BlockTopology{
@@ -207,15 +209,14 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 					}
 
 					if blockItem.BlockHeight != 0 {
-						opaqueBlock := blockItem.Block
-						opaqueBlock.Unbox()
-						block, err := opaqueBlock.GetNative()
-						if err != nil {
-							return err
+						if !blockItem.Block.HasValue() {
+							return errors.New("Optional block not present")
 						}
 
-						topology.Previous = block.Header.Previous
+						topology.Previous = blockItem.Block.Value.Header.Previous
 					}
+
+					response.BlockTopology = append(response.BlockTopology, topology)
 				}
 			}
 		}

@@ -2,6 +2,8 @@ package protocol
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -183,14 +185,10 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 			Err:      nil,
 		}
 
-		// TODO:  We should not unbox here, however for some reason the API requires Block not OpaqueBlock
-		resp.Block.Unbox()
-		block, err := resp.Block.GetNative()
-		if err != nil {
-			applyResult.Err = err
-			log.Warnf("Downloaded block not applied - %s from peer %s - Error %s",
-				util.BlockTopologyCmpString(&applyResult.Topology), applyResult.PeerID, err.Error())
+		if !resp.Block.HasValue() {
+			applyResult.Err = errors.New("Downloaded block not applied - from peer %s - Optional block not present")
 		} else {
+			block := resp.Block.Value
 			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
 		}
 
@@ -341,12 +339,12 @@ func (p *BdmiProvider) connectForkHead(ctx context.Context, lib types.BlockTopol
 		return
 	}
 
-	for _, opaqueBlock := range response.BlockItems {
-		opaqueBlock.Block.Unbox()
-		block, err := opaqueBlock.Block.GetNative()
-		if err != nil {
-			log.Warnf("Could not unbox connecting block: %v", err)
+	for _, blockItem := range response.BlockItems {
+		if !blockItem.Block.HasValue() {
+			log.Warnf("Optional block not present")
 		}
+
+		block := blockItem.Block.Value
 
 		select {
 		case p.myBlockTopologyChan <- types.BlockTopology{
@@ -365,7 +363,8 @@ func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.Fork
 	// TODO:  This loop could be improved if we make p.forkHeads a dictionary
 	for _, fh := range newHeads.ForkHeads {
 		if !p.forkHeadConnects(fh) {
-			log.Infof("Connecting disconnected fork head %s", fh.ID)
+			id, _ := json.Marshal(fh.ID)
+			log.Infof("Connecting disconnected fork head %s", string(id))
 			p.connectForkHead(ctx, newHeads.LastIrreversibleBlock, fh)
 		}
 	}

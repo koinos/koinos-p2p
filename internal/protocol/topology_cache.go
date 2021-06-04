@@ -227,7 +227,7 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 		}
 	}
 
-	log.Debugf("GetInitialDownload() returned %d blocks", len(result))
+	//log.Debugf("GetInitialDownload() returned %d blocks", len(result))
 	return result
 }
 

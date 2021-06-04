@@ -33,7 +33,7 @@ type BatchBlockRequest struct {
 type PeerBlockResponse struct {
 	Topology  types.BlockTopology
 	Responder peer.ID
-	Block     *types.OpaqueBlock
+	Block     *types.OptionalBlock
 }
 
 // PeerBlockResponseError is a peer block response error

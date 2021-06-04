@@ -102,7 +102,7 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultih
 			item := types.NewBlockItem()
 			item.BlockID = blockID
 			item.BlockHeight = block.Header.Height
-			item.Block = *types.NewOpaqueBlockFromNative(*block)
+			item.Block = types.OptionalBlock{Value: block}
 			resp.BlockItems = append(resp.BlockItems, *item)
 		}
 	}
@@ -120,14 +120,11 @@ func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihas
 
 		block := k.createDummyBlock(height + types.BlockHeightType(i))
 
-		vb := types.NewVariableBlob()
-		vb = block.Serialize(vb)
-
 		blockItem := types.NewBlockItem()
 		blockItem.BlockHeight = block.Header.Height
 		blockItem.BlockID = block.ID
 
-		blockItem.Block = *types.NewOpaqueBlockFromBlob(vb)
+		blockItem.Block = types.OptionalBlock{Value: block}
 		blocks.BlockItems = append(blocks.BlockItems, *blockItem)
 	}
 

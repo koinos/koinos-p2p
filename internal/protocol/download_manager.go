@@ -29,7 +29,7 @@ type BlockDownloadResponse struct {
 	Topology util.BlockTopologyCmp
 	PeerID   peer.ID
 
-	Block types.OpaqueBlock
+	Block types.OptionalBlock
 	Err   error
 }
 
@@ -149,7 +149,7 @@ type BlockDownloadManager struct {
 // NewBlockDownloadResponse creates a new instance of BlockDownloadResponse
 func NewBlockDownloadResponse() *BlockDownloadResponse {
 	// It is okay to default-initialize all fields except Block
-	block := types.NewOpaqueBlock()
+	block := types.NewOptionalBlock()
 	resp := BlockDownloadResponse{
 		Block: *block,
 	}
@@ -254,6 +254,7 @@ func (m *BlockDownloadManager) handleApplyBlockResult(applyResult BlockDownloadA
 
 	// Failure.
 	// TODO:  Handle block that fails to apply.
+	log.Infof("Error applying block %s", applyResult.Err)
 }
 
 // ConvertPeerSetToSlice converts a set (a map from PeerCmp to void) to a slice.
@@ -315,7 +316,7 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 }
 
 func (m *BlockDownloadManager) rescan(ctx context.Context) {
-	log.Debug("Rescanning downloads")
+	//log.Debug("Rescanning downloads")
 
 	for _, resp := range m.WaitingToApply {
 		m.maybeApplyBlock(ctx, resp)
@@ -323,7 +324,7 @@ func (m *BlockDownloadManager) rescan(ctx context.Context) {
 
 	// Figure out the blocks we'd ideally be downloading
 	downloadList := GetDownloads(&m.MyTopoCache, &m.TopoCache, m.Options.MaxDownloadsInFlight, m.Options.MaxDownloadDepth)
-	log.Debugf("GetDownloads() suggests %d eligible downloads", len(downloadList))
+	//log.Debugf("GetDownloads() suggests %d eligible downloads", len(downloadList))
 
 	for _, download := range downloadList {
 		// If we can't support additional downloads, bail
