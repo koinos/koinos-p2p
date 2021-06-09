@@ -67,6 +67,9 @@ type SyncManager struct {
 	// Channel for new peer ID's we want to connect to
 	newPeers chan peer.ID
 
+	// Channel for peers to remove
+	removedPeers chan peer.ID
+
 	// Channel for peers that have errors
 	errPeers chan PeerError
 
@@ -99,6 +102,7 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *optio
 
 		newPeers:           make(chan peer.ID),
 		handshakeDonePeers: make(chan peer.ID),
+		removedPeers:       make(chan peer.ID),
 		errPeers:           make(chan PeerError),
 
 		peers:     make(map[peer.ID]util.Void),
@@ -137,6 +141,19 @@ func (m *SyncManager) AddPeer(ctx context.Context, pid peer.ID) {
 	go func() {
 		select {
 		case m.newPeers <- pid:
+		case <-ctx.Done():
+		}
+	}()
+
+	return
+}
+
+// RemovePeer removes a peer from the SyncManager
+// Will cleanup the peer in the background.
+func (m *SyncManager) RemovePeer(ctx context.Context, pid peer.ID) {
+	go func() {
+		select {
+		case m.removedPeers <- pid:
 		case <-ctx.Done():
 		}
 	}()
@@ -197,6 +214,14 @@ func (m *SyncManager) doPeerEnableDownload(ctx context.Context, pid peer.ID) {
 	}
 }
 
+func (m *SyncManager) doRemovePeer(ctx context.Context, pid peer.ID) {
+	// Handoff to BdmiProvider
+	select {
+	case m.bdmiProvider.removePeerChan <- pid:
+	case <-ctx.Done():
+	}
+}
+
 func (m *SyncManager) run(ctx context.Context) {
 	for {
 		select {
@@ -209,6 +234,9 @@ func (m *SyncManager) run(ctx context.Context) {
 			m.peers[pid] = util.Void{}
 			// Now that our data structures are all set up, we're ready to send it off to the BdmiProvider
 			go m.doPeerEnableDownload(ctx, pid)
+		case pid := <-m.removedPeers:
+			go m.doRemovePeer(ctx, pid)
+			delete(m.peers, pid)
 		case perr := <-m.errPeers:
 			// If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
 			m.Blacklist.AddPeerToBlacklist(perr)

@@ -48,6 +48,9 @@ type BdmiProvider struct {
 	newPeerChan    chan peer.ID
 	peerErrChan    chan PeerError
 	nodeUpdateChan chan NodeUpdate
+	removePeerChan chan peer.ID
+
+	peerLoopCancelFuncs map[peer.ID]context.CancelFunc
 
 	// Below channels are drained by DownloadManager
 
@@ -84,6 +87,7 @@ func NewBdmiProvider(
 		newPeerChan:    make(chan peer.ID, 1),
 		peerErrChan:    make(chan PeerError, 1),
 		nodeUpdateChan: make(chan NodeUpdate, 1),
+		removePeerChan: make(chan peer.ID, 1),
 
 		myBlockTopologyChan:    make(chan types.BlockTopology),
 		myLastIrrChan:          make(chan types.BlockTopology),
@@ -240,7 +244,12 @@ func (p *BdmiProvider) EnableGossip(ctx context.Context, enableGossip bool) {
 }
 
 func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
-	// TODO handle case where peer already exists
+	if _, ok := p.peerHandlers[newPeer]; ok {
+		return
+	}
+
+	peerCtx, cancel := context.WithCancel(ctx)
+
 	h := &PeerHandler{
 		peerID:                 newPeer,
 		lastNodeUpdate:         p.lastNodeUpdate,
@@ -254,8 +263,9 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 		downloadResponseChan:   p.downloadResponseChan,
 	}
 	p.peerHandlers[newPeer] = h
-	go h.peerHandlerLoop(ctx)
-	go h.nodeUpdateLoop(ctx)
+	p.peerLoopCancelFuncs[newPeer] = cancel
+	go h.peerHandlerLoop(peerCtx)
+	go h.nodeUpdateLoop(peerCtx)
 }
 
 func (p *BdmiProvider) handleNodeUpdate(ctx context.Context, nodeUpdate NodeUpdate) {
@@ -270,6 +280,14 @@ func (p *BdmiProvider) handleNodeUpdate(ctx context.Context, nodeUpdate NodeUpda
 			case <-ctx.Done():
 			}
 		}(peerHandler, nodeUpdate)
+	}
+}
+
+func (p *BdmiProvider) handleRemovePeer(ctx context.Context, pid peer.ID) {
+	if cancel, ok := p.peerLoopCancelFuncs[pid]; ok {
+		cancel()
+		delete(p.peerLoopCancelFuncs, pid)
+		delete(p.peerHandlers, pid)
 	}
 }
 
@@ -413,6 +431,8 @@ func (p *BdmiProvider) providerLoop(ctx context.Context) {
 			p.handleNewPeer(ctx, newPeer)
 		case nodeUpdate := <-p.nodeUpdateChan:
 			p.handleNodeUpdate(ctx, nodeUpdate)
+		case pid := <-p.removePeerChan:
+			p.handleRemovePeer(ctx, pid)
 
 		case <-ctx.Done():
 			return

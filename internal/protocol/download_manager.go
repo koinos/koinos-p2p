@@ -217,6 +217,11 @@ func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp 
 		delete(m.Downloading, resp.Topology)
 	}
 
+	if resp.Err != nil {
+		log.Infof("Error downloading block %s from peer %s: %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID, resp.Err)
+		return
+	}
+
 	alreadyApplying, hasAlreadyApplying := m.Applying[resp.Topology]
 	if hasAlreadyApplying {
 		log.Warnf("Discarded block response for block %s from peer %s:  Already applying from peer %s",
