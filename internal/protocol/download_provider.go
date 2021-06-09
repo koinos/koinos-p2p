@@ -58,6 +58,7 @@ type BdmiProvider struct {
 	myLastIrrChan          chan types.BlockTopology
 	peerHasBlockChan       chan PeerHasBlock
 	peerIsContemporaryChan chan PeerIsContemporary
+	peerIsClosedChan       chan PeerIsClosed
 	downloadResponseChan   chan BlockDownloadResponse
 	applyBlockResultChan   chan BlockDownloadApplyResult
 	rescanChan             chan bool
@@ -93,6 +94,7 @@ func NewBdmiProvider(
 		myLastIrrChan:          make(chan types.BlockTopology),
 		peerHasBlockChan:       make(chan PeerHasBlock, opts.PeerHasBlockQueueSize),
 		peerIsContemporaryChan: make(chan PeerIsContemporary, 1),
+		peerIsClosedChan:       make(chan PeerIsClosed, 1),
 		downloadResponseChan:   make(chan BlockDownloadResponse, 1),
 		applyBlockResultChan:   make(chan BlockDownloadApplyResult, 1),
 		rescanChan:             make(chan bool, 1),
@@ -117,6 +119,11 @@ func (p *BdmiProvider) PeerIsContemporaryChan() <-chan PeerIsContemporary {
 // PeerHasBlockChan is a getter for peerHasBlockChan
 func (p *BdmiProvider) PeerHasBlockChan() <-chan PeerHasBlock {
 	return p.peerHasBlockChan
+}
+
+// PeerIsClosedChan is for notifying that a peer connection is closed
+func (p *BdmiProvider) PeerIsClosedChan() <-chan PeerIsClosed {
+	return p.peerIsClosedChan
 }
 
 // DownloadResponseChan is a getter for downloadResponseChan
