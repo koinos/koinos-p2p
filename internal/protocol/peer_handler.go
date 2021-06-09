@@ -166,11 +166,10 @@ func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 		case req := <-h.downloadRequestChan:
 			h.requestDownload(ctx, req)
 		case <-ctx.Done():
+			h.peerIsClosedChan <- PeerIsClosed{PeerID: h.peerID}
 			return
 		}
 	}
-
-	h.peerIsClosedChan <- PeerIsClosed{PeerID: h.peerID}
 }
 
 func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
