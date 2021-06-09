@@ -90,6 +90,8 @@ func NewBdmiProvider(
 		nodeUpdateChan: make(chan NodeUpdate, 1),
 		removePeerChan: make(chan peer.ID, 1),
 
+		peerLoopCancelFuncs: make(map[peer.ID]context.CancelFunc),
+
 		myBlockTopologyChan:    make(chan types.BlockTopology),
 		myLastIrrChan:          make(chan types.BlockTopology),
 		peerHasBlockChan:       make(chan PeerHasBlock, opts.PeerHasBlockQueueSize),
