@@ -193,42 +193,7 @@ func (c *TopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (pe
 
 // SetLastIrr sets the last irreversible block
 func (c *TopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
-	for c.OldestBlock < newMyLastIrr.Height {
-		// Each block needs to be checked incrementally because removal of peers can
-		// create gaps in the topology cache
-		if peerBlocks, ok := c.ByHeight[c.OldestBlock]; ok {
-
-			for peerBlock := range peerBlocks {
-				// Remove from Set
-				delete(c.Set, peerBlock)
-
-				// Remove from ByTopology
-				delete(c.ByTopology, peerBlock.Block)
-
-				// Remove from ByPrevious
-				if blocksByPrevious, ok := c.ByPrevious[peerBlock.Block.Previous]; ok {
-					delete(blocksByPrevious, peerBlock.Block)
-
-					if len(blocksByPrevious) == 0 {
-						delete(c.ByPrevious, peerBlock.Block.Previous)
-					}
-				}
-
-				// Remove from ByPeer
-				if blockByPeer, ok := c.ByPeer[peerBlock.PeerID]; ok {
-					delete(blockByPeer, peerBlock)
-
-					if len(blockByPeer) == 0 {
-						delete(c.ByPeer, peerBlock.PeerID)
-					}
-				}
-			}
-
-			// Remove from ByHeight
-			delete(c.ByHeight, c.OldestBlock)
-			c.OldestBlock++
-		}
-	}
+	// TODO: Implement this
 }
 
 // RemovePeer removes peer's blocks from the cache
