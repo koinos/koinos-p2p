@@ -44,6 +44,7 @@ func (peerAdder *SyncManagerPeerAdder) Connected(n network.Network, c network.Co
 // Disconnected is part of the libp2p network.Notifiee interface
 func (peerAdder *SyncManagerPeerAdder) Disconnected(n network.Network, c network.Conn) {
 	log.Infof("Disconnected from peer %s", c.RemotePeer())
+	peerAdder.syncManager.RemovePeer(peerAdder.ctx, c.RemotePeer())
 }
 
 // Listen is part of the libp2p network.Notifiee interface
