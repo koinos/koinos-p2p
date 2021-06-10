@@ -48,6 +48,11 @@ type PeerIsContemporary struct {
 	IsContemporary bool
 }
 
+// PeerIsClosed is a message that specifies a peer connection has been closed
+type PeerIsClosed struct {
+	PeerID peer.ID
+}
+
 // BlockDownloadManagerInterface is an abstraction of the methods a BlockDownloadManager should contain
 type BlockDownloadManagerInterface interface {
 	// RequestDownload is called by the BlockDownloadManager to request a download to begin.
@@ -96,6 +101,12 @@ type BlockDownloadManagerInterface interface {
 	//
 	// Normally the user would give this channel to each peer's PeerHandler.
 	PeerIsContemporaryChan() <-chan PeerIsContemporary
+
+	// PeerIsClosed values are supplied by the user to inform the BlockDownloadManager when a
+	// peer connection has been closed.
+	//
+	// Normally, the user would give this channel to each peer's PeerHandler.
+	PeerIsClosedChan() <-chan PeerIsClosed
 
 	// DownloadResponseChan values are supplied by the user to inform the BlockDownloadManager when
 	// a download is complete.
@@ -215,6 +226,11 @@ func (m *BlockDownloadManager) handleDownloadResponse(ctx context.Context, resp 
 			util.BlockTopologyCmpString(&resp.Topology), resp.PeerID)
 	} else {
 		delete(m.Downloading, resp.Topology)
+	}
+
+	if resp.Err != nil {
+		log.Infof("Error downloading block %s from peer %s: %s", util.BlockTopologyCmpString(&resp.Topology), resp.PeerID, resp.Err)
+		return
 	}
 
 	alreadyApplying, hasAlreadyApplying := m.Applying[resp.Topology]
@@ -369,6 +385,8 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 				log.Infof("EnableGossip set to %s", m.GossipVoter.EnableGossip)
 				m.iface.EnableGossip(ctx, m.GossipVoter.EnableGossip)
 			}
+		case peerIsClosed := <-m.iface.PeerIsClosedChan():
+			m.TopoCache.RemovePeer(peerIsClosed.PeerID)
 		case downloadResponse := <-m.iface.DownloadResponseChan():
 			m.handleDownloadResponse(ctx, downloadResponse)
 		case applyBlockResult := <-m.iface.ApplyBlockResultChan():

@@ -56,6 +56,9 @@ type PeerHandler struct {
 	// All PeerHandlers send PeerHasBlock messages to a common channel.
 	peerHasBlockChan chan<- PeerHasBlock
 
+	// Channel for notifying when the peer connection is closed.
+	peerIsClosedChan chan<- PeerIsClosed
+
 	// Channel for requesting downloads.
 	// Each PeerHandler has its own downloadRequestChan.
 	// It is filled by BdmiProvider and drained by PeerHandler.
@@ -163,6 +166,7 @@ func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 		case req := <-h.downloadRequestChan:
 			h.requestDownload(ctx, req)
 		case <-ctx.Done():
+			h.peerIsClosedChan <- PeerIsClosed{PeerID: h.peerID}
 			return
 		}
 	}
