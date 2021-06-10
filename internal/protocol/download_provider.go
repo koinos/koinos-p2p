@@ -268,6 +268,7 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 		nodeUpdateChan:         make(chan NodeUpdate, 1),
 		internalNodeUpdateChan: make(chan NodeUpdate, 1),
 		peerHasBlockChan:       p.peerHasBlockChan,
+		peerIsClosedChan:       p.peerIsClosedChan,
 		downloadRequestChan:    make(chan BlockDownloadRequest, 1),
 		downloadResponseChan:   p.downloadResponseChan,
 	}
