@@ -201,6 +201,12 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 	connectionManager := NewPeerConnectionManager(n, n.Options.InitialPeers)
 	n.Host.Network().Notify(connectionManager)
 	n.SyncManager.Start(ctx)
+
+	// Start gossip if forced
+	if n.Options.ForceGossip {
+		n.Gossip.Start(ctx)
+	}
+
 	go connectionManager.ConnectInitialPeers()
 }
 

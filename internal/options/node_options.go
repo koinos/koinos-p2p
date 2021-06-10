@@ -13,6 +13,9 @@ type NodeOptions struct {
 
 	// Peers to directly connect
 	DirectPeers []string
+
+	// Force gossip mode on startup
+	ForceGossip bool
 }
 
 // NewNodeOptions creates a NodeOptions object which controls how p2p works
@@ -22,5 +25,6 @@ func NewNodeOptions() *NodeOptions {
 		EnableBootstrap:    false,
 		InitialPeers:       make([]string, 0),
 		DirectPeers:        make([]string, 0),
+		ForceGossip:        false,
 	}
 }
