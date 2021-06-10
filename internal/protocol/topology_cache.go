@@ -21,19 +21,21 @@ type PeerHasBlock struct {
 
 // MyTopologyCache holds my topology (i.e. the topology of a single node).
 type MyTopologyCache struct {
-	ByTopology map[util.BlockTopologyCmp]util.Void
-	ByID       map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void
-	ByPrevious map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void
-	ByHeight   map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void
+	ByTopology  map[util.BlockTopologyCmp]util.Void
+	ByID        map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void
+	ByPrevious  map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void
+	ByHeight    map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void
+	OldestBlock types.BlockHeightType
 }
 
 // NewMyTopologyCache instantiates a new MyTopologyCache
 func NewMyTopologyCache() *MyTopologyCache {
 	return &MyTopologyCache{
-		ByTopology: make(map[util.BlockTopologyCmp]util.Void),
-		ByID:       make(map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void),
-		ByPrevious: make(map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void),
-		ByHeight:   make(map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void),
+		ByTopology:  make(map[util.BlockTopologyCmp]util.Void),
+		ByID:        make(map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void),
+		ByPrevious:  make(map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void),
+		ByHeight:    make(map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void),
+		OldestBlock: ^types.BlockHeightType(0),
 	}
 }
 
@@ -70,6 +72,9 @@ func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
 			c.ByHeight[block.Height] = m
 		}
 		m[block] = util.Void{}
+		if block.Height < c.OldestBlock {
+			c.OldestBlock = block.Height
+		}
 	}
 
 	return true
@@ -77,7 +82,37 @@ func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
 
 // SetLastIrr sets the last irreversible block
 func (c *MyTopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
-	// TODO: Implement this
+	for c.OldestBlock < newMyLastIrr.Height {
+		if topos, ok := c.ByHeight[c.OldestBlock]; ok {
+			for topo := range topos {
+				// Remove from ByTopology
+				delete(c.ByTopology, topo)
+
+				// Remove from ByID
+				if blocksByID, ok := c.ByID[topo.ID]; ok {
+					delete(blocksByID, topo)
+
+					if len(blocksByID) == 0 {
+						delete(c.ByID, topo.ID)
+					}
+				}
+
+				// Remove from ByPrevious
+				if blocksByPrevious, ok := c.ByPrevious[topo.Previous]; ok {
+					delete(blocksByPrevious, topo)
+
+					if len(blocksByPrevious) == 0 {
+						delete(c.ByPrevious, topo.Previous)
+					}
+				}
+			}
+
+			// Remove from ByHeight
+			delete(c.ByHeight, c.OldestBlock)
+		}
+
+		c.OldestBlock++
+	}
 }
 
 // TopologyCache holds the topology of all peers.
@@ -193,7 +228,43 @@ func (c *TopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (pe
 
 // SetLastIrr sets the last irreversible block
 func (c *TopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
-	// TODO: Implement this
+	for c.OldestBlock < newMyLastIrr.Height {
+		// Each block needs to be checked incrementally because removal of peers can
+		// create gaps in the topology cache
+		if peerBlocks, ok := c.ByHeight[c.OldestBlock]; ok {
+
+			for peerBlock := range peerBlocks {
+				// Remove from Set
+				delete(c.Set, peerBlock)
+
+				// Remove from ByTopology
+				delete(c.ByTopology, peerBlock.Block)
+
+				// Remove from ByPrevious
+				if blocksByPrevious, ok := c.ByPrevious[peerBlock.Block.Previous]; ok {
+					delete(blocksByPrevious, peerBlock.Block)
+
+					if len(blocksByPrevious) == 0 {
+						delete(c.ByPrevious, peerBlock.Block.Previous)
+					}
+				}
+
+				// Remove from ByPeer
+				if blockByPeer, ok := c.ByPeer[peerBlock.PeerID]; ok {
+					delete(blockByPeer, peerBlock)
+
+					if len(blockByPeer) == 0 {
+						delete(c.ByPeer, peerBlock.PeerID)
+					}
+				}
+			}
+
+			// Remove from ByHeight
+			delete(c.ByHeight, c.OldestBlock)
+		}
+
+		c.OldestBlock++
+	}
 }
 
 // RemovePeer removes peer's blocks from the cache
