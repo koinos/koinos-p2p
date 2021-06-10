@@ -368,7 +368,9 @@ func (p *BdmiProvider) connectForkHead(ctx context.Context, lib types.BlockTopol
 
 	for _, blockItem := range response.BlockItems {
 		if !blockItem.Block.HasValue() {
-			log.Warnf("Optional block not present")
+			j, _ := json.Marshal(blockItem.BlockID)
+			log.Warnf("Optional block not present for block: %s", string(j))
+			continue
 		}
 
 		block := blockItem.Block.Value
