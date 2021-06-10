@@ -113,6 +113,7 @@ func main() {
 	}
 	if *forceGossip {
 		config.DownloadManagerOptions.GossipAlwaysEnable = true
+		config.NodeOptions.ForceGossip = true
 	}
 
 	client.Start()
