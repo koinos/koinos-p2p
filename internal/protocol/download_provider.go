@@ -361,6 +361,10 @@ func (p *BdmiProvider) forkHeadConnects(b types.BlockTopology) bool {
 
 // connectForkHead connects the fork head
 func (p *BdmiProvider) connectForkHead(ctx context.Context, lib types.BlockTopology, head types.BlockTopology) {
+	if lib.Height == 0 {
+		lib.Height = 1
+	}
+
 	response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, lib.Height, types.UInt32(1+head.Height-lib.Height))
 	if err != nil {
 		log.Warnf("Could not connect fork head: %v", err)
