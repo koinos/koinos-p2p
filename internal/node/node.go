@@ -208,7 +208,6 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 	}
 
 	go connectionManager.ConnectInitialPeers()
-
 }
 
 // ----------------------------------------------------------------------------
