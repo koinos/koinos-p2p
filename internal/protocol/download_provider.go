@@ -45,10 +45,13 @@ type BdmiProvider struct {
 
 	GossipEnableHandler GossipEnableHandler
 
-	newPeerChan    chan peer.ID
-	peerErrChan    chan PeerError
-	nodeUpdateChan chan NodeUpdate
-	removePeerChan chan peer.ID
+	newPeerChan      chan peer.ID
+	peerErrChan      chan PeerError
+	nodeUpdateChan   chan NodeUpdate
+	removePeerChan   chan peer.ID
+	forkHeadsChan    chan *types.ForkHeads
+	enableGossipChan chan bool
+	downloadChan     chan BlockDownloadRequest
 
 	peerLoopCancelFuncs map[peer.ID]context.CancelFunc
 
@@ -85,10 +88,13 @@ func NewBdmiProvider(
 		PeerHandlerOptions:  phopts,
 		GossipEnableHandler: nil,
 
-		newPeerChan:    make(chan peer.ID, 1),
-		peerErrChan:    make(chan PeerError, 1),
-		nodeUpdateChan: make(chan NodeUpdate, 1),
-		removePeerChan: make(chan peer.ID, 1),
+		newPeerChan:      make(chan peer.ID, 1),
+		peerErrChan:      make(chan PeerError, 1),
+		nodeUpdateChan:   make(chan NodeUpdate, 1),
+		removePeerChan:   make(chan peer.ID, 1),
+		forkHeadsChan:    make(chan *types.ForkHeads, 1),
+		enableGossipChan: make(chan bool, 1),
+		downloadChan:     make(chan BlockDownloadRequest),
 
 		peerLoopCancelFuncs: make(map[peer.ID]context.CancelFunc),
 
@@ -145,7 +151,13 @@ func (p *BdmiProvider) RescanChan() <-chan bool {
 
 // RequestDownload initiates a downlaod request
 func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
+	select {
+	case p.downloadChan <- req:
+	case <-ctx.Done():
+	}
+}
 
+func (p *BdmiProvider) handleRequestDownload(ctx context.Context, req BlockDownloadRequest) {
 	log.Debugf("Downloading block %s from peer %s", util.BlockTopologyCmpString(&req.Topology), req.PeerID)
 
 	resp := BlockDownloadResponse{
@@ -241,14 +253,35 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 	newNodeUpdate := getNodeUpdate(heads, p.Options.HeightInterestReach)
 
 	// TODO move HandleForkHeads() functionality into handleNodeUpdate()
+	//
+	// I am not sure we want to move the functionality. Yes, handleForkHeads
+	// can trigger a node update, but the NodeUpdate type is defined by
+	// peer_handler.go and PeerHandler does not access to fork heads
+	// Combining the functionality seems like an abstraction violation
 	p.handleNodeUpdate(ctx, newNodeUpdate)
-	p.HandleForkHeads(ctx, heads)
+	p.handleForkHeads(ctx, heads)
 }
 
 // EnableGossip enables or disables gossip mode
 func (p *BdmiProvider) EnableGossip(ctx context.Context, enableGossip bool) {
+	select {
+	case p.enableGossipChan <- enableGossip:
+	case <-ctx.Done():
+	}
+}
+
+func (p *BdmiProvider) handleEnableGossip(ctx context.Context, enableGossip bool) {
 	if p.GossipEnableHandler != nil {
 		p.GossipEnableHandler.EnableGossip(ctx, enableGossip)
+	}
+}
+
+// NewPeer creates and adds a peer handler wrapping the pid
+func (p *BdmiProvider) NewPeer(ctx context.Context, pid peer.ID) {
+	// Handoff to BdmiProvider
+	select {
+	case p.newPeerChan <- pid:
+	case <-ctx.Done():
 	}
 }
 
@@ -290,6 +323,14 @@ func (p *BdmiProvider) handleNodeUpdate(ctx context.Context, nodeUpdate NodeUpda
 			case <-ctx.Done():
 			}
 		}(peerHandler, nodeUpdate)
+	}
+}
+
+// RemovePeer closes the associated peer handler and removes the peer
+func (p *BdmiProvider) RemovePeer(ctx context.Context, pid peer.ID) {
+	select {
+	case p.removePeerChan <- pid:
+	case <-ctx.Done():
 	}
 }
 
@@ -388,8 +429,15 @@ func (p *BdmiProvider) connectForkHead(ctx context.Context, lib types.BlockTopol
 	}
 }
 
-// HandleForkHeads handles fork broadcast
-func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.ForkHeads) {
+// UpdateForkHeads updates current fork heads
+func (p *BdmiProvider) UpdateForkHeads(ctx context.Context, newHeads *types.ForkHeads) {
+	select {
+	case p.forkHeadsChan <- newHeads:
+	case <-ctx.Done():
+	}
+}
+
+func (p *BdmiProvider) handleForkHeads(ctx context.Context, newHeads *types.ForkHeads) {
 	// TODO:  This loop could be improved if we make p.forkHeads a dictionary
 	for _, fh := range newHeads.ForkHeads {
 		if !p.forkHeadConnects(fh) {
@@ -404,18 +452,21 @@ func (p *BdmiProvider) HandleForkHeads(ctx context.Context, newHeads *types.Fork
 	newNodeUpdate := getNodeUpdate(newHeads, p.Options.HeightInterestReach)
 
 	// Any changes to nodeUpdate get sent to the main loop for broadcast to PeerHandlers
+	// Since nodeUpdateChan is also handled by the providerLoop, we need to push to the channel
+	// asynchronously to prevent deadlock
 	if newNodeUpdate != p.lastNodeUpdate {
-		log.Debugf("lastNodeUpdate changed from %v to %v", p.lastNodeUpdate, newNodeUpdate)
+		go func(ctx context.Context, nodeUpdate NodeUpdate) {
+			log.Debugf("lastNodeUpdate changed from %v to %v", p.lastNodeUpdate, newNodeUpdate)
 
-		p.lastNodeUpdate = newNodeUpdate
-
-		select {
-		case p.nodeUpdateChan <- newNodeUpdate:
-		case <-ctx.Done():
-			return
-		}
+			select {
+			case p.nodeUpdateChan <- newNodeUpdate:
+			case <-ctx.Done():
+				return
+			}
+		}(ctx, newNodeUpdate)
 	}
 
+	// myLastIrrChan is handled by the BdmiManager, so there is no deadlock here
 	select {
 	case p.myLastIrrChan <- p.forkHeads.LastIrreversibleBlock:
 	case <-ctx.Done():
@@ -445,6 +496,12 @@ func (p *BdmiProvider) providerLoop(ctx context.Context) {
 			p.handleNodeUpdate(ctx, nodeUpdate)
 		case pid := <-p.removePeerChan:
 			p.handleRemovePeer(ctx, pid)
+		case forkHeads := <-p.forkHeadsChan:
+			p.handleForkHeads(ctx, forkHeads)
+		case enableGossip := <-p.enableGossipChan:
+			p.handleEnableGossip(ctx, enableGossip)
+		case req := <-p.downloadChan:
+			p.handleRequestDownload(ctx, req)
 
 		case <-ctx.Done():
 			return
