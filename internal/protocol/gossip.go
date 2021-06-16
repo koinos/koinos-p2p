@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"time"
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -9,6 +10,7 @@ import (
 	util "github.com/koinos/koinos-util-golang"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/multiformats/go-multiaddr"
 )
 
 const (
@@ -102,20 +104,30 @@ type GossipEnableHandler interface {
 	EnableGossip(context.Context, bool)
 }
 
+type PeerConnectionHandler interface {
+	PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error)
+	ConnectToPeerAddress(*peer.AddrInfo) error
+	GetPeerAddress() multiaddr.Multiaddr
+}
+
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
 	rpc         rpc.RPC
 	Block       *GossipManager
 	Transaction *GossipManager
+	Peer        *GossipManager
 	PubSub      *pubsub.PubSub
+	Connector   PeerConnectionHandler
 	myPeerID    peer.ID
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
-func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, id peer.ID) *KoinosGossip {
+func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, connector PeerConnectionHandler, id peer.ID) *KoinosGossip {
 	block := NewGossipManager(ps, "koinos.blocks")
 	transaction := NewGossipManager(ps, "koinos.transactions")
-	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, PubSub: ps, myPeerID: id}
+	peers := NewGossipManager(ps, "koinos.peers")
+	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, Peer: peers,
+		Connector: connector, PubSub: ps, myPeerID: id}
 
 	return &kg
 }
@@ -123,21 +135,21 @@ func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, id pee
 // EnableGossip satisfies GossipEnableHandler interface
 func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
 	if enable {
-		kg.Start(ctx)
+		kg.StartGossip(ctx)
 	} else {
-		kg.Stop()
+		kg.StopGossip()
 	}
 }
 
-// Start enables gossip of blocks and transactions
-func (kg *KoinosGossip) Start(ctx context.Context) {
+// StartGossip enables gossip of blocks and transactions
+func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 	log.Info("Starting gossip mode")
 	kg.startBlockGossip(ctx)
 	kg.startTransactionGossip(ctx)
 }
 
-// Stop stops gossiping on both block and transaction topics
-func (kg *KoinosGossip) Stop() {
+// StopGossip stops gossiping on both block and transaction topics
+func (kg *KoinosGossip) StopGossip() {
 	log.Info("Stopping gossip mode")
 	kg.Block.Stop()
 	kg.Transaction.Stop()
@@ -229,4 +241,61 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 
 	log.Infof("Gossiped transaction applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 	return true
+}
+
+// ----------------------------------------------------------------------------
+// Peer Gossip
+// ----------------------------------------------------------------------------
+
+func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
+	sAddr := string(msg.Data)
+	addr, err := kg.Connector.PeerStringToAddress(sAddr)
+
+	// If data cannot be interpreted as an address, invalidate it
+	if err != nil {
+		return false
+	}
+
+	// A failure to connect should not invalidate the address
+	kg.Connector.ConnectToPeerAddress(addr)
+
+	return true
+}
+
+func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
+	addr := types.VariableBlob(kg.Connector.GetPeerAddress().String())
+	log.Info(string(addr))
+
+	for {
+		kg.Peer.PublishMessage(ctx, &addr)
+
+		select {
+		case <-time.After(time.Minute * 5):
+			break
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (kg *KoinosGossip) StartPeerGossip(ctx context.Context) {
+	go func() {
+		ch := make(chan types.VariableBlob, transactionBuffer)
+		kg.Peer.RegisterValidator(kg.validatePeer)
+		kg.Peer.Start(ctx, ch)
+		log.Debug("Started peer gossip listener")
+
+		// Start address publisher
+		cctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go kg.addressPublisher(cctx)
+
+		for {
+			_, ok := <-ch
+			if !ok {
+				close(ch)
+				return
+			}
+		}
+	}()
 }
