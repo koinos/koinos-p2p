@@ -56,6 +56,7 @@ func (p *PeerConnectionManager) ClosedStream(n network.Network, s network.Stream
 
 // Connected is part of the libp2p network.Notifiee interface
 func (p *PeerConnectionManager) Connected(n network.Network, c network.Conn) {
+	log.Infof("Connected to peer %s/p2p/%s", c.RemoteMultiaddr(), c.RemotePeer())
 }
 
 // Disconnected is part of the libp2p network.Notifiee interface
