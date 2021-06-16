@@ -67,7 +67,7 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 }
 
 // ApplyBlock rpc call
-func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, error) {
+func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (*types.SubmitBlockResponse, error) {
 	blockSub := types.NewSubmitBlockRequest()
 	blockSub.Block = *block
 
@@ -81,38 +81,38 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, e
 	data, err := json.Marshal(args)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return false, nil
+		return nil, err
 	}
 
-	response := false
+	var response *types.SubmitBlockResponse
 
 	switch t := responseVariant.Value.(type) {
 	case *types.SubmitBlockResponse:
-		response = true
+		response = (*types.SubmitBlockResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("Chain returned error processing SubmitBlockRequest: " + string(t.ErrorText))
 	default:
-		response = false
+		err = errors.New("Chain returned unexpected type processing SubmitBlockRequest")
 	}
 
 	return response, err
 }
 
 // ApplyTransaction rpc call
-func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction) (bool, error) {
+func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction) (*types.SubmitTransactionResponse, error) {
 	trxSub := types.NewSubmitTransactionRequest()
 	trxSub.Transaction = *trx
 
@@ -125,31 +125,31 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction
 	data, err := json.Marshal(args)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return false, nil
+		return nil, err
 	}
 
-	response := false
+	var response *types.SubmitTransactionResponse
 
 	switch t := responseVariant.Value.(type) {
 	case *types.SubmitTransactionResponse:
-		response = true
+		response = (*types.SubmitTransactionResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("Chain returned error processing SubmitTransactionRequest: " + string(t.ErrorText))
 	default:
-		response = false
+		err = errors.New("Chain returned unexpected type processing SubmitTransactionRequest")
 	}
 
 	return response, err
