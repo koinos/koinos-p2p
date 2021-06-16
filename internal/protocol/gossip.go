@@ -293,7 +293,7 @@ func (kg *KoinosGossip) StartPeerGossip(ctx context.Context) {
 		ch := make(chan types.VariableBlob, transactionBuffer)
 		kg.Peer.RegisterValidator(kg.validatePeer)
 		kg.Peer.Start(ctx, ch)
-		log.Debug("Started peer gossip listener")
+		log.Info("Started peer gossip")
 
 		// Start address publisher
 		cctx, cancel := context.WithCancel(ctx)
