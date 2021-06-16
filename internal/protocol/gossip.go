@@ -266,6 +266,8 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 	err = kg.Connector.ConnectToPeerAddress(addr)
 	if err == nil {
 		log.Infof("Connected to gossiped peer: %s", sAddr)
+	} else {
+		log.Infof("Failed to connect to gossiped peer: %s", sAddr)
 	}
 
 	return true
@@ -273,13 +275,13 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 
 func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
 	addr := types.VariableBlob(kg.Connector.GetPeerAddress().String())
-	log.Info(string(addr))
 
 	for {
+		log.Info("Publishing peer address")
 		kg.Peer.PublishMessage(ctx, &addr)
 
 		select {
-		case <-time.After(time.Minute * 5):
+		case <-time.After(time.Minute * 1):
 			break
 		case <-ctx.Done():
 			return
