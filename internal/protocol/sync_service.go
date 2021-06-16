@@ -100,7 +100,7 @@ type GetBlocksByIDResponse struct {
 type SyncService struct {
 	RPC      rpc.RPC
 	Provider *BdmiProvider
-	MyTopo   *MyTopologyCache
+	MyTopo   *LocalTopologyCache
 	Options  options.SyncServiceOptions
 }
 
@@ -183,7 +183,7 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 		}
 
 		for i := request.BlockHeight; i <= lastBlock; i++ {
-			if topos, ok := s.MyTopo.ByHeight[i]; ok {
+			if topos, ok := s.MyTopo.ByHeight(i); ok {
 				for key := range topos {
 					response.BlockTopology = append(response.BlockTopology, types.BlockTopology{
 						ID: types.Multihash{
@@ -226,7 +226,7 @@ func (s *SyncService) GetTopologyAtHeight(ctx context.Context, request GetTopolo
 }
 
 // NewSyncService constructs a new broadcast protocol object
-func NewSyncService(rpc *rpc.RPC, provider *BdmiProvider, myTopo *MyTopologyCache, opts options.SyncServiceOptions) *SyncService {
+func NewSyncService(rpc *rpc.RPC, provider *BdmiProvider, myTopo *LocalTopologyCache, opts options.SyncServiceOptions) *SyncService {
 	p := &SyncService{RPC: *rpc, Provider: provider, MyTopo: myTopo, Options: opts}
 	return p
 }
