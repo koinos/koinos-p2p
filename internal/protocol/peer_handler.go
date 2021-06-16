@@ -88,7 +88,6 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 			log.Warnf("  - Got 0 block")
 			resp.Err = errors.New("Got 0 blocks from peer")
 		} else {
-			optBlock := types.NewOptionalBlock()
 			bytes, optBlock, err := types.DeserializeOptionalBlock((*types.VariableBlob)(&rpcResp.BlockItems[0]))
 			if err != nil {
 				resp.Err = err

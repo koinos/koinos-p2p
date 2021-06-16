@@ -151,15 +151,6 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 	n.SyncManager.HandleForkHeads(context.Background(), forkHeads)
 }
 
-func getChannelError(errs chan error) error {
-	select {
-	case err := <-errs:
-		return err
-	default:
-		return nil
-	}
-}
-
 // PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string
 func (n *KoinosP2PNode) PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error) {
 	addr, err := multiaddr.NewMultiaddr(peerAddr)

@@ -301,11 +301,6 @@ func (p *BdmiProvider) handleRemovePeer(ctx context.Context, pid peer.ID) {
 	}
 }
 
-// MyTopologyLoopState represents that state of a topology loop
-type MyTopologyLoopState struct {
-	lastNodeUpdate NodeUpdate
-}
-
 // getNodeUpdate computes the NodeUpdate based on GetForkHeadsResponse
 func getNodeUpdate(forkHeads *types.ForkHeads, heightInterestReach uint64) NodeUpdate {
 	if len(forkHeads.ForkHeads) == 0 {
