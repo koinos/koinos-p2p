@@ -344,6 +344,11 @@ func getNodeUpdate(forkHeads *types.ForkHeads, heightInterestReach uint64) NodeU
 
 // forkHeadConnects returns true if b connects to some existing fork head, false otherwise
 func (p *BdmiProvider) forkHeadConnects(b types.BlockTopology) bool {
+	// Genesis level blocks always connect
+	if b.Height == 1 {
+		return true
+	}
+
 	for _, h := range p.forkHeads.ForkHeads {
 		if h.ID.Equals(&b.ID) {
 			return true
