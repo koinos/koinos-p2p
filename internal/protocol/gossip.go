@@ -192,7 +192,7 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
-	if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
+	if _, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); err != nil {
 		log.Debugf("Gossiped block not applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 		return false
 	}
@@ -235,7 +235,7 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 		return true
 	}
 
-	if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
+	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {
 		log.Debugf("Gossiped transaction not applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 		return false
 	}

@@ -202,7 +202,8 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 			applyResult.Err = errors.New("Downloaded block not applied - from peer %s - Optional block not present")
 		} else {
 			block := resp.Block.Value
-			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
+			_, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
+			applyResult.Ok = (applyResult.Err != nil)
 		}
 
 		select {

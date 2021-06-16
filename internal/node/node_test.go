@@ -27,9 +27,9 @@ func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse,
 }
 
 // ApplyBlock rpc call
-func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, error) {
+func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block) (*types.SubmitBlockResponse, error) {
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
-		return false, nil
+		return types.NewSubmitBlockResponse(), nil
 	}
 
 	if k.BlocksApplied != nil {
@@ -37,11 +37,11 @@ func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, err
 		k.BlocksApplied = b
 	}
 
-	return true, nil
+	return types.NewSubmitBlockResponse(), nil
 }
 
-func (k *TestRPC) ApplyTransaction(ctx context.Context, txn *types.Transaction) (bool, error) {
-	return true, nil
+func (k *TestRPC) ApplyTransaction(ctx context.Context, txn *types.Transaction) (*types.SubmitTransactionResponse, error) {
+	return types.NewSubmitTransactionResponse(), nil
 }
 
 func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error) {
