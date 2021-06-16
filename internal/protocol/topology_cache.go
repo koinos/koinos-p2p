@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 
@@ -19,61 +20,97 @@ type PeerHasBlock struct {
 	Block  util.BlockTopologyCmp
 }
 
-// MyTopologyCache holds my topology (i.e. the topology of a single node).
-type MyTopologyCache struct {
-	ByTopology  map[util.BlockTopologyCmp]util.Void
-	ByID        map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void
-	ByPrevious  map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void
-	ByHeight    map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void
-	OldestBlock types.BlockHeightType
+// LocalTopologyCache holds my topology (i.e. the topology of a single node).
+type LocalTopologyCache struct {
+	byTopology  map[util.BlockTopologyCmp]util.Void
+	byID        map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void
+	byPrevious  map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void
+	byHeight    map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void
+	oldestBlock types.BlockHeightType
+	mutex       sync.Mutex
 }
 
-// NewMyTopologyCache instantiates a new MyTopologyCache
-func NewMyTopologyCache() *MyTopologyCache {
-	return &MyTopologyCache{
-		ByTopology:  make(map[util.BlockTopologyCmp]util.Void),
-		ByID:        make(map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void),
-		ByPrevious:  make(map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void),
-		ByHeight:    make(map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void),
-		OldestBlock: ^types.BlockHeightType(0),
+// ByTopology allows for thread safe access to the topology map
+func (c *LocalTopologyCache) ByTopology(key util.BlockTopologyCmp) (util.Void, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	a, b := c.byTopology[key]
+	return a, b
+}
+
+// ByID allows for thread safe access to the ID map
+func (c *LocalTopologyCache) ByID(key util.MultihashCmp) (map[util.BlockTopologyCmp]util.Void, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	a, b := c.byID[key]
+	return a, b
+}
+
+// ByPrevious allows for thread safe access to the previous map
+func (c *LocalTopologyCache) ByPrevious(key util.MultihashCmp) (map[util.BlockTopologyCmp]util.Void, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	a, b := c.byPrevious[key]
+	return a, b
+}
+
+// ByHeight allows for thread safe access to the height map
+func (c *LocalTopologyCache) ByHeight(key types.BlockHeightType) (map[util.BlockTopologyCmp]util.Void, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	a, b := c.byHeight[key]
+	return a, b
+}
+
+// NewLocalTopologyCache instantiates a new LocalTopologyCache
+func NewLocalTopologyCache() *LocalTopologyCache {
+	return &LocalTopologyCache{
+		byTopology:  make(map[util.BlockTopologyCmp]util.Void),
+		byID:        make(map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void),
+		byPrevious:  make(map[util.MultihashCmp]map[util.BlockTopologyCmp]util.Void),
+		byHeight:    make(map[types.BlockHeightType]map[util.BlockTopologyCmp]util.Void),
+		oldestBlock: ^types.BlockHeightType(0),
 	}
 }
 
 // Add adds the given BlockTopology to the cache
-func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
-	_, hasBlock := c.ByTopology[block]
+func (c *LocalTopologyCache) Add(block util.BlockTopologyCmp) bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	_, hasBlock := c.byTopology[block]
 	if hasBlock {
 		return false
 	}
-	c.ByTopology[block] = util.Void{}
+	c.byTopology[block] = util.Void{}
 
 	{
-		m, hasM := c.ByID[block.ID]
+		m, hasM := c.byID[block.ID]
 		if !hasM {
 			m = make(map[util.BlockTopologyCmp]util.Void)
-			c.ByID[block.ID] = m
+			c.byID[block.ID] = m
 		}
 		m[block] = util.Void{}
 	}
 
 	{
-		m, hasM := c.ByPrevious[block.Previous]
+		m, hasM := c.byPrevious[block.Previous]
 		if !hasM {
 			m = make(map[util.BlockTopologyCmp]util.Void)
-			c.ByPrevious[block.Previous] = m
+			c.byPrevious[block.Previous] = m
 		}
 		m[block] = util.Void{}
 	}
 
 	{
-		m, hasM := c.ByHeight[block.Height]
+		m, hasM := c.byHeight[block.Height]
 		if !hasM {
 			m = make(map[util.BlockTopologyCmp]util.Void)
-			c.ByHeight[block.Height] = m
+			c.byHeight[block.Height] = m
 		}
 		m[block] = util.Void{}
-		if block.Height < c.OldestBlock {
-			c.OldestBlock = block.Height
+		if block.Height < c.oldestBlock {
+			c.oldestBlock = block.Height
 		}
 	}
 
@@ -81,87 +118,125 @@ func (c *MyTopologyCache) Add(block util.BlockTopologyCmp) bool {
 }
 
 // SetLastIrr sets the last irreversible block
-func (c *MyTopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
-	for c.OldestBlock < newMyLastIrr.Height {
-		if topos, ok := c.ByHeight[c.OldestBlock]; ok {
+func (c *LocalTopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	for c.oldestBlock < newMyLastIrr.Height {
+		if topos, ok := c.byHeight[c.oldestBlock]; ok {
 			for topo := range topos {
 				// Remove from ByTopology
-				delete(c.ByTopology, topo)
+				delete(c.byTopology, topo)
 
 				// Remove from ByID
-				if blocksByID, ok := c.ByID[topo.ID]; ok {
+				if blocksByID, ok := c.byID[topo.ID]; ok {
 					delete(blocksByID, topo)
 
 					if len(blocksByID) == 0 {
-						delete(c.ByID, topo.ID)
+						delete(c.byID, topo.ID)
 					}
 				}
 
 				// Remove from ByPrevious
-				if blocksByPrevious, ok := c.ByPrevious[topo.Previous]; ok {
+				if blocksByPrevious, ok := c.byPrevious[topo.Previous]; ok {
 					delete(blocksByPrevious, topo)
 
 					if len(blocksByPrevious) == 0 {
-						delete(c.ByPrevious, topo.Previous)
+						delete(c.byPrevious, topo.Previous)
 					}
 				}
 			}
 
 			// Remove from ByHeight
-			delete(c.ByHeight, c.OldestBlock)
+			delete(c.byHeight, c.oldestBlock)
 		}
 
-		c.OldestBlock++
+		c.oldestBlock++
 	}
 }
 
-// TopologyCache holds the topology of all peers.
-// TODO rename to NetTopologyCache?
-type TopologyCache struct {
-	Set         map[PeerHasBlock]util.Void
-	ByTopology  map[util.BlockTopologyCmp]map[peer.ID]util.Void
-	ByPrevious  map[util.MultihashCmp]map[util.BlockTopologyCmp]map[peer.ID]util.Void
-	ByHeight    map[types.BlockHeightType]map[PeerHasBlock]util.Void
-	ByPeer      map[peer.ID]map[PeerHasBlock]util.Void
-	PeerHeight  map[peer.ID]types.BlockHeightType
-	OldestBlock types.BlockHeightType
+// NetTopologyCache holds the topology of all peers.
+type NetTopologyCache struct {
+	set         map[PeerHasBlock]util.Void
+	byTopology  map[util.BlockTopologyCmp]map[peer.ID]util.Void
+	byPrevious  map[util.MultihashCmp]map[util.BlockTopologyCmp]map[peer.ID]util.Void
+	byHeight    map[types.BlockHeightType]map[PeerHasBlock]util.Void
+	byPeer      map[peer.ID]map[PeerHasBlock]util.Void
+	peerHeight  map[peer.ID]types.BlockHeightType
+	oldestBlock types.BlockHeightType
+	mutex       sync.Mutex
 }
 
-// NewTopologyCache instantiates a new TopologyCache
-func NewTopologyCache() *TopologyCache {
-	return &TopologyCache{
-		Set:         make(map[PeerHasBlock]util.Void),
-		ByTopology:  make(map[util.BlockTopologyCmp]map[peer.ID]util.Void),
-		ByPrevious:  make(map[util.MultihashCmp]map[util.BlockTopologyCmp]map[peer.ID]util.Void),
-		ByHeight:    make(map[types.BlockHeightType]map[PeerHasBlock]util.Void),
-		ByPeer:      make(map[peer.ID]map[PeerHasBlock]util.Void),
-		PeerHeight:  make(map[peer.ID]types.BlockHeightType),
-		OldestBlock: ^types.BlockHeightType(0),
+// NewNetTopologyCache instantiates a new TopologyCache
+func NewNetTopologyCache() *NetTopologyCache {
+	return &NetTopologyCache{
+		set:         make(map[PeerHasBlock]util.Void),
+		byTopology:  make(map[util.BlockTopologyCmp]map[peer.ID]util.Void),
+		byPrevious:  make(map[util.MultihashCmp]map[util.BlockTopologyCmp]map[peer.ID]util.Void),
+		byHeight:    make(map[types.BlockHeightType]map[PeerHasBlock]util.Void),
+		byPeer:      make(map[peer.ID]map[PeerHasBlock]util.Void),
+		peerHeight:  make(map[peer.ID]types.BlockHeightType),
+		oldestBlock: ^types.BlockHeightType(0),
 	}
+}
+
+// ByTopology allows for thread safe access to the topology map
+func (c *NetTopologyCache) ByTopology(key util.BlockTopologyCmp) (map[peer.ID]util.Void, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	a, b := c.byTopology[key]
+	return a, b
+}
+
+// ByPeer allows for thread safe access to the peer map
+func (c *NetTopologyCache) ByPeer(key peer.ID) (map[PeerHasBlock]util.Void, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	a, b := c.byPeer[key]
+	return a, b
+}
+
+// ByPrevious allows for thread safe access to the previous map
+func (c *NetTopologyCache) ByPrevious(key util.MultihashCmp) (map[util.BlockTopologyCmp]map[peer.ID]util.Void, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	a, b := c.byPrevious[key]
+	return a, b
+}
+
+// ByHeight allows for thread safe access to the height map
+func (c *NetTopologyCache) ByHeight(key types.BlockHeightType) (map[PeerHasBlock]util.Void, bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	a, b := c.byHeight[key]
+	return a, b
 }
 
 // Add adds a known block held by a peer
-func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) bool {
-	_, hasBlock := c.Set[peerHasBlock]
+func (c *NetTopologyCache) Add(peerHasBlock PeerHasBlock) bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	_, hasBlock := c.set[peerHasBlock]
 	if hasBlock {
 		return false
 	}
-	c.Set[peerHasBlock] = util.Void{}
+	c.set[peerHasBlock] = util.Void{}
 
 	{
-		m, hasM := c.ByTopology[peerHasBlock.Block]
+		m, hasM := c.byTopology[peerHasBlock.Block]
 		if !hasM {
 			m = make(map[peer.ID]util.Void)
-			c.ByTopology[peerHasBlock.Block] = m
+			c.byTopology[peerHasBlock.Block] = m
 		}
 		m[peerHasBlock.PeerID] = util.Void{}
 	}
 
 	{
-		m, hasM := c.ByPrevious[peerHasBlock.Block.Previous]
+		m, hasM := c.byPrevious[peerHasBlock.Block.Previous]
 		if !hasM {
 			m = make(map[util.BlockTopologyCmp]map[peer.ID]util.Void)
-			c.ByPrevious[peerHasBlock.Block.Previous] = m
+			c.byPrevious[peerHasBlock.Block.Previous] = m
 		}
 		m2, hasM2 := m[peerHasBlock.Block]
 		if !hasM2 {
@@ -172,30 +247,30 @@ func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) bool {
 	}
 
 	{
-		m, hasM := c.ByHeight[peerHasBlock.Block.Height]
+		m, hasM := c.byHeight[peerHasBlock.Block.Height]
 		if !hasM {
 			m = make(map[PeerHasBlock]util.Void)
-			c.ByHeight[peerHasBlock.Block.Height] = m
+			c.byHeight[peerHasBlock.Block.Height] = m
 		}
 		m[peerHasBlock] = util.Void{}
-		if peerHasBlock.Block.Height < c.OldestBlock {
-			c.OldestBlock = peerHasBlock.Block.Height
+		if peerHasBlock.Block.Height < c.oldestBlock {
+			c.oldestBlock = peerHasBlock.Block.Height
 		}
 	}
 
 	{
-		m, hasM := c.ByPeer[peerHasBlock.PeerID]
+		m, hasM := c.byPeer[peerHasBlock.PeerID]
 		if !hasM {
 			m = make(map[PeerHasBlock]util.Void)
-			c.ByPeer[peerHasBlock.PeerID] = m
+			c.byPeer[peerHasBlock.PeerID] = m
 		}
 		m[peerHasBlock] = util.Void{}
 	}
 
 	{
-		height, hasHeight := c.PeerHeight[peerHasBlock.PeerID]
+		height, hasHeight := c.peerHeight[peerHasBlock.PeerID]
 		if (!hasHeight) || (height < peerHasBlock.Block.Height) {
-			c.PeerHeight[peerHasBlock.PeerID] = peerHasBlock.Block.Height
+			c.peerHeight[peerHasBlock.PeerID] = peerHasBlock.Block.Height
 		}
 	}
 
@@ -203,15 +278,18 @@ func (c *TopologyCache) Add(peerHasBlock PeerHasBlock) bool {
 }
 
 // PickPeer chooses a random peer
-func (c *TopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (peer.ID, error) {
+func (c *NetTopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (peer.ID, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	var emptyPeerID peer.ID
 
-	peers, hasPeers := c.ByTopology[topo]
+	peers, hasPeers := c.byTopology[topo]
 	if !hasPeers {
-		return emptyPeerID, errors.New("Attempt to log with no peers")
+		return emptyPeerID, errors.New("attempt to log with no peers")
 	}
 	if len(peers) < 1 {
-		return emptyPeerID, errors.New("Cannot pick from empty peer list")
+		return emptyPeerID, errors.New("cannot pick from empty peer list")
 	}
 	pickIndex := rng.Intn(len(peers))
 
@@ -223,68 +301,74 @@ func (c *TopologyCache) PickPeer(topo util.BlockTopologyCmp, rng *rand.Rand) (pe
 		}
 		i++
 	}
-	return emptyPeerID, fmt.Errorf("Could not pick the %dth element of map of length %d", pickIndex, len(peers))
+	return emptyPeerID, fmt.Errorf("could not pick the %dth element of map of length %d", pickIndex, len(peers))
 }
 
 // SetLastIrr sets the last irreversible block
-func (c *TopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
-	for c.OldestBlock < newMyLastIrr.Height {
+func (c *NetTopologyCache) SetLastIrr(newMyLastIrr util.BlockTopologyCmp) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	for c.oldestBlock < newMyLastIrr.Height {
 		// Each block needs to be checked incrementally because removal of peers can
 		// create gaps in the topology cache
-		if peerBlocks, ok := c.ByHeight[c.OldestBlock]; ok {
+		if peerBlocks, ok := c.byHeight[c.oldestBlock]; ok {
 
 			for peerBlock := range peerBlocks {
 				// Remove from Set
-				delete(c.Set, peerBlock)
+				delete(c.set, peerBlock)
 
 				// Remove from ByTopology
-				delete(c.ByTopology, peerBlock.Block)
+				delete(c.byTopology, peerBlock.Block)
 
 				// Remove from ByPrevious
-				if blocksByPrevious, ok := c.ByPrevious[peerBlock.Block.Previous]; ok {
+				if blocksByPrevious, ok := c.byPrevious[peerBlock.Block.Previous]; ok {
 					delete(blocksByPrevious, peerBlock.Block)
 
 					if len(blocksByPrevious) == 0 {
-						delete(c.ByPrevious, peerBlock.Block.Previous)
+						delete(c.byPrevious, peerBlock.Block.Previous)
 					}
 				}
 
 				// Remove from ByPeer
-				if blockByPeer, ok := c.ByPeer[peerBlock.PeerID]; ok {
+				if blockByPeer, ok := c.byPeer[peerBlock.PeerID]; ok {
 					delete(blockByPeer, peerBlock)
 
 					if len(blockByPeer) == 0 {
-						delete(c.ByPeer, peerBlock.PeerID)
+						delete(c.byPeer, peerBlock.PeerID)
 					}
 				}
 			}
 
 			// Remove from ByHeight
-			delete(c.ByHeight, c.OldestBlock)
+			delete(c.byHeight, c.oldestBlock)
 		}
 
-		c.OldestBlock++
+		c.oldestBlock++
 	}
 }
 
 // RemovePeer removes peer's blocks from the cache
-func (c *TopologyCache) RemovePeer(pid peer.ID) {
-	if peerBlocks, ok := c.ByPeer[pid]; ok {
+func (c *NetTopologyCache) RemovePeer(pid peer.ID) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if peerBlocks, ok := c.byPeer[pid]; ok {
 		for peerBlock := range peerBlocks {
 			// Remove from Set
-			delete(c.Set, peerBlock)
+			delete(c.set, peerBlock)
 
 			// Remove from ByTopology
-			if topologyPeers, ok := c.ByTopology[peerBlock.Block]; ok {
+			if topologyPeers, ok := c.byTopology[peerBlock.Block]; ok {
 				delete(topologyPeers, pid)
 
 				if len(topologyPeers) == 0 {
-					delete(c.ByTopology, peerBlock.Block)
+					delete(c.byTopology, peerBlock.Block)
 				}
 			}
 
 			// Remove from ByPrevious
-			if blocksByPrevious, ok := c.ByPrevious[peerBlock.Block.Previous]; ok {
+			if blocksByPrevious, ok := c.byPrevious[peerBlock.Block.Previous]; ok {
 				if topologyPeers, ok := blocksByPrevious[peerBlock.Block]; ok {
 					delete(topologyPeers, pid)
 
@@ -294,57 +378,62 @@ func (c *TopologyCache) RemovePeer(pid peer.ID) {
 				}
 
 				if len(blocksByPrevious) == 0 {
-					delete(c.ByPrevious, peerBlock.Block.Previous)
+					delete(c.byPrevious, peerBlock.Block.Previous)
 				}
 			}
 
 			// Remove from ByHeight
-			if heightPeers, ok := c.ByHeight[peerBlock.Block.Height]; ok {
+			if heightPeers, ok := c.byHeight[peerBlock.Block.Height]; ok {
 				delete(heightPeers, peerBlock)
 
 				if len(heightPeers) == 0 {
-					delete(c.ByHeight, peerBlock.Block.Height)
+					delete(c.byHeight, peerBlock.Block.Height)
 				}
 			}
 		}
 
 		// Remove from ByPeer
-		delete(c.ByPeer, pid)
+		delete(c.byPeer, pid)
 
 		// Remove from PeerHeight
-		delete(c.PeerHeight, pid)
+		delete(c.peerHeight, pid)
 	}
 }
 
-// GetInitialDownload returns the initial download from a topology.
+// getInitialDownload returns the initial download from a topology.
 //
 // The initial download is the set of blocks in netTopo that directly connect to myTopo but are
 // not themselves in myTopo.
-func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[util.BlockTopologyCmp]util.Void {
+func getInitialDownload(localTopo *LocalTopologyCache, netTopo *NetTopologyCache) map[util.BlockTopologyCmp]util.Void {
+	localTopo.mutex.Lock()
+	netTopo.mutex.Lock()
+	defer localTopo.mutex.Unlock()
+	defer netTopo.mutex.Unlock()
+
 	result := make(map[util.BlockTopologyCmp]util.Void)
 
 	// Special case:  A node that has no blocks is interested in blocks of height 1
-	if len(myTopo.ByTopology) == 0 {
-		log.Debug("No blocks, so GetInitialDownload is looking for blocks of height 1")
-		netNextBlocks, ok := netTopo.ByHeight[1]
+	if len(localTopo.byTopology) == 0 {
+		log.Debug("No blocks, so getInitialDownload is looking for blocks of height 1")
+		netNextBlocks, ok := netTopo.byHeight[1]
 		if ok {
 			for nextBlock := range netNextBlocks {
 				result[nextBlock.Block] = util.Void{}
 			}
 		}
 
-		log.Debugf("GetInitialDownload() returned %d blocks", len(result))
+		log.Debugf("getInitialDownload() returned %d blocks", len(result))
 		return result
 	}
 
-	for block := range myTopo.ByTopology {
-		netNextBlocks, ok := netTopo.ByPrevious[block.ID]
+	for block := range localTopo.byTopology {
+		netNextBlocks, ok := netTopo.byPrevious[block.ID]
 		if !ok {
 			continue
 		}
 		for nextBlock := range netNextBlocks {
 			// Skip blocks we already have
-			_, myHasNextBlock := myTopo.ByTopology[nextBlock]
+			_, myHasNextBlock := localTopo.byTopology[nextBlock]
 			if myHasNextBlock {
 				continue
 			}
@@ -356,13 +445,16 @@ func GetInitialDownload(myTopo *MyTopologyCache, netTopo *TopologyCache) map[uti
 	return result
 }
 
-// GetNextDownload returns the next download from a topology.
+// getNextDownload returns the next download from a topology.
 //
 // The next download is the set of blocks in netTopo that directly connect to currentDownload.
-func GetNextDownload(myTopo *MyTopologyCache, netTopo *TopologyCache, currentDownload map[util.BlockTopologyCmp]util.Void) map[util.BlockTopologyCmp]util.Void {
+func getNextDownload(netTopo *NetTopologyCache, currentDownload map[util.BlockTopologyCmp]util.Void) map[util.BlockTopologyCmp]util.Void {
+	netTopo.mutex.Lock()
+	defer netTopo.mutex.Unlock()
+
 	result := make(map[util.BlockTopologyCmp]util.Void)
 	for block := range currentDownload {
-		netNextBlocks, ok := netTopo.ByPrevious[block.ID]
+		netNextBlocks, ok := netTopo.byPrevious[block.ID]
 		if !ok {
 			continue
 		}
@@ -373,10 +465,10 @@ func GetNextDownload(myTopo *MyTopologyCache, netTopo *TopologyCache, currentDow
 	return result
 }
 
-// ConvertBlockTopologySetToSlice converts a set (a map from BlockTopologyCmp to util.Void) to a slice.
+// convertBlockTopologySetToSlice converts a set (a map from BlockTopologyCmp to util.Void) to a slice.
 //
 // Only the first n elements are converted.
-func ConvertBlockTopologySetToSlice(m map[util.BlockTopologyCmp]util.Void) []util.BlockTopologyCmp {
+func convertBlockTopologySetToSlice(m map[util.BlockTopologyCmp]util.Void) []util.BlockTopologyCmp {
 	result := make([]util.BlockTopologyCmp, len(m))
 
 	i := 0
@@ -390,36 +482,36 @@ func ConvertBlockTopologySetToSlice(m map[util.BlockTopologyCmp]util.Void) []uti
 // GetDownloads scans for a set of downloads that makes progress from the current topology.
 //
 // This function could likely be optimized by adding additional indexing.
-func GetDownloads(myTopo *MyTopologyCache, netTopo *TopologyCache, maxCount int, maxDepth int) []util.BlockTopologyCmp {
-	nextSet := GetInitialDownload(myTopo, netTopo)
+func GetDownloads(localTopo *LocalTopologyCache, netTopo *NetTopologyCache, maxCount int, maxDepth int) []util.BlockTopologyCmp {
+	nextSet := getInitialDownload(localTopo, netTopo)
 	resultSet := make(map[util.BlockTopologyCmp]util.Void)
 
 	// Set resultSet to the union of resultSet and nextSet
 	for k := range nextSet {
 		if len(resultSet) >= maxCount {
-			return ConvertBlockTopologySetToSlice(resultSet)
+			return convertBlockTopologySetToSlice(resultSet)
 		}
 		resultSet[k] = util.Void{}
 	}
 
 	for depth := 1; depth <= maxDepth; depth++ {
 		if len(resultSet) >= maxCount {
-			return ConvertBlockTopologySetToSlice(resultSet)
+			return convertBlockTopologySetToSlice(resultSet)
 		}
 
 		// Set resultSet to the union of resultSet and nextSet
 		for k := range nextSet {
 			if len(resultSet) >= maxCount {
-				return ConvertBlockTopologySetToSlice(resultSet)
+				return convertBlockTopologySetToSlice(resultSet)
 			}
 			resultSet[k] = util.Void{}
 		}
 
-		nextSet = GetNextDownload(myTopo, netTopo, resultSet)
+		nextSet = getNextDownload(netTopo, resultSet)
 		if len(nextSet) == 0 {
-			return ConvertBlockTopologySetToSlice(resultSet)
+			return convertBlockTopologySetToSlice(resultSet)
 		}
 	}
 
-	return ConvertBlockTopologySetToSlice(resultSet)
+	return convertBlockTopologySetToSlice(resultSet)
 }
