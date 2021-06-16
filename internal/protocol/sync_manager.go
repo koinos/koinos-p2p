@@ -70,8 +70,8 @@ type SyncManager struct {
 	// Channel for peers to remove
 	removedPeers chan peer.ID
 
-	// Channel for peers that have errors
-	errPeers chan PeerError
+	// Channel for reporting peer errors
+	PeerErrorChan chan PeerError
 
 	// Channel for peer to notify when handshake is done
 	handshakeDonePeers chan peer.ID
@@ -87,7 +87,12 @@ type SyncManager struct {
 }
 
 // NewSyncManager factory
-func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *options.Config) *SyncManager {
+func NewSyncManager(
+	ctx context.Context,
+	h host.Host,
+	rpc rpc.RPC,
+	peerErrorChan chan PeerError,
+	config *options.Config) *SyncManager {
 
 	// TODO pass rng as parameter
 	// TODO initialize RNG from cryptographically secure source
@@ -103,7 +108,7 @@ func NewSyncManager(ctx context.Context, h host.Host, rpc rpc.RPC, config *optio
 		newPeers:           make(chan peer.ID),
 		handshakeDonePeers: make(chan peer.ID),
 		removedPeers:       make(chan peer.ID),
-		errPeers:           make(chan PeerError),
+		PeerErrorChan:      peerErrorChan,
 
 		peers:     make(map[peer.ID]util.Void),
 		Blacklist: NewBlacklist(config.BlacklistOptions),
@@ -200,7 +205,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 
 	if err != nil {
 		select {
-		case m.errPeers <- PeerError{pid, err}:
+		case m.PeerErrorChan <- PeerError{pid, err}:
 		case <-ctx.Done():
 		}
 	}
@@ -237,7 +242,7 @@ func (m *SyncManager) run(ctx context.Context) {
 		case pid := <-m.removedPeers:
 			go m.doRemovePeer(ctx, pid)
 			delete(m.peers, pid)
-		case perr := <-m.errPeers:
+		case perr := <-m.PeerErrorChan:
 			// If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
 			m.Blacklist.AddPeerToBlacklist(perr)
 			delete(m.peers, perr.PeerID)

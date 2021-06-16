@@ -30,10 +30,11 @@ import (
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
-	Host        host.Host
-	RPC         rpc.RPC
-	Gossip      *protocol.KoinosGossip
-	SyncManager *protocol.SyncManager
+	Host          host.Host
+	RPC           rpc.RPC
+	Gossip        *protocol.KoinosGossip
+	SyncManager   *protocol.SyncManager
+	PeerErrorChan chan protocol.PeerError
 
 	Options options.NodeOptions
 }
@@ -70,8 +71,9 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 		log.Info("Starting P2P node without broadcast listeners")
 	}
 
-	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, config)
 	node.Options = config.NodeOptions
+	node.PeerErrorChan = make(chan protocol.PeerError)
+	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, node.PeerErrorChan, config)
 
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {
