@@ -144,8 +144,8 @@ type BlockDownloadManagerInterface interface {
 
 // BlockDownloadManager handles downloads
 type BlockDownloadManager struct {
-	MyTopoCache    MyTopologyCache
-	TopoCache      TopologyCache
+	MyTopoCache    LocalTopologyCache
+	TopoCache      NetTopologyCache
 	Downloading    map[util.BlockTopologyCmp]BlockDownloadRequest
 	Applying       map[util.BlockTopologyCmp]BlockDownloadResponse
 	WaitingToApply map[util.BlockTopologyCmp]BlockDownloadResponse
@@ -170,8 +170,8 @@ func NewBlockDownloadResponse() *BlockDownloadResponse {
 // NewBlockDownloadManager creates a new instance of BlockDownloadManager
 func NewBlockDownloadManager(rng *rand.Rand, iface BlockDownloadManagerInterface, opt options.DownloadManagerOptions) *BlockDownloadManager {
 	man := BlockDownloadManager{
-		MyTopoCache:    *NewMyTopologyCache(),
-		TopoCache:      *NewTopologyCache(),
+		MyTopoCache:    *NewLocalTopologyCache(),
+		TopoCache:      *NewNetTopologyCache(),
 		Downloading:    make(map[util.BlockTopologyCmp]BlockDownloadRequest),
 		Applying:       make(map[util.BlockTopologyCmp]BlockDownloadResponse),
 		WaitingToApply: make(map[util.BlockTopologyCmp]BlockDownloadResponse),
@@ -201,7 +201,7 @@ func (m *BlockDownloadManager) maybeApplyBlock(ctx context.Context, resp BlockDo
 	if resp.Topology.Height == 1 {
 		hasPrev = true
 	} else {
-		_, hasPrev = m.MyTopoCache.ByID[resp.Topology.Previous]
+		_, hasPrev = m.MyTopoCache.ByID(resp.Topology.Previous)
 	}
 
 	if hasPrev {
@@ -307,7 +307,7 @@ func (m *BlockDownloadManager) startDownload(ctx context.Context, download util.
 		return
 	}
 
-	peers, hasPeers := m.TopoCache.ByTopology[download]
+	peers, hasPeers := m.TopoCache.ByTopology(download)
 	if (!hasPeers) || (len(peers) < 1) {
 		log.Warnf("Could not find download %s in TopoCache", util.BlockTopologyCmpString(&download))
 		return
