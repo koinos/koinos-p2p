@@ -156,6 +156,7 @@ func getChannelError(errs chan error) error {
 	}
 }
 
+// PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string
 func (n *KoinosP2PNode) PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error) {
 	addr, err := multiaddr.NewMultiaddr(peerAddr)
 	if err != nil {
@@ -183,6 +184,7 @@ func (n *KoinosP2PNode) ConnectToPeerString(peerAddr string) (*peer.AddrInfo, er
 	return peer, nil
 }
 
+// ConnectToPeerAddress connects to the given peer address
 func (n *KoinosP2PNode) ConnectToPeerAddress(peer *peer.AddrInfo) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

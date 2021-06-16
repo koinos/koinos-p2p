@@ -104,6 +104,7 @@ type GossipEnableHandler interface {
 	EnableGossip(context.Context, bool)
 }
 
+// PeerConnectionHandler handles the function necessary for gossip to connect to peers
 type PeerConnectionHandler interface {
 	PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error)
 	ConnectToPeerAddress(*peer.AddrInfo) error
@@ -185,7 +186,7 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
-	if msg.GetFrom() != kg.myPeerID {
+	if msg.GetFrom() == kg.myPeerID {
 		return true
 	}
 
@@ -230,7 +231,7 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
-	if msg.GetFrom() != kg.myPeerID {
+	if msg.GetFrom() == kg.myPeerID {
 		return true
 	}
 
@@ -256,6 +257,11 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 		return false
 	}
 
+	// If the peer is from this node, consider it valid but do not add it
+	if msg.GetFrom() == kg.myPeerID {
+		return true
+	}
+
 	// A failure to connect should not invalidate the address
 	kg.Connector.ConnectToPeerAddress(addr)
 
@@ -278,6 +284,7 @@ func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
 	}
 }
 
+// StartPeerGossip begins exchanging peers over gossip
 func (kg *KoinosGossip) StartPeerGossip(ctx context.Context) {
 	go func() {
 		ch := make(chan types.VariableBlob, transactionBuffer)
