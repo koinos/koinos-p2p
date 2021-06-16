@@ -22,6 +22,7 @@ import (
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -197,6 +198,11 @@ func (n *KoinosP2PNode) ConnectToPeerAddress(peer *peer.AddrInfo) error {
 	return nil
 }
 
+// GetNetwork returns the host's network object
+func (n *KoinosP2PNode) GetNetwork() network.Network {
+	return n.Host.Network()
+}
+
 // GetListenAddress returns the multiaddress on which the node is listening
 func (n *KoinosP2PNode) GetListenAddress() multiaddr.Multiaddr {
 	return n.Host.Addrs()[0]
@@ -219,7 +225,7 @@ func (n *KoinosP2PNode) Close() error {
 
 // Start starts background goroutines
 func (n *KoinosP2PNode) Start(ctx context.Context) {
-	connectionManager := NewPeerConnectionManager(n, n.Options.InitialPeers)
+	connectionManager := NewPeerConnectionManager(ctx, n, n.Options.InitialPeers)
 	n.Host.Network().Notify(connectionManager)
 	n.SyncManager.Start(ctx)
 

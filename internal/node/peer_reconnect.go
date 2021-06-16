@@ -2,9 +2,11 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
+	types "github.com/koinos/koinos-types-golang"
 	util "github.com/koinos/koinos-util-golang"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -25,11 +27,12 @@ func min(a, b int) int {
 type PeerConnectionManager struct {
 	node         *KoinosP2PNode
 	initialPeers map[peer.ID]peer.AddrInfo
+	ctx          context.Context
 }
 
 // NewPeerConnectionManager creates a new PeerReconnectManager object
-func NewPeerConnectionManager(n *KoinosP2PNode, initialPeers []string) *PeerConnectionManager {
-	reconnectManager := PeerConnectionManager{node: n, initialPeers: make(map[peer.ID]peer.AddrInfo)}
+func NewPeerConnectionManager(ctx context.Context, n *KoinosP2PNode, initialPeers []string) *PeerConnectionManager {
+	reconnectManager := PeerConnectionManager{node: n, initialPeers: make(map[peer.ID]peer.AddrInfo), ctx: ctx}
 	for _, peerStr := range initialPeers {
 		ma, err := multiaddr.NewMultiaddr(peerStr)
 		if err != nil {
@@ -56,6 +59,11 @@ func (p *PeerConnectionManager) ClosedStream(n network.Network, s network.Stream
 
 // Connected is part of the libp2p network.Notifiee interface
 func (p *PeerConnectionManager) Connected(n network.Network, c network.Conn) {
+	//log.Infof("PEER CONN %s", c.RemoteMultiaddr().String())
+	s := fmt.Sprintf("%s/p2p/%s", c.RemoteMultiaddr(), c.RemotePeer())
+	log.Infof("Publishing connected peer: %s", s)
+	vb := types.VariableBlob((s))
+	p.node.Gossip.Peer.PublishMessage(p.ctx, &vb)
 }
 
 // Disconnected is part of the libp2p network.Notifiee interface
