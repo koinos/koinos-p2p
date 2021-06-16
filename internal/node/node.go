@@ -104,8 +104,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	if err != nil {
 		return nil, err
 	}
-	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node, node.Host.ID())
-
+	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.PeerErrorChan, node, node.Host.ID())
 	node.SyncManager.SetGossipEnableHandler(node.Gossip)
 
 	return node, nil
