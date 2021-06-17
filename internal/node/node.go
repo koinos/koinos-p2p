@@ -275,6 +275,11 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 }
 
 func generateMessageID(msg *pb.Message) string {
+	// Use the default unique ID function for peer exchange
+	if *msg.Topic == protocol.PeerTopicName {
+		return pubsub.DefaultMsgIdFn(msg)
+	}
+
 	// Hash the data
 	h := sha256.New()
 	h.Write(msg.Data)

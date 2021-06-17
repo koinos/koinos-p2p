@@ -106,7 +106,10 @@ func (p *PeerConnectionManager) ConnectInitialPeers() {
 	for len(peersToConnect) > 0 {
 		for peer, addr := range p.initialPeers {
 			log.Infof("Attempting to connect to peer %v", peer)
-			if err := p.connectToPeer(addr); err == nil {
+			err := p.connectToPeer(addr)
+			if err != nil {
+				log.Infof("Error connecting to peer %v: %s", peer, err)
+			} else {
 				newlyConnectedPeers[peer] = util.Void{}
 			}
 		}

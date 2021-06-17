@@ -17,6 +17,10 @@ import (
 const (
 	transactionBuffer int = 32
 	blockBuffer       int = 8
+
+	BlockTopicName       string = "koinos.blocks"
+	TransactionTopicName string = "koinos.transactions"
+	PeerTopicName        string = "koinos.peers"
 )
 
 // GossipManager manages gossip on a given topic
@@ -125,9 +129,9 @@ type KoinosGossip struct {
 
 // NewKoinosGossip constructs a new koinosGossip instance
 func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, connector PeerConnectionHandler, id peer.ID) *KoinosGossip {
-	block := NewGossipManager(ps, "koinos.blocks")
-	transaction := NewGossipManager(ps, "koinos.transactions")
-	peers := NewGossipManager(ps, "koinos.peers")
+	block := NewGossipManager(ps, BlockTopicName)
+	transaction := NewGossipManager(ps, TransactionTopicName)
+	peers := NewGossipManager(ps, PeerTopicName)
 	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, Peer: peers,
 		Connector: connector, PubSub: ps, myPeerID: id}
 
@@ -263,7 +267,7 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 		return true
 	}
 
-	// A failure to connect should not invalidate the address
+	// Attempt to connect
 	err = kg.Connector.ConnectToPeerAddress(addr)
 	if err != nil {
 		log.Infof("Failed to connect to gossiped peer: %s", sAddr)
