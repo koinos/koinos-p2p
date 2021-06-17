@@ -52,6 +52,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	options := []libp2p.Option{
 		libp2p.ListenAddrStrings(listenAddr),
 		libp2p.Identity(privateKey),
+		libp2p.NATPortMap(),
 	}
 
 	host, err := libp2p.New(ctx, options...)
