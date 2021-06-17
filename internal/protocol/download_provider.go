@@ -47,7 +47,6 @@ type BdmiProvider struct {
 
 	newPeerChan      chan peer.ID
 	peerErrChan      chan PeerError
-	nodeUpdateChan   chan NodeUpdate
 	removePeerChan   chan peer.ID
 	forkHeadsChan    chan *types.ForkHeads
 	enableGossipChan chan bool
@@ -90,7 +89,6 @@ func NewBdmiProvider(
 
 		newPeerChan:      make(chan peer.ID, 1),
 		peerErrChan:      make(chan PeerError, 1),
-		nodeUpdateChan:   make(chan NodeUpdate, 1),
 		removePeerChan:   make(chan peer.ID, 1),
 		forkHeadsChan:    make(chan *types.ForkHeads, 1),
 		enableGossipChan: make(chan bool, 1),
@@ -250,15 +248,6 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 
 	heads := toForkHeads(headsResp)
 
-	newNodeUpdate := getNodeUpdate(heads, p.Options.HeightInterestReach)
-
-	// TODO move HandleForkHeads() functionality into handleNodeUpdate()
-	//
-	// I am not sure we want to move the functionality. Yes, handleForkHeads
-	// can trigger a node update, but the NodeUpdate type is defined by
-	// peer_handler.go and PeerHandler does not access to fork heads
-	// Combining the functionality seems like an abstraction violation
-	p.handleNodeUpdate(ctx, newNodeUpdate)
 	p.handleForkHeads(ctx, heads)
 }
 
@@ -309,21 +298,6 @@ func (p *BdmiProvider) handleNewPeer(ctx context.Context, newPeer peer.ID) {
 	p.peerLoopCancelFuncs[newPeer] = cancel
 	go h.peerHandlerLoop(peerCtx)
 	go h.nodeUpdateLoop(peerCtx)
-}
-
-func (p *BdmiProvider) handleNodeUpdate(ctx context.Context, nodeUpdate NodeUpdate) {
-	p.lastNodeUpdate = nodeUpdate
-	for _, peerHandler := range p.peerHandlers {
-		go func(ph *PeerHandler, nodeUpdate NodeUpdate) {
-			select {
-			case <-time.After(time.Duration(p.Options.HeightRangeTimeoutMs) * time.Millisecond):
-				log.Warnf("PeerHandler for peer %s did not timely service NodeUpdate %v",
-					ph.peerID, nodeUpdate)
-			case ph.nodeUpdateChan <- nodeUpdate:
-			case <-ctx.Done():
-			}
-		}(peerHandler, nodeUpdate)
-	}
 }
 
 // RemovePeer closes the associated peer handler and removes the peer
@@ -449,21 +423,23 @@ func (p *BdmiProvider) handleForkHeads(ctx context.Context, newHeads *types.Fork
 
 	p.forkHeads = newHeads
 
-	newNodeUpdate := getNodeUpdate(newHeads, p.Options.HeightInterestReach)
+	nodeUpdate := getNodeUpdate(newHeads, p.Options.HeightInterestReach)
 
-	// Any changes to nodeUpdate get sent to the main loop for broadcast to PeerHandlers
-	// Since nodeUpdateChan is also handled by the providerLoop, we need to push to the channel
-	// asynchronously to prevent deadlock
-	if newNodeUpdate != p.lastNodeUpdate {
-		go func(ctx context.Context, nodeUpdate NodeUpdate) {
-			log.Debugf("lastNodeUpdate changed from %v to %v", p.lastNodeUpdate, newNodeUpdate)
+	if nodeUpdate != p.lastNodeUpdate {
+		log.Debugf("lastNodeUpdate changed from %v to %v", p.lastNodeUpdate, nodeUpdate)
 
-			select {
-			case p.nodeUpdateChan <- newNodeUpdate:
-			case <-ctx.Done():
-				return
-			}
-		}(ctx, newNodeUpdate)
+		p.lastNodeUpdate = nodeUpdate
+		for _, peerHandler := range p.peerHandlers {
+			go func(ph *PeerHandler, nodeUpdate NodeUpdate) {
+				select {
+				case <-time.After(time.Duration(p.Options.HeightRangeTimeoutMs) * time.Millisecond):
+					log.Warnf("PeerHandler for peer %s did not timely service NodeUpdate %v",
+						ph.peerID, nodeUpdate)
+				case ph.nodeUpdateChan <- nodeUpdate:
+				case <-ctx.Done():
+				}
+			}(peerHandler, nodeUpdate)
+		}
 	}
 
 	// myLastIrrChan is handled by the BdmiManager, so there is no deadlock here
@@ -492,8 +468,6 @@ func (p *BdmiProvider) providerLoop(ctx context.Context) {
 		select {
 		case newPeer := <-p.newPeerChan:
 			p.handleNewPeer(ctx, newPeer)
-		case nodeUpdate := <-p.nodeUpdateChan:
-			p.handleNodeUpdate(ctx, nodeUpdate)
 		case pid := <-p.removePeerChan:
 			p.handleRemovePeer(ctx, pid)
 		case forkHeads := <-p.forkHeadsChan:
