@@ -198,9 +198,9 @@ func (n *KoinosP2PNode) ConnectToPeerAddress(peer *peer.AddrInfo) error {
 	return nil
 }
 
-// GetNetwork returns the host's network object
-func (n *KoinosP2PNode) GetNetwork() network.Network {
-	return n.Host.Network()
+// GetConnections returns the host's current peer connections
+func (n *KoinosP2PNode) GetConnections() []network.Conn {
+	return n.Host.Network().Conns()
 }
 
 // GetListenAddress returns the multiaddress on which the node is listening

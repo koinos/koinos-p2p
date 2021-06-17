@@ -113,7 +113,7 @@ type GossipEnableHandler interface {
 type PeerConnectionHandler interface {
 	PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error)
 	ConnectToPeerAddress(*peer.AddrInfo) error
-	GetNetwork() network.Network
+	GetConnections() []network.Conn
 }
 
 // KoinosGossip handles gossip of blocks and transactions
@@ -267,6 +267,11 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 		return true
 	}
 
+	// Do not try to connect to myself
+	if addr.ID == kg.myPeerID {
+		return true
+	}
+
 	// Attempt to connect
 	err = kg.Connector.ConnectToPeerAddress(addr)
 	if err != nil {
@@ -288,11 +293,10 @@ func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
 			return
 		}
 
-		log.Info("Publishing connected peers")
-		net := kg.Connector.GetNetwork()
-		peerstore := net.Peerstore()
-		for _, peerID := range net.Peers() {
-			s := fmt.Sprintf("%s/p2p/%s", peerstore.Addrs(peerID)[0], peerID)
+		log.Debug("Publishing connected peers...")
+		for _, conn := range kg.Connector.GetConnections() {
+			s := fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
+			log.Debugf("Published peer: %s", s)
 			vb := types.VariableBlob((s))
 			kg.Peer.PublishMessage(ctx, &vb)
 		}
