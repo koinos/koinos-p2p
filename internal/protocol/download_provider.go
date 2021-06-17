@@ -92,7 +92,7 @@ func NewBdmiProvider(
 		removePeerChan:   make(chan peer.ID, 1),
 		forkHeadsChan:    make(chan *types.ForkHeads, 1),
 		enableGossipChan: make(chan bool, 1),
-		downloadChan:     make(chan BlockDownloadRequest),
+		downloadChan:     make(chan BlockDownloadRequest, 100),
 
 		peerLoopCancelFuncs: make(map[peer.ID]context.CancelFunc),
 
@@ -149,10 +149,15 @@ func (p *BdmiProvider) RescanChan() <-chan bool {
 
 // RequestDownload initiates a downlaod request
 func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadRequest) {
-	select {
-	case p.downloadChan <- req:
-	case <-ctx.Done():
-	}
+	// The BdmiManager calls RequestDownload, which can sometimes deadlock if
+	// the BdmiProvider is sending to a thread consumed by BdmiManager.
+	// Running this in a separate go routine prevents the deadlock
+	go func() {
+		select {
+		case p.downloadChan <- req:
+		case <-ctx.Done():
+		}
+	}()
 }
 
 func (p *BdmiProvider) handleRequestDownload(ctx context.Context, req BlockDownloadRequest) {
@@ -253,10 +258,15 @@ func (p *BdmiProvider) initialize(ctx context.Context) {
 
 // EnableGossip enables or disables gossip mode
 func (p *BdmiProvider) EnableGossip(ctx context.Context, enableGossip bool) {
-	select {
-	case p.enableGossipChan <- enableGossip:
-	case <-ctx.Done():
-	}
+	// The BdmiManager calls EnableGossip, which can sometimes deadlock if
+	// the BdmiProvider is sending to a thread consumed by BdmiManager.
+	// Running this in a separate go routine prevents the deadlock
+	go func() {
+		select {
+		case p.enableGossipChan <- enableGossip:
+		case <-ctx.Done():
+		}
+	}()
 }
 
 func (p *BdmiProvider) handleEnableGossip(ctx context.Context, enableGossip bool) {
@@ -442,7 +452,6 @@ func (p *BdmiProvider) handleForkHeads(ctx context.Context, newHeads *types.Fork
 		}
 	}
 
-	// myLastIrrChan is handled by the BdmiManager, so there is no deadlock here
 	select {
 	case p.myLastIrrChan <- p.forkHeads.LastIrreversibleBlock:
 	case <-ctx.Done():
