@@ -205,7 +205,7 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
-		log.Debugf("Gossiped block not applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+		log.Infof("Gossiped block not applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 		return false
 	}
 
