@@ -58,9 +58,9 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 	case *types.GetHeadInfoResponse:
 		response = t
 	case *types.ChainErrorResponse:
-		err = errors.New("Chain returned error processing GetHeadInfoRequest: " + string(t.ErrorText) + "    req=" + string(data))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Chain returned unexpected type processing GetHeadInfoRequest")
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err
@@ -103,9 +103,9 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (*types.
 	case *types.SubmitBlockResponse:
 		response = (*types.SubmitBlockResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New("Chain returned error processing SubmitBlockRequest: " + string(t.ErrorText) + "    req=" + string(data))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Chain returned unexpected type processing SubmitBlockRequest" + "    req=" + string(data))
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err
@@ -147,9 +147,9 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction
 	case *types.SubmitTransactionResponse:
 		response = (*types.SubmitTransactionResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New("Chain returned error processing SubmitTransactionRequest: " + string(t.ErrorText) + "    req=" + string(data))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Chain returned unexpected type processing SubmitTransactionRequest" + "    req=" + string(data))
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err
@@ -189,9 +189,9 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMult
 	case *types.GetBlocksByIDResponse:
 		response = (*types.GetBlocksByIDResponse)(t)
 	case *types.BlockStoreErrorResponse:
-		err = errors.New("Block store returned error processing GetBlocksByIDRequest: " + string(t.ErrorText) + "    req=" + string(data))
+		err = errors.New("block_store rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Block store returned unexpected type processing GetBlocksByIDRequest    req=" + string(data))
+		err = errors.New("unexpected block_store rpc response")
 	}
 
 	return response, err
@@ -233,9 +233,9 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multih
 	case *types.GetBlocksByHeightResponse:
 		response = (*types.GetBlocksByHeightResponse)(t)
 	case *types.BlockStoreErrorResponse:
-		err = errors.New("Block store returned error processing GetBlocksByHeightRequest: " + string(t.ErrorText) + "    req=" + string(data))
+		err = errors.New("block_store rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Block store returned unexpected type processing GetBlocksByHeightRequest    req=" + string(data))
+		err = errors.New("unexpected block_store rpc response")
 	}
 
 	return response, err
@@ -272,9 +272,9 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 	case *types.GetChainIDResponse:
 		response = (*types.GetChainIDResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New("Chain returned error processing GetChainIDRequest: " + string(t.ErrorText) + "    req=" + string(data))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Chain returned unexpected type processing GetChainIDRequest:    req=" + string(data))
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err
@@ -311,9 +311,9 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsRespon
 	case *types.GetForkHeadsResponse:
 		response = (*types.GetForkHeadsResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New("Chain returned error processing GetForkHeadsRequest: " + string(t.ErrorText) + "    req=" + string(data))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Chain returned unexpected type processing GetForkHeadsRequest    req=" + string(data))
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err

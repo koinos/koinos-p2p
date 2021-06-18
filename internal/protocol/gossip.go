@@ -118,7 +118,7 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.Varia
 	for {
 		msg, err := gm.sub.Next(ctx)
 		if err != nil {
-			log.Warnf("Error %s in readMessages() for topic %s", err, gm.topicName)
+			log.Warnf("Error getting message for topic %s: %s", gm.topicName, err)
 			return
 		}
 
@@ -230,7 +230,7 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
 	err := kg.applyBlock(ctx, pid, msg)
 	if err != nil {
-		log.Warnf("Processing block from peer %v KoinosGossip.applyBlock() returned error: %s", msg.ReceivedFrom, err)
+		log.Warnf("Gossiped block not applied from peer %v: %s", msg.ReceivedFrom, err)
 		select {
 		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
 		case <-ctx.Done():
@@ -247,7 +247,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
 	if err != nil {
 		// TODO: (Issue #5) Bad message, assign naughty points
-		return errors.New("Received a corrupt block via gossip: " + err.Error())
+		return errors.New("block deserialization failed, " + err.Error())
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
@@ -258,10 +258,10 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if _, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); err != nil {
-		return errors.New("Gossiped block not applied, because " + err.Error() + ": " + util.BlockString(&blockBroadcast.Block))
+		return errors.New("block application failed - " + util.BlockString(&blockBroadcast.Block) + ", " + err.Error())
 	}
 
-	log.Infof("Gossiped block applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 	return nil
 }
 
@@ -292,7 +292,7 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
 	err := kg.applyTransaction(ctx, pid, msg)
 	if err != nil {
-		log.Warnf("Processing transaction from peer %v KoinosGossip.applyBlock() returned error: %s", msg.ReceivedFrom, err)
+		log.Warnf("Gossiped transaction not applied from peer %v: %s", msg.ReceivedFrom, err)
 		select {
 		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
 		case <-ctx.Done():
@@ -309,7 +309,7 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	_, transaction, err := types.DeserializeTransaction(&vb)
 	if err != nil {
 		// TODO: (Issue #5) Bad message, assign naughty points
-		return errors.New("Received a corrupt transaction via gossip")
+		return errors.New("transaction deserialization failed, " + err.Error())
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
@@ -318,10 +318,10 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	}
 
 	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {
-		return errors.New("Gossiped transaction not applied, because " + err.Error() + ": " + util.TransactionString(transaction))
+		return errors.New("transaction application failed - " + util.TransactionString(transaction) + ", " + err.Error())
 	}
 
-	log.Infof("Gossiped transaction applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+	log.Infof("Gossiped transaction applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 	return nil
 }
 
