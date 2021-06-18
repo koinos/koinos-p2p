@@ -3,20 +3,32 @@ package protocol
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	types "github.com/koinos/koinos-types-golang"
 	util "github.com/koinos/koinos-util-golang"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/multiformats/go-multiaddr"
 )
 
 const (
 	transactionBuffer int = 32
 	blockBuffer       int = 8
+
+	// BlockTopicName is the block topic string
+	BlockTopicName string = "koinos.blocks"
+
+	// TransactionTopicName is the transaction topic string
+	TransactionTopicName string = "koinos.transactions"
+
+	//PeerTopicName is the peer topic string
+	PeerTopicName string = "koinos.peers"
+
+	peerAdvertiseTime time.Duration = time.Minute * 1
 )
 
 // GossipManager manages gossip on a given topic
@@ -127,7 +139,7 @@ type GossipEnableHandler interface {
 type PeerConnectionHandler interface {
 	PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error)
 	ConnectToPeerAddress(*peer.AddrInfo) error
-	GetPeerAddress() multiaddr.Multiaddr
+	GetConnections() []network.Conn
 }
 
 // KoinosGossip handles gossip of blocks and transactions
@@ -151,9 +163,9 @@ func NewKoinosGossip(
 	connector PeerConnectionHandler,
 	id peer.ID) *KoinosGossip {
 
-	block := NewGossipManager(ps, peerErrorChan, "koinos.blocks")
-	transaction := NewGossipManager(ps, peerErrorChan, "koinos.transactions")
-	peers := NewGossipManager(ps, peerErrorChan, "koinos.peers")
+	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
+	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
+	peers := NewGossipManager(ps, peerErrorChan, PeerTopicName)
 	kg := KoinosGossip{
 		rpc:           rpc,
 		Block:         block,
@@ -331,27 +343,38 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 		return true
 	}
 
-	// A failure to connect should not invalidate the address
-	err = kg.Connector.ConnectToPeerAddress(addr)
-	if err == nil {
-		log.Infof("Connected to gossiped peer: %s", sAddr)
+	// Do not try to connect to myself
+	if addr.ID == kg.myPeerID {
+		return true
 	}
+
+	// Attempt to connect
+	err = kg.Connector.ConnectToPeerAddress(addr)
+	if err != nil {
+		log.Infof("Failed to connect to gossiped peer: %s, %s", sAddr, err)
+		return false
+	}
+
+	log.Infof("Received peer address via gossip - %s", sAddr)
 
 	return true
 }
 
 func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
-	addr := types.VariableBlob(kg.Connector.GetPeerAddress().String())
-	log.Info(string(addr))
-
 	for {
-		kg.Peer.PublishMessage(ctx, &addr)
-
 		select {
-		case <-time.After(time.Minute * 5):
+		case <-time.After(peerAdvertiseTime):
 			break
 		case <-ctx.Done():
 			return
+		}
+
+		log.Debug("Publishing connected peers...")
+		for _, conn := range kg.Connector.GetConnections() {
+			s := fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
+			log.Debugf("Published peer: %s", s)
+			vb := types.VariableBlob((s))
+			kg.Peer.PublishMessage(ctx, &vb)
 		}
 	}
 }
@@ -362,7 +385,7 @@ func (kg *KoinosGossip) StartPeerGossip(ctx context.Context) {
 		ch := make(chan types.VariableBlob, transactionBuffer)
 		kg.Peer.RegisterValidator(kg.validatePeer)
 		kg.Peer.Start(ctx, ch)
-		log.Debug("Started peer gossip listener")
+		log.Info("Started peer gossip")
 
 		// Start address publisher
 		cctx, cancel := context.WithCancel(ctx)

@@ -22,6 +22,7 @@ import (
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -52,6 +53,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	options := []libp2p.Option{
 		libp2p.ListenAddrStrings(listenAddr),
 		libp2p.Identity(privateKey),
+		libp2p.NATPortMap(),
 	}
 
 	host, err := libp2p.New(ctx, options...)
@@ -121,7 +123,7 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	binary := types.NewVariableBlob()
 	binary = blockBroadcast.Serialize(binary)
 	n.Gossip.Block.PublishMessage(context.Background(), binary)
-	log.Infof("Publishing Block: %s", util.BlockString(&blockBroadcast.Block))
+	log.Infof("Publishing block - %s", util.BlockString(&blockBroadcast.Block))
 	n.SyncManager.HandleBlockBroadcast(context.Background(), blockBroadcast)
 }
 
@@ -135,7 +137,7 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 	}
 	binary := types.NewVariableBlob()
 	binary = trxBroadcast.Serialize(binary)
-	log.Infof("Publishing Transaction: %s", util.TransactionString(&trxBroadcast.Transaction))
+	log.Infof("Publishing transaction - %s", util.TransactionString(&trxBroadcast.Transaction))
 	n.Gossip.Transaction.PublishMessage(context.Background(), binary)
 }
 
@@ -189,6 +191,11 @@ func (n *KoinosP2PNode) ConnectToPeerAddress(peer *peer.AddrInfo) error {
 	return nil
 }
 
+// GetConnections returns the host's current peer connections
+func (n *KoinosP2PNode) GetConnections() []network.Conn {
+	return n.Host.Network().Conns()
+}
+
 // GetListenAddress returns the multiaddress on which the node is listening
 func (n *KoinosP2PNode) GetListenAddress() multiaddr.Multiaddr {
 	return n.Host.Addrs()[0]
@@ -211,7 +218,7 @@ func (n *KoinosP2PNode) Close() error {
 
 // Start starts background goroutines
 func (n *KoinosP2PNode) Start(ctx context.Context) {
-	connectionManager := NewPeerConnectionManager(n, n.Options.InitialPeers)
+	connectionManager := NewPeerConnectionManager(ctx, n, n.Options.InitialPeers)
 	n.Host.Network().Notify(connectionManager)
 	n.SyncManager.Start(ctx)
 
@@ -261,6 +268,11 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 }
 
 func generateMessageID(msg *pb.Message) string {
+	// Use the default unique ID function for peer exchange
+	if *msg.Topic == protocol.PeerTopicName {
+		return pubsub.DefaultMsgIdFn(msg)
+	}
+
 	// Hash the data
 	h := sha256.New()
 	h.Write(msg.Data)
