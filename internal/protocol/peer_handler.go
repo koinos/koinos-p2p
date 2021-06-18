@@ -71,7 +71,9 @@ type PeerHandler struct {
 
 func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequest) {
 	go func() {
-		log.Debugf("Request block %s from peer %s", util.BlockTopologyCmpString(&req.Topology), h.peerID)
+		log.Debugm("Requesting block from peer",
+			"block", util.BlockTopologyCmpString(&req.Topology),
+			"peer", h.peerID)
 		rpcReq := GetBlocksByIDRequest{BlockID: []types.Multihash{util.MultihashFromCmp(req.Topology.ID)}}
 		rpcResp := GetBlocksByIDResponse{}
 
@@ -82,11 +84,18 @@ func (h *PeerHandler) requestDownload(ctx context.Context, req BlockDownloadRequ
 		resp.Topology = req.Topology
 		resp.PeerID = h.peerID
 		if err != nil {
-			log.Warnf("Error getting block %s from peer %s: error was %s", util.BlockTopologyCmpString(&req.Topology), h.peerID, err.Error())
+			log.Warnm("Error getting block from peer",
+				"block", util.BlockTopologyCmpString(&req.Topology),
+				"peer", h.peerID,
+				"err", err)
 			resp.Err = err
 		} else if len(rpcResp.BlockItems) < 1 {
-			log.Warnf("  - Got 0 block")
-			resp.Err = errors.New("Got 0 blocks from peer")
+			log.Warnm("Got 0 blocks from peer",
+				"block", util.BlockTopologyCmpString(&req.Topology),
+				"peer", h.peerID)
+			resp.Err = log.NewErrorm("Got 0 blocks from peer",
+				"block", util.BlockTopologyCmpString(&req.Topology),
+				"peer", h.peerID)
 		} else {
 			bytes, optBlock, err := types.DeserializeOptionalBlock((*types.VariableBlob)(&rpcResp.BlockItems[0]))
 			if err != nil {
@@ -140,8 +149,8 @@ func (h *PeerHandler) nodeUpdateLoop(ctx context.Context) {
 
 func (h *PeerHandler) peerHandlerLoop(ctx context.Context) {
 	// Helper function to call peerHandlerCycle() and send any error to errChan
-	log.Debugf("Start peer handler loop for peer %s", h.peerID)
-	defer log.Debugf("Exit peer handler loop for peer %s", h.peerID)
+	log.Debugm("Start peer handler loop for peer", "peer", h.peerID)
+	defer log.Debugm("Exit peer handler loop for peer", "peer", h.peerID)
 
 	doPeerCycle := func() {
 		err := h.peerHandlerCycle(ctx)
@@ -182,7 +191,10 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	//        libp2p-gorpc to support passing the peer ID into the caller.
 	//
 
-	log.Debugf("%s: Polling HeightRange{%d,%d}", h.peerID, h.lastNodeUpdate.InterestStartHeight, h.lastNodeUpdate.InterestNumBlocks)
+	log.Debugm("Polling HeightRange",
+		"peer", h.peerID,
+		"start", h.lastNodeUpdate.InterestStartHeight,
+		"count", h.lastNodeUpdate.InterestNumBlocks)
 
 	req := GetTopologyAtHeightRequest{
 		BlockHeight: h.lastNodeUpdate.InterestStartHeight,
@@ -193,13 +205,17 @@ func (h *PeerHandler) peerHandlerCycle(ctx context.Context) error {
 	defer cancel()
 	err := h.client.CallContext(subctx, h.peerID, "SyncService", "GetTopologyAtHeight", req, &resp)
 	if err != nil {
-		log.Warnf("%s: error calling GetTopologyAtHeight, error was %s", h.peerID, err.Error())
+		log.Warnm("Error calling GetTopologyAtHeight",
+			"peer", h.peerID,
+			"err", err)
 		return err
 	}
 
 	for _, b := range resp.BlockTopology {
 		hasBlockMsg := PeerHasBlock{h.peerID, util.BlockTopologyToCmp(b)}
-		log.Debugf("%s: Sending PeerHasBlock message for block %s", h.peerID, util.BlockTopologyCmpString(&hasBlockMsg.Block))
+		log.Debugm("Sending PeerHasBlock message",
+			"peer", h.peerID,
+			"block", util.BlockTopologyCmpString(&hasBlockMsg.Block))
 
 		select {
 		case h.peerHasBlockChan <- hasBlockMsg:

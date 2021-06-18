@@ -414,7 +414,7 @@ func getInitialDownload(localTopo *LocalTopologyCache, netTopo *NetTopologyCache
 
 	// Special case:  A node that has no blocks is interested in blocks of height 1
 	if len(localTopo.byTopology) == 0 {
-		log.Debug("No blocks, so getInitialDownload is looking for blocks of height 1")
+		log.Debugm("No blocks, so getInitialDownload is looking for blocks of height 1")
 		netNextBlocks, ok := netTopo.byHeight[1]
 		if ok {
 			for nextBlock := range netNextBlocks {
@@ -422,7 +422,8 @@ func getInitialDownload(localTopo *LocalTopologyCache, netTopo *NetTopologyCache
 			}
 		}
 
-		log.Debugf("getInitialDownload() returned %d blocks", len(result))
+		log.Debugm("getInitialDownload() returned blocks",
+			"numBlocks", len(result))
 		return result
 	}
 

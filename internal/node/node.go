@@ -70,7 +70,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 		requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.handleTransactionBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.block.forks", node.handleForkUpdate)
 	} else {
-		log.Info("Starting P2P node without broadcast listeners")
+		log.Infom("Starting P2P node without broadcast listeners")
 	}
 
 	node.Options = config.NodeOptions
@@ -80,7 +80,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {
 		// TODO:  When https://github.com/libp2p/go-libp2p-pubsub/issues/364 is fixed, don't monkey-patch global variables like this
-		log.Info("Bootstrap node enabled")
+		log.Infom("Bootstrap node enabled")
 		pubsub.GossipSubD = 0
 		pubsub.GossipSubDlo = 0
 		pubsub.GossipSubDhi = 0
@@ -113,40 +113,40 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 }
 
 func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.block.accept broadcast: %v", string(data))
+	log.Debugm("Received koinos.block.accept broadcast", "data", string(data))
 	blockBroadcast := types.NewBlockAccepted()
 	err := json.Unmarshal(data, blockBroadcast)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.block.accept broadcast: %v", string(data))
+		log.Warnm("Unable to parse koinos.block.accept broadcast", "data", string(data))
 		return
 	}
 	binary := types.NewVariableBlob()
 	binary = blockBroadcast.Serialize(binary)
 	n.Gossip.Block.PublishMessage(context.Background(), binary)
-	log.Infof("Publishing block - %s", util.BlockString(&blockBroadcast.Block))
+	log.Infom("Publishing block", "block", util.BlockString(&blockBroadcast.Block))
 	n.SyncManager.HandleBlockBroadcast(context.Background(), blockBroadcast)
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.transction.accept broadcast: %v", string(data))
+	log.Debugm("Received koinos.transction.accept broadcast", "data", string(data))
 	trxBroadcast := types.NewTransactionAccepted()
 	err := json.Unmarshal(data, trxBroadcast)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", string(data))
+		log.Warnm("Unable to parse koinos.transaction.accept broadcast", "data", string(data))
 		return
 	}
 	binary := types.NewVariableBlob()
 	binary = trxBroadcast.Serialize(binary)
-	log.Infof("Publishing transaction - %s", util.TransactionString(&trxBroadcast.Transaction))
+	log.Infom("Publishing transaction", "transaction", util.TransactionString(&trxBroadcast.Transaction))
 	n.Gossip.Transaction.PublishMessage(context.Background(), binary)
 }
 
 func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
-	log.Debugf("Received koinos.block.forks broadcast: %v", string(data))
+	log.Debugm("Received koinos.block.forks broadcast", "data", string(data))
 	forkHeads := types.NewForkHeads()
 	err := json.Unmarshal(data, forkHeads)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", string(data))
+		log.Warnm("Unable to parse koinos.block.forks broadcast", "data", string(data))
 		return
 	}
 	n.SyncManager.HandleForkHeads(context.Background(), forkHeads)
@@ -252,7 +252,7 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 	// If blank seed, generate a new randomized seed
 	if seed == "" {
 		seed = util.GenerateBase58ID(8)
-		log.Infof("Using random seed: %s", seed)
+		log.Infom("Using random seed", "seed", seed)
 	}
 
 	// Convert the seed to int64 and construct the random source

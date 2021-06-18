@@ -175,7 +175,8 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMult
 		return nil, err
 	}
 
-	log.Debugf("GetBlocksByID() response: %s", responseBytes)
+	log.Debugm("GetBlocksByID() response bytes",
+		"responseBytes", responseBytes)
 
 	responseVariant := types.NewBlockStoreResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
@@ -254,7 +255,8 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
-	log.Debugf("GetChainID() response was %s", responseBytes)
+	log.Debugm("GetChainID() response bytes",
+		"responseBytes", responseBytes)
 
 	if err != nil {
 		return nil, err

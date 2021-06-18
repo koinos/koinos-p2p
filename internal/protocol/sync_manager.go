@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"math/rand"
@@ -119,13 +118,14 @@ func NewSyncManager(
 	ticker := time.NewTicker(time.Duration(config.BlacklistOptions.BlacklistRescanMs) * time.Millisecond)
 	manager.rescanBlacklist = ticker.C
 
-	log.Debug("Registering SyncService")
+	log.Debugm("Registering SyncService")
 	err := manager.server.Register(NewSyncService(&rpc, manager.bdmiProvider, &manager.downloadManager.MyTopoCache, config.SyncServiceOptions))
 	if err != nil {
-		log.Errorf("Error registering sync service: %s", err.Error())
+		log.Errorm("Error registering sync service",
+			"err", err)
 		panic(err)
 	}
-	log.Debugf("SyncService successfully registered")
+	log.Debugm("SyncService successfully registered")
 
 	// TODO: What is context?
 	peerAdder := NewSyncManagerPeerAdder(ctx, h, &manager)
@@ -169,7 +169,8 @@ func (m *SyncManager) RemovePeer(ctx context.Context, pid peer.ID) {
 func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 
 	err := func() error {
-		log.Debugf("connecting to peer for sync: %v", pid)
+		log.Debugm("Connecting to peer for sync",
+			"peer", pid)
 
 		peerChainID := GetChainIDResponse{}
 		{
@@ -178,20 +179,30 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 			defer cancel()
 			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, &peerChainID)
 			if err != nil {
-				log.Warnf("%v: error getting peer chain id, %v", pid, err)
+				log.Warnm("Error getting peer chain id",
+					"peer", pid,
+					"err", err)
 				return err
 			}
 		}
 
 		chainID, err := m.rpc.GetChainID(ctx)
 		if err != nil {
-			log.Errorf("%v: error getting chain id, %v", pid, err)
+			log.Errorm("Error getting chain id",
+				"peer", pid,
+				"err", err)
 			return err
 		}
 
 		if !chainID.ChainID.Equals(&peerChainID.ChainID) {
-			log.Warnf("%v: peer's chain id %v does not match my chain ID %v", pid, peerChainID.ChainID, chainID.ChainID)
-			return fmt.Errorf("%v: peer's chain id does not match", pid)
+			log.Warnm("Peer's chain ID does not match my chain ID",
+				"peer", pid,
+				"peerChainID", peerChainID.ChainID,
+				"myChainID", chainID.ChainID)
+			return log.NewErrorm("Peer's chain ID does not match my chain ID",
+				"peer", pid,
+				"peerChainID", peerChainID.ChainID,
+				"myChainID", chainID.ChainID)
 		}
 
 		select {
@@ -199,7 +210,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 		case <-ctx.Done():
 		}
 
-		log.Infof("Connected to peer for sync: %v", pid)
+		log.Infom("Connected to peer for sync", "pid", pid)
 		return nil
 	}()
 

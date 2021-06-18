@@ -106,15 +106,16 @@ type SyncService struct {
 
 // GetChainID p2p rpc
 func (s *SyncService) GetChainID(ctx context.Context, request GetChainIDRequest, response *GetChainIDResponse) error {
-	log.Debug("SyncService.ChainID() start")
+	log.Debugm("SyncService.ChainID() start")
 	rpcResult, err := s.RPC.GetChainID(ctx)
 	if err != nil {
-		log.Error("SyncService.ChainID() returning error")
+		log.Errorm("SyncService.ChainID() returning error")
 		return err
 	}
 
 	response.ChainID = rpcResult.ChainID
-	log.Debugf("SyncService.ChainID() returning normally, chain ID is %v", response.ChainID)
+	log.Debugm("SyncService.ChainID() returning normally",
+		"chainID", response.ChainID)
 	return nil
 }
 

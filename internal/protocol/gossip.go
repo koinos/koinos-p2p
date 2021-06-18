@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -100,7 +99,7 @@ func (gm *GossipManager) PublishMessage(ctx context.Context, vb *types.VariableB
 		return false
 	}
 
-	log.Debugf("Publishing message")
+	log.Debugm("Publishing message")
 	gm.topic.Publish(ctx, *vb)
 
 	return true
@@ -118,7 +117,9 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.Varia
 	for {
 		msg, err := gm.sub.Next(ctx)
 		if err != nil {
-			log.Warnf("Error %s in readMessages() for topic %s", err, gm.topicName)
+			log.Warnm("Topic gm.sub.Next() returned error",
+				"topic", gm.topicName,
+				"err", err)
 			return
 		}
 
@@ -191,14 +192,14 @@ func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
 
 // StartGossip enables gossip of blocks and transactions
 func (kg *KoinosGossip) StartGossip(ctx context.Context) {
-	log.Info("Starting gossip mode")
+	log.Infom("Starting gossip mode")
 	kg.startBlockGossip(ctx)
 	kg.startTransactionGossip(ctx)
 }
 
 // StopGossip stops gossiping on both block and transaction topics
 func (kg *KoinosGossip) StopGossip() {
-	log.Info("Stopping gossip mode")
+	log.Infom("Stopping gossip mode")
 	kg.Block.Stop()
 	kg.Transaction.Stop()
 }
@@ -209,7 +210,7 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 		defer close(blockChan)
 		kg.Block.RegisterValidator(kg.validateBlock)
 		kg.Block.Start(ctx, blockChan)
-		log.Info("Started block gossip listener")
+		log.Infom("Started block gossip listener")
 
 		// A block that reaches here has already been applied
 		// Any postprocessing that might be needed would happen here
@@ -230,7 +231,9 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
 	err := kg.applyBlock(ctx, pid, msg)
 	if err != nil {
-		log.Warnf("Processing block from peer %v KoinosGossip.applyBlock() returned error: %s", msg.ReceivedFrom, err)
+		log.Warnm("Block from gossip had applyBlock() return error",
+			"peer", msg.ReceivedFrom,
+			"err", err)
 		select {
 		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
 		case <-ctx.Done():
@@ -243,11 +246,11 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
 	vb := types.VariableBlob(msg.Data)
 
-	log.Debug("Received block via gossip")
+	log.Debugm("Received block via gossip")
 	_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
 	if err != nil {
 		// TODO: (Issue #5) Bad message, assign naughty points
-		return errors.New("Received a corrupt block via gossip: " + err.Error())
+		return log.NewErrorm("Received a corrupt block via gossip", "err", err.Error())
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
@@ -258,10 +261,14 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if _, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); err != nil {
-		return errors.New("Gossiped block not applied, because " + err.Error() + ": " + util.BlockString(&blockBroadcast.Block))
+		return log.NewErrorm("Gossiped block not applied",
+			"block", util.BlockString(&blockBroadcast.Block),
+			"err", err.Error())
 	}
 
-	log.Infof("Gossiped block applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+	log.Infom("Gossiped block applied",
+		"block", util.BlockString(&blockBroadcast.Block),
+		"peer", msg.ReceivedFrom)
 	return nil
 }
 
@@ -271,7 +278,7 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 		defer close(transactionChan)
 		kg.Transaction.RegisterValidator(kg.validateTransaction)
 		kg.Transaction.Start(ctx, transactionChan)
-		log.Debug("Started transaction gossip listener")
+		log.Debugm("Started transaction gossip listener")
 
 		// A transaction that reaches here has already been applied
 		// Any postprocessing that might be needed would happen here
@@ -292,7 +299,9 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
 	err := kg.applyTransaction(ctx, pid, msg)
 	if err != nil {
-		log.Warnf("Processing transaction from peer %v KoinosGossip.applyBlock() returned error: %s", msg.ReceivedFrom, err)
+		log.Warnm("Transaction from gossip had applyTransaction() return error",
+			"peer", msg.ReceivedFrom,
+			"err", err)
 		select {
 		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
 		case <-ctx.Done():
@@ -305,11 +314,13 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
 	vb := types.VariableBlob(msg.Data)
 
-	log.Debug("Received transaction via gossip")
+	log.Debugm("Received transaction via gossip")
 	_, transaction, err := types.DeserializeTransaction(&vb)
 	if err != nil {
 		// TODO: (Issue #5) Bad message, assign naughty points
-		return errors.New("Received a corrupt transaction via gossip")
+		return log.NewErrorm("Received a corrupt transaction via gossip",
+			"peer", msg.ReceivedFrom,
+			"err", err)
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
@@ -318,10 +329,15 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	}
 
 	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {
-		return errors.New("Gossiped transaction not applied, because " + err.Error() + ": " + util.TransactionString(transaction))
+		return log.NewErrorm("Gossiped transaction not applied",
+			"tx", util.TransactionString(transaction),
+			"peer", msg.ReceivedFrom,
+			"err", err)
 	}
 
-	log.Infof("Gossiped transaction applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+	log.Infom("Gossiped transaction applied",
+		"tx", util.TransactionString(transaction),
+		"peer", msg.ReceivedFrom)
 	return nil
 }
 
@@ -351,11 +367,14 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 	// Attempt to connect
 	err = kg.Connector.ConnectToPeerAddress(addr)
 	if err != nil {
-		log.Infof("Failed to connect to gossiped peer: %s, %s", sAddr, err)
+		log.Infom("Failed to connect to gossiped peer",
+			"sAddr", sAddr,
+			"err", err)
 		return false
 	}
 
-	log.Infof("Received peer address via gossip - %s", sAddr)
+	log.Infom("Received peer address via gossip",
+		"sAddr", sAddr)
 
 	return true
 }
@@ -369,10 +388,11 @@ func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
 			return
 		}
 
-		log.Debug("Publishing connected peers...")
+		log.Debugm("Publishing connected peers...")
 		for _, conn := range kg.Connector.GetConnections() {
 			s := fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
-			log.Debugf("Published peer: %s", s)
+			log.Debugm("Published peer",
+				"peer", s)
 			vb := types.VariableBlob((s))
 			kg.Peer.PublishMessage(ctx, &vb)
 		}
@@ -385,7 +405,7 @@ func (kg *KoinosGossip) StartPeerGossip(ctx context.Context) {
 		ch := make(chan types.VariableBlob, transactionBuffer)
 		kg.Peer.RegisterValidator(kg.validatePeer)
 		kg.Peer.Start(ctx, ch)
-		log.Info("Started peer gossip")
+		log.Infom("Started peer gossip")
 
 		// Start address publisher
 		cctx, cancel := context.WithCancel(ctx)

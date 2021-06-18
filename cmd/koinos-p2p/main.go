@@ -120,25 +120,25 @@ func main() {
 
 	koinosRPC := rpc.NewKoinosRPC(client)
 
-	log.Info("Attempting to connect to block_store...")
+	log.Infom("Attempting to connect to block_store...")
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToBlockStore(ctx)
 		if val {
-			log.Info("Connected")
+			log.Infom("Connected")
 			break
 		}
 		time.Sleep(amqpConnectAttemptSeconds * time.Second)
 	}
 
-	log.Info("Attempting to connect to chain...")
+	log.Infom("Attempting to connect to chain...")
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToChain(ctx)
 		if val {
-			log.Info("Connected")
+			log.Infom("Connected")
 			break
 		}
 		time.Sleep(amqpConnectAttemptSeconds * time.Second)
@@ -153,13 +153,13 @@ func main() {
 
 	node.Start(context.Background())
 
-	log.Infof("Starting node at address: %s", node.GetPeerAddress())
+	log.Infom("Starting node at address: %s", node.GetPeerAddress())
 
 	// Wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	<-ch
-	log.Info("Shutting down node...")
+	log.Infom("Shutting down node...")
 	// Shut the node down
 	node.Close()
 }

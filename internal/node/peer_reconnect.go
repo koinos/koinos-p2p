@@ -35,12 +35,12 @@ func NewPeerConnectionManager(ctx context.Context, n *KoinosP2PNode, initialPeer
 	for _, peerStr := range initialPeers {
 		ma, err := multiaddr.NewMultiaddr(peerStr)
 		if err != nil {
-			log.Warnf("Error parsing peer address: %v", err)
+			log.Warnm("NewPeerConnectionManager", "Error parsing peer address", "err", err)
 		}
 
 		addr, err := peer.AddrInfoFromP2pAddr(ma)
 		if err != nil {
-			log.Warnf("Error parsing peer address: %v", err)
+			log.Warnm("NewPeerConnectionManager", "Error parsing peer address", "err", err)
 		}
 
 		reconnectManager.initialPeers[addr.ID] = *addr
@@ -59,7 +59,7 @@ func (p *PeerConnectionManager) ClosedStream(n network.Network, s network.Stream
 // Connected is part of the libp2p network.Notifiee interface
 func (p *PeerConnectionManager) Connected(n network.Network, c network.Conn) {
 	s := fmt.Sprintf("%s/p2p/%s", c.RemoteMultiaddr(), c.RemotePeer())
-	log.Infof("Publishing connected peer: %s", s)
+	log.Infom("Connected", "Publishing connected peer", "peer", s)
 	vb := types.VariableBlob((s))
 	p.node.Gossip.Peer.PublishMessage(p.ctx, &vb)
 }
@@ -70,7 +70,7 @@ func (p *PeerConnectionManager) Disconnected(n network.Network, c network.Conn) 
 		go func() {
 			sleepTimeSeconds := 1
 			for {
-				log.Infof("Attempting to connect to peer %v", addr.ID)
+				log.Infom("Attempting to connect to peer", "peer", addr.ID)
 				if err := p.connectToPeer(addr); err == nil {
 					return
 				}
@@ -103,10 +103,10 @@ func (p *PeerConnectionManager) ConnectInitialPeers() {
 
 	for len(peersToConnect) > 0 {
 		for peer, addr := range p.initialPeers {
-			log.Infof("Attempting to connect to peer %v", peer)
+			log.Infom("Attempting to connect to peer", "peer", peer)
 			err := p.connectToPeer(addr)
 			if err != nil {
-				log.Infof("Error connecting to peer %v: %s", peer, err)
+				log.Infom("Error connecting to peer", "peer", peer, "err", err)
 			} else {
 				newlyConnectedPeers[peer] = util.Void{}
 			}

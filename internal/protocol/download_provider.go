@@ -3,7 +3,6 @@ package protocol
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -161,7 +160,9 @@ func (p *BdmiProvider) RequestDownload(ctx context.Context, req BlockDownloadReq
 }
 
 func (p *BdmiProvider) handleRequestDownload(ctx context.Context, req BlockDownloadRequest) {
-	log.Debugf("Downloading block %s from peer %s", util.BlockTopologyCmpString(&req.Topology), req.PeerID)
+	log.Debugm("Downloading block from peer",
+		"block", util.BlockTopologyCmpString(&req.Topology),
+		"peer", req.PeerID)
 
 	resp := BlockDownloadResponse{
 		Topology: req.Topology,
@@ -172,7 +173,10 @@ func (p *BdmiProvider) handleRequestDownload(ctx context.Context, req BlockDownl
 	peerHandler, hasHandler := p.peerHandlers[req.PeerID]
 	if !hasHandler {
 		resp.Err = fmt.Errorf("Tried to download block %s from peer %s, but handler was not registered", util.BlockTopologyCmpString(&req.Topology), req.PeerID)
-		log.Error(resp.Err.Error())
+		log.Errorm("Tried to download block, but handler was not registered",
+			"block", util.BlockTopologyCmpString(&req.Topology),
+			"peer", req.PeerID,
+			"err", resp.Err.Error())
 	}
 
 	go func() {
@@ -214,7 +218,9 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		}
 
 		if !resp.Block.HasValue() {
-			applyResult.Err = errors.New("Downloaded block not applied - from peer %s - Optional block not present")
+			applyResult.Err = log.NewErrorm("Optional block not present, so downloaded block not applied",
+				"block", resp.Topology,
+				"peer", resp.PeerID)
 		} else {
 			block := resp.Block.Value
 			_, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
@@ -232,8 +238,9 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 		// BlockDownloadManager will drain applyBlockResultChan
 		// BlockDownloadManager will call another peer to download if apply failed
 
-		log.Infof("Downloaded block applied - %s from peer %s",
-			util.BlockTopologyCmpString(&applyResult.Topology), applyResult.PeerID)
+		log.Infom("Downloaded block applied",
+			"block", util.BlockTopologyCmpString(&applyResult.Topology),
+			"peer", applyResult.PeerID)
 	}()
 }
 
@@ -248,7 +255,8 @@ func toForkHeads(resp *types.GetForkHeadsResponse) *types.ForkHeads {
 func (p *BdmiProvider) initialize(ctx context.Context) {
 	headsResp, err := p.rpc.GetForkHeads(ctx)
 	if err != nil {
-		log.Warnf("Could not get initial fork heads: %v", err)
+		log.Warnm("Could not get initial fork heads",
+			"err", err)
 		return
 	}
 
@@ -338,7 +346,7 @@ func getNodeUpdate(forkHeads *types.ForkHeads, heightInterestReach uint64) NodeU
 	longestForkHeight := forkHeads.ForkHeads[0].Height
 	for i := 1; i < len(forkHeads.ForkHeads); i++ {
 		if forkHeads.ForkHeads[i].Height > longestForkHeight {
-			log.Warnf("Best fork head was not returned first")
+			log.Warnm("Best fork head was not returned first")
 			longestForkHeight = forkHeads.ForkHeads[i].Height
 		}
 	}
@@ -346,7 +354,7 @@ func getNodeUpdate(forkHeads *types.ForkHeads, heightInterestReach uint64) NodeU
 	libHeight := uint64(forkHeads.LastIrreversibleBlock.Height)
 
 	if uint64(longestForkHeight) < libHeight {
-		log.Error("Longest fork height was smaller than LIB height!?")
+		log.Errorm("Longest fork height was smaller than LIB height!?")
 		return NodeUpdate{types.BlockHeightType(libHeight), types.BlockHeightType(libHeight), types.UInt32(heightInterestReach)}
 	}
 
@@ -389,14 +397,16 @@ func (p *BdmiProvider) forkHeadConnects(b types.BlockTopology) bool {
 func (p *BdmiProvider) connectForkHead(ctx context.Context, lib types.BlockTopology, head types.BlockTopology) {
 	response, err := p.rpc.GetBlocksByHeight(ctx, &head.ID, lib.Height, types.UInt32(1+head.Height-lib.Height))
 	if err != nil {
-		log.Warnf("Could not connect fork head: %v", err)
+		log.Warnm("Could not connect fork head",
+			"err", err)
 		return
 	}
 
 	for _, blockItem := range response.BlockItems {
 		if !blockItem.Block.HasValue() {
 			j, _ := json.Marshal(blockItem.BlockID)
-			log.Warnf("Optional block not present for block: %s", string(j))
+			log.Warnm("Optional block not present for block",
+				"blockID", string(j))
 			continue
 		}
 
@@ -427,7 +437,8 @@ func (p *BdmiProvider) handleForkHeads(ctx context.Context, newHeads *types.Fork
 	for _, fh := range newHeads.ForkHeads {
 		if !p.forkHeadConnects(fh) {
 			id, _ := json.Marshal(fh.ID)
-			log.Infof("Connecting disconnected fork head %s", string(id))
+			log.Infom("Connecting disconnected fork head",
+				"fh.ID", string(id))
 			p.connectForkHead(ctx, newHeads.LastIrreversibleBlock, fh)
 		}
 	}
@@ -437,15 +448,17 @@ func (p *BdmiProvider) handleForkHeads(ctx context.Context, newHeads *types.Fork
 	nodeUpdate := getNodeUpdate(newHeads, p.Options.HeightInterestReach)
 
 	if nodeUpdate != p.lastNodeUpdate {
-		log.Debugf("lastNodeUpdate changed from %v to %v", p.lastNodeUpdate, nodeUpdate)
+		log.Debugm("lastNodeUpdate changed",
+			"lastNodeUpdate", p.lastNodeUpdate,
+			"nodeUpdate", nodeUpdate)
 
 		p.lastNodeUpdate = nodeUpdate
 		for _, peerHandler := range p.peerHandlers {
 			go func(ph *PeerHandler, nodeUpdate NodeUpdate) {
 				select {
 				case <-time.After(time.Duration(p.Options.HeightRangeTimeoutMs) * time.Millisecond):
-					log.Warnf("PeerHandler for peer %s did not timely service NodeUpdate %v",
-						ph.peerID, nodeUpdate)
+					log.Warnm("PeerHandler did not timely service NodeUpdate",
+						"peer", ph.peerID, "nodeUpdate", nodeUpdate)
 				case ph.nodeUpdateChan <- nodeUpdate:
 				case <-ctx.Done():
 				}
