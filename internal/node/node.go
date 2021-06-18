@@ -22,6 +22,7 @@ import (
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -51,6 +52,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	options := []libp2p.Option{
 		libp2p.ListenAddrStrings(listenAddr),
 		libp2p.Identity(privateKey),
+		libp2p.NATPortMap(),
 	}
 
 	host, err := libp2p.New(ctx, options...)
@@ -102,7 +104,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	if err != nil {
 		return nil, err
 	}
-	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.Host.ID())
+	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node, node.Host.ID())
 
 	node.SyncManager.SetGossipEnableHandler(node.Gossip)
 
@@ -120,6 +122,7 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	binary := types.NewVariableBlob()
 	binary = blockBroadcast.Serialize(binary)
 	n.Gossip.Block.PublishMessage(context.Background(), binary)
+	log.Infof("Publishing block - %s", util.BlockString(&blockBroadcast.Block))
 	n.SyncManager.HandleBlockBroadcast(context.Background(), blockBroadcast)
 }
 
@@ -133,6 +136,7 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 	}
 	binary := types.NewVariableBlob()
 	binary = trxBroadcast.Serialize(binary)
+	log.Infof("Publishing transaction - %s", util.TransactionString(&trxBroadcast.Transaction))
 	n.Gossip.Transaction.PublishMessage(context.Background(), binary)
 }
 
@@ -156,8 +160,8 @@ func getChannelError(errs chan error) error {
 	}
 }
 
-// ConnectToPeer connects the node to the given peer
-func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
+// PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string
+func (n *KoinosP2PNode) PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error) {
 	addr, err := multiaddr.NewMultiaddr(peerAddr)
 	if err != nil {
 		return nil, err
@@ -167,13 +171,37 @@ func (n *KoinosP2PNode) ConnectToPeer(peerAddr string) (*peer.AddrInfo, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := n.Host.Connect(ctx, *peer); err != nil {
+	return peer, nil
+}
+
+// ConnectToPeerString connects the node to the given peer
+func (n *KoinosP2PNode) ConnectToPeerString(peerAddr string) (*peer.AddrInfo, error) {
+	peer, err := n.PeerStringToAddress(peerAddr)
+	if err != nil {
 		return nil, err
 	}
 
+	if err = n.ConnectToPeerAddress(peer); err != nil {
+		return peer, err
+	}
+
 	return peer, nil
+}
+
+// ConnectToPeerAddress connects to the given peer address
+func (n *KoinosP2PNode) ConnectToPeerAddress(peer *peer.AddrInfo) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := n.Host.Connect(ctx, *peer); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetConnections returns the host's current peer connections
+func (n *KoinosP2PNode) GetConnections() []network.Conn {
+	return n.Host.Network().Conns()
 }
 
 // GetListenAddress returns the multiaddress on which the node is listening
@@ -198,14 +226,17 @@ func (n *KoinosP2PNode) Close() error {
 
 // Start starts background goroutines
 func (n *KoinosP2PNode) Start(ctx context.Context) {
-	connectionManager := NewPeerConnectionManager(n, n.Options.InitialPeers)
+	connectionManager := NewPeerConnectionManager(ctx, n, n.Options.InitialPeers)
 	n.Host.Network().Notify(connectionManager)
 	n.SyncManager.Start(ctx)
 
 	// Start gossip if forced
 	if n.Options.ForceGossip {
-		n.Gossip.Start(ctx)
+		n.Gossip.StartGossip(ctx)
 	}
+
+	// Start peer gossip
+	n.Gossip.StartPeerGossip(ctx)
 
 	go connectionManager.ConnectInitialPeers()
 }
@@ -245,6 +276,11 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 }
 
 func generateMessageID(msg *pb.Message) string {
+	// Use the default unique ID function for peer exchange
+	if *msg.Topic == protocol.PeerTopicName {
+		return pubsub.DefaultMsgIdFn(msg)
+	}
+
 	// Hash the data
 	h := sha256.New()
 	h.Write(msg.Data)

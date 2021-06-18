@@ -216,7 +216,7 @@ func TestSyncNoError(t *testing.T) {
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	_, err = sendNode.ConnectToPeer(peer.String())
+	_, err = sendNode.ConnectToPeerString(peer.String())
 	if err != nil {
 		t.Error(err)
 	}
@@ -243,7 +243,7 @@ func TestSyncChainID(t *testing.T) {
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	_, err = sendNode.ConnectToPeer(peer.String())
+	_, err = sendNode.ConnectToPeerString(peer.String())
 	if err != nil {
 		t.Error("ConnectToPeer() returned unexpected error")
 	}
@@ -278,7 +278,7 @@ func TestApplyBlockFailure(t *testing.T) {
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	_, err = sendNode.ConnectToPeer(peer.String())
+	_, err = sendNode.ConnectToPeerString(peer.String())
 
 	time.Sleep(time.Duration(800) * time.Duration(time.Millisecond))
 
