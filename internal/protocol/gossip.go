@@ -95,20 +95,17 @@ func (gm *GossipManager) PublishMessage(ctx context.Context, vb *types.VariableB
 }
 
 func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.VariableBlob) {
-	// The purpose of this is to move messages from each topic's gm.sub.Next()
+	//
+	// The purpose of this function is to move messages from each topic's gm.sub.Next()
 	// and send them to a single channel.
 	//
 	// Note that libp2p has already used the callback passed to RegisterValidator()
 	// to validate blocks / transactions.
 	//
-	// TODO:  Perhaps it makes more sense to do away with this and instead process each of
-	// the n topics separately, especially given n=2 and each topic has slightly
-	// different handling?
 	defer close(ch)
 	for {
 		msg, err := gm.sub.Next(ctx)
 		if err != nil {
-			// TODO:  How normal is this error?  We may need to lower the log level.
 			log.Warnf("Error %s in readMessages() for topic %s", err, gm.topicName)
 			return
 		}
@@ -237,7 +234,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	log.Debug("Received block via gossip")
 	_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
 	if err != nil {
-		// TODO: Bad message, assign naughty points
+		// TODO: (Issue #5) Bad message, assign naughty points
 		return errors.New("Received a corrupt block via gossip: " + err.Error())
 	}
 
@@ -298,7 +295,8 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 
 	log.Debug("Received transaction via gossip")
 	_, transaction, err := types.DeserializeTransaction(&vb)
-	if err != nil { // TODO: Bad message, assign naughty points
+	if err != nil {
+		// TODO: (Issue #5) Bad message, assign naughty points
 		return errors.New("Received a corrupt transaction via gossip")
 	}
 
