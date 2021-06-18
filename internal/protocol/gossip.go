@@ -18,9 +18,16 @@ const (
 	transactionBuffer int = 32
 	blockBuffer       int = 8
 
-	BlockTopicName       string = "koinos.blocks"
+	// BlockTopicName is the block topic string
+	BlockTopicName string = "koinos.blocks"
+
+	// TransactionTopicName is the transaction topic string
 	TransactionTopicName string = "koinos.transactions"
-	PeerTopicName        string = "koinos.peers"
+
+	//PeerTopicName is the peer topic string
+	PeerTopicName string = "koinos.peers"
+
+	peerAdvertiseTime time.Duration = time.Minute * 1
 )
 
 // GossipManager manages gossip on a given topic
@@ -198,11 +205,11 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
-		log.Debugf("Gossiped block not applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+		log.Debugf("Gossiped block not applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 		return false
 	}
 
-	log.Infof("Gossiped block applied: %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
 	return true
 }
 
@@ -241,11 +248,11 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	}
 
 	if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
-		log.Debugf("Gossiped transaction not applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+		log.Debugf("Gossiped transaction not applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 		return false
 	}
 
-	log.Infof("Gossiped transaction applied: %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+	log.Infof("Gossiped transaction applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 	return true
 }
 
@@ -275,11 +282,12 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 	// Attempt to connect
 	err = kg.Connector.ConnectToPeerAddress(addr)
 	if err != nil {
-		log.Infof("Failed to connect to gossiped peer: %s", sAddr)
+		log.Infof("Failed to connect to gossiped peer - %s", sAddr)
+
 		return false
 	}
 
-	log.Infof("Received peer address via gossip: %s", sAddr)
+	log.Infof("Received peer address via gossip - %s", sAddr)
 
 	return true
 }
@@ -287,7 +295,7 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
 	for {
 		select {
-		case <-time.After(time.Minute * 1):
+		case <-time.After(peerAdvertiseTime):
 			break
 		case <-ctx.Done():
 			return
