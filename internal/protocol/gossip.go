@@ -282,8 +282,7 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 	// Attempt to connect
 	err = kg.Connector.ConnectToPeerAddress(addr)
 	if err != nil {
-		log.Infof("Failed to connect to gossiped peer - %s", sAddr)
-
+		log.Infof("Failed to connect to gossiped peer: %s, %s", sAddr, err)
 		return false
 	}
 
