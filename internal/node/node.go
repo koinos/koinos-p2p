@@ -122,7 +122,7 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	binary := types.NewVariableBlob()
 	binary = blockBroadcast.Serialize(binary)
 	n.Gossip.Block.PublishMessage(context.Background(), binary)
-	log.Infof("Publishing Block: %s", util.BlockString(&blockBroadcast.Block))
+	log.Infof("Publishing block - %s", util.BlockString(&blockBroadcast.Block))
 	n.SyncManager.HandleBlockBroadcast(context.Background(), blockBroadcast)
 }
 
@@ -136,7 +136,7 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 	}
 	binary := types.NewVariableBlob()
 	binary = trxBroadcast.Serialize(binary)
-	log.Infof("Publishing Transaction: %s", util.TransactionString(&trxBroadcast.Transaction))
+	log.Infof("Publishing transaction - %s", util.TransactionString(&trxBroadcast.Transaction))
 	n.Gossip.Transaction.PublishMessage(context.Background(), binary)
 }
 
