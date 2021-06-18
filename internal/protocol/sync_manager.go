@@ -207,19 +207,12 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 }
 
 func (m *SyncManager) doPeerEnableDownload(ctx context.Context, pid peer.ID) {
-	// Handoff to BdmiProvider
-	select {
-	case m.bdmiProvider.newPeerChan <- pid:
-	case <-ctx.Done():
-	}
+	m.bdmiProvider.NewPeer(ctx, pid)
 }
 
 func (m *SyncManager) doRemovePeer(ctx context.Context, pid peer.ID) {
 	// Handoff to BdmiProvider
-	select {
-	case m.bdmiProvider.removePeerChan <- pid:
-	case <-ctx.Done():
-	}
+	m.bdmiProvider.RemovePeer(ctx, pid)
 }
 
 func (m *SyncManager) run(ctx context.Context) {
@@ -263,5 +256,5 @@ func (m *SyncManager) HandleBlockBroadcast(ctx context.Context, blockBroadcast *
 
 // HandleForkHeads handles fork heads broadcast
 func (m *SyncManager) HandleForkHeads(ctx context.Context, forkHeads *types.ForkHeads) {
-	m.bdmiProvider.HandleForkHeads(ctx, forkHeads)
+	m.bdmiProvider.UpdateForkHeads(ctx, forkHeads)
 }
