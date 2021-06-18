@@ -59,7 +59,6 @@ func (p *PeerConnectionManager) ClosedStream(n network.Network, s network.Stream
 
 // Connected is part of the libp2p network.Notifiee interface
 func (p *PeerConnectionManager) Connected(n network.Network, c network.Conn) {
-	//log.Infof("PEER CONN %s", c.RemoteMultiaddr().String())
 	s := fmt.Sprintf("%s/p2p/%s", c.RemoteMultiaddr(), c.RemotePeer())
 	log.Infof("Publishing connected peer: %s", s)
 	vb := types.VariableBlob((s))

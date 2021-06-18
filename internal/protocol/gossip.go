@@ -248,7 +248,7 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	}
 
 	if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
-		log.Debugf("Gossiped transaction not applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+		log.Infof("Gossiped transaction not applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 		return false
 	}
 
