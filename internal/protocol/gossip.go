@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -32,16 +33,22 @@ const (
 
 // GossipManager manages gossip on a given topic
 type GossipManager struct {
-	ps        *pubsub.PubSub
-	topic     *pubsub.Topic
-	sub       *pubsub.Subscription
-	topicName string
-	enabled   bool
+	ps            *pubsub.PubSub
+	topic         *pubsub.Topic
+	sub           *pubsub.Subscription
+	peerErrorChan chan<- PeerError
+	topicName     string
+	enabled       bool
 }
 
 // NewGossipManager creates and returns a new instance of gossipManager
-func NewGossipManager(ps *pubsub.PubSub, topicName string) *GossipManager {
-	gm := GossipManager{ps: ps, topicName: topicName, enabled: false}
+func NewGossipManager(ps *pubsub.PubSub, errChan chan<- PeerError, topicName string) *GossipManager {
+	gm := GossipManager{
+		ps:            ps,
+		peerErrorChan: errChan,
+		topicName:     topicName,
+		enabled:       false,
+	}
 	return &gm
 }
 
@@ -100,14 +107,26 @@ func (gm *GossipManager) PublishMessage(ctx context.Context, vb *types.VariableB
 }
 
 func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.VariableBlob) {
+	//
+	// The purpose of this function is to move messages from each topic's gm.sub.Next()
+	// and send them to a single channel.
+	//
+	// Note that libp2p has already used the callback passed to RegisterValidator()
+	// to validate blocks / transactions.
+	//
+	defer close(ch)
 	for {
 		msg, err := gm.sub.Next(ctx)
 		if err != nil {
-			close(ch)
+			log.Warnf("Error getting message for topic %s: %s", gm.topicName, err)
 			return
 		}
 
-		ch <- types.VariableBlob(msg.Data)
+		select {
+		case ch <- types.VariableBlob(msg.Data):
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -125,22 +144,38 @@ type PeerConnectionHandler interface {
 
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
-	rpc         rpc.RPC
-	Block       *GossipManager
-	Transaction *GossipManager
-	Peer        *GossipManager
-	PubSub      *pubsub.PubSub
-	Connector   PeerConnectionHandler
-	myPeerID    peer.ID
+	rpc           rpc.RPC
+	Block         *GossipManager
+	Transaction   *GossipManager
+	Peer          *GossipManager
+	PubSub        *pubsub.PubSub
+	PeerErrorChan chan<- PeerError
+	Connector     PeerConnectionHandler
+	myPeerID      peer.ID
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
-func NewKoinosGossip(ctx context.Context, rpc rpc.RPC, ps *pubsub.PubSub, connector PeerConnectionHandler, id peer.ID) *KoinosGossip {
-	block := NewGossipManager(ps, BlockTopicName)
-	transaction := NewGossipManager(ps, TransactionTopicName)
-	peers := NewGossipManager(ps, PeerTopicName)
-	kg := KoinosGossip{rpc: rpc, Block: block, Transaction: transaction, Peer: peers,
-		Connector: connector, PubSub: ps, myPeerID: id}
+func NewKoinosGossip(
+	ctx context.Context,
+	rpc rpc.RPC,
+	ps *pubsub.PubSub,
+	peerErrorChan chan<- PeerError,
+	connector PeerConnectionHandler,
+	id peer.ID) *KoinosGossip {
+
+	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
+	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
+	peers := NewGossipManager(ps, peerErrorChan, PeerTopicName)
+	kg := KoinosGossip{
+		rpc:           rpc,
+		Block:         block,
+		Transaction:   transaction,
+		Peer:          peers,
+		PubSub:        ps,
+		PeerErrorChan: peerErrorChan,
+		Connector:     connector,
+		myPeerID:      id,
+	}
 
 	return &kg
 }
@@ -170,17 +205,22 @@ func (kg *KoinosGossip) StopGossip() {
 
 func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 	go func() {
-		ch := make(chan types.VariableBlob, blockBuffer)
+		blockChan := make(chan types.VariableBlob, blockBuffer)
+		defer close(blockChan)
 		kg.Block.RegisterValidator(kg.validateBlock)
-		kg.Block.Start(ctx, ch)
-		log.Debug("Started block gossip listener")
+		kg.Block.Start(ctx, blockChan)
+		log.Info("Started block gossip listener")
 
 		// A block that reaches here has already been applied
 		// Any postprocessing that might be needed would happen here
 		for {
-			_, ok := <-ch
-			if !ok {
-				close(ch)
+			select {
+			case _, ok := <-blockChan:
+				if !ok {
+					// ok == false means blockChan is closed, so we simply return
+					return
+				}
+			case <-ctx.Done():
 				return
 			}
 		}
@@ -188,44 +228,61 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 }
 
 func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
+	err := kg.applyBlock(ctx, pid, msg)
+	if err != nil {
+		log.Warnf("Gossiped block not applied from peer %v: %s", msg.ReceivedFrom, err)
+		select {
+		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
+		case <-ctx.Done():
+		}
+		return false
+	}
+	return true
+}
+
+func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
 	vb := types.VariableBlob(msg.Data)
 
 	log.Debug("Received block via gossip")
 	_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
-	if err != nil { // TODO: Bad message, assign naughty points
-		log.Warnf("Received a corrupt block via gossip from peer: %v", msg.ReceivedFrom)
-		return false
+	if err != nil {
+		// TODO: (Issue #5) Bad message, assign naughty points
+		return errors.New("block deserialization failed, " + err.Error())
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
 	if msg.GetFrom() == kg.myPeerID {
-		return true
+		return nil
 	}
 
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
-	if ok, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); !ok || err != nil {
-		log.Infof("Gossiped block not applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
-		return false
+	if _, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); err != nil {
+		return errors.New("block application failed - " + util.BlockString(&blockBroadcast.Block) + ", " + err.Error())
 	}
 
 	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
-	return true
+	return nil
 }
 
 func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 	go func() {
-		ch := make(chan types.VariableBlob, transactionBuffer)
+		transactionChan := make(chan types.VariableBlob, transactionBuffer)
+		defer close(transactionChan)
 		kg.Transaction.RegisterValidator(kg.validateTransaction)
-		kg.Transaction.Start(ctx, ch)
+		kg.Transaction.Start(ctx, transactionChan)
 		log.Debug("Started transaction gossip listener")
 
 		// A transaction that reaches here has already been applied
 		// Any postprocessing that might be needed would happen here
 		for {
-			_, ok := <-ch
-			if !ok {
-				close(ch)
+			select {
+			case _, ok := <-transactionChan:
+				if !ok {
+					// ok == false means blockChan is closed, so we simply return
+					return
+				}
+			case <-ctx.Done():
 				return
 			}
 		}
@@ -233,27 +290,39 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 }
 
 func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
+	err := kg.applyTransaction(ctx, pid, msg)
+	if err != nil {
+		log.Warnf("Gossiped transaction not applied from peer %v: %s", msg.ReceivedFrom, err)
+		select {
+		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
+		case <-ctx.Done():
+		}
+		return false
+	}
+	return true
+}
+
+func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
 	vb := types.VariableBlob(msg.Data)
 
 	log.Debug("Received transaction via gossip")
 	_, transaction, err := types.DeserializeTransaction(&vb)
-	if err != nil { // TODO: Bad message, assign naughty points
-		log.Warnf("Received a corrupt transaction via gossip from peer: %v", msg.ReceivedFrom)
-		return false
+	if err != nil {
+		// TODO: (Issue #5) Bad message, assign naughty points
+		return errors.New("transaction deserialization failed, " + err.Error())
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
 	if msg.GetFrom() == kg.myPeerID {
-		return true
+		return nil
 	}
 
-	if ok, err := kg.rpc.ApplyTransaction(ctx, transaction); !ok || err != nil {
-		log.Infof("Gossiped transaction not applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
-		return false
+	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {
+		return errors.New("transaction application failed - " + util.TransactionString(transaction) + ", " + err.Error())
 	}
 
 	log.Infof("Gossiped transaction applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
-	return true
+	return nil
 }
 
 // ----------------------------------------------------------------------------

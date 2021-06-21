@@ -58,16 +58,16 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 	case *types.GetHeadInfoResponse:
 		response = t
 	case *types.ChainErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Unexpected return type")
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err
 }
 
 // ApplyBlock rpc call
-func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, error) {
+func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (*types.SubmitBlockResponse, error) {
 	blockSub := types.NewSubmitBlockRequest()
 	blockSub.Block = *block
 
@@ -81,38 +81,38 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (bool, e
 	data, err := json.Marshal(args)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return false, nil
+		return nil, err
 	}
 
-	response := false
+	var response *types.SubmitBlockResponse
 
 	switch t := responseVariant.Value.(type) {
 	case *types.SubmitBlockResponse:
-		response = true
+		response = (*types.SubmitBlockResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		response = false
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err
 }
 
 // ApplyTransaction rpc call
-func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction) (bool, error) {
+func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction) (*types.SubmitTransactionResponse, error) {
 	trxSub := types.NewSubmitTransactionRequest()
 	trxSub.Transaction = *trx
 
@@ -125,31 +125,31 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction
 	data, err := json.Marshal(args)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	responseVariant := types.NewChainRPCResponse()
 	err = json.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return false, nil
+		return nil, err
 	}
 
-	response := false
+	var response *types.SubmitTransactionResponse
 
 	switch t := responseVariant.Value.(type) {
 	case *types.SubmitTransactionResponse:
-		response = true
+		response = (*types.SubmitTransactionResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		response = false
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err
@@ -189,9 +189,9 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMult
 	case *types.GetBlocksByIDResponse:
 		response = (*types.GetBlocksByIDResponse)(t)
 	case *types.BlockStoreErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("block_store rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Unexpected return type")
+		err = errors.New("unexpected block_store rpc response")
 	}
 
 	return response, err
@@ -233,9 +233,9 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multih
 	case *types.GetBlocksByHeightResponse:
 		response = (*types.GetBlocksByHeightResponse)(t)
 	case *types.BlockStoreErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("block_store rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Unexpected return type")
+		err = errors.New("unexpected block_store rpc response")
 	}
 
 	return response, err
@@ -272,9 +272,9 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 	case *types.GetChainIDResponse:
 		response = (*types.GetChainIDResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Unexpected return type")
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err
@@ -311,9 +311,9 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsRespon
 	case *types.GetForkHeadsResponse:
 		response = (*types.GetForkHeadsResponse)(t)
 	case *types.ChainErrorResponse:
-		err = errors.New(string(t.ErrorText))
+		err = errors.New("chain rpc error, " + string(t.ErrorText))
 	default:
-		err = errors.New("Unexpected return type")
+		err = errors.New("unexpected chain rpc response")
 	}
 
 	return response, err

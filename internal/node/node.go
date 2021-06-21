@@ -31,10 +31,11 @@ import (
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
-	Host        host.Host
-	RPC         rpc.RPC
-	Gossip      *protocol.KoinosGossip
-	SyncManager *protocol.SyncManager
+	Host          host.Host
+	RPC           rpc.RPC
+	Gossip        *protocol.KoinosGossip
+	SyncManager   *protocol.SyncManager
+	PeerErrorChan chan protocol.PeerError
 
 	Options options.NodeOptions
 }
@@ -72,8 +73,9 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 		log.Info("Starting P2P node without broadcast listeners")
 	}
 
-	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, config)
 	node.Options = config.NodeOptions
+	node.PeerErrorChan = make(chan protocol.PeerError)
+	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, node.PeerErrorChan, config)
 
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {
@@ -104,8 +106,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	if err != nil {
 		return nil, err
 	}
-	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node, node.Host.ID())
-
+	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.PeerErrorChan, node, node.Host.ID())
 	node.SyncManager.SetGossipEnableHandler(node.Gossip)
 
 	return node, nil
@@ -149,15 +150,6 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 		return
 	}
 	n.SyncManager.HandleForkHeads(context.Background(), forkHeads)
-}
-
-func getChannelError(errs chan error) error {
-	select {
-	case err := <-errs:
-		return err
-	default:
-		return nil
-	}
 }
 
 // PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string

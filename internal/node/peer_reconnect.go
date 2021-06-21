@@ -10,8 +10,7 @@ import (
 	util "github.com/koinos/koinos-util-golang"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/multiformats/go-multiaddr"
-	ma "github.com/multiformats/go-multiaddr"
+	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
 const maxSleepBackoff = 30
@@ -84,11 +83,11 @@ func (p *PeerConnectionManager) Disconnected(n network.Network, c network.Conn) 
 }
 
 // Listen is part of the libp2p network.Notifiee interface
-func (p *PeerConnectionManager) Listen(n network.Network, _ ma.Multiaddr) {
+func (p *PeerConnectionManager) Listen(n network.Network, _ multiaddr.Multiaddr) {
 }
 
 // ListenClose is part of the libp2p network.Notifiee interface
-func (p *PeerConnectionManager) ListenClose(n network.Network, _ ma.Multiaddr) {
+func (p *PeerConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr) {
 }
 
 // ConnectInitialPeers connects to the initial peers with exponential backoff,

@@ -217,7 +217,8 @@ func (p *BdmiProvider) ApplyBlock(ctx context.Context, resp BlockDownloadRespons
 			applyResult.Err = errors.New("Downloaded block not applied - from peer %s - Optional block not present")
 		} else {
 			block := resp.Block.Value
-			applyResult.Ok, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
+			_, applyResult.Err = p.rpc.ApplyBlock(ctx, block)
+			applyResult.Ok = (applyResult.Err != nil)
 		}
 
 		select {
@@ -326,11 +327,6 @@ func (p *BdmiProvider) handleRemovePeer(ctx context.Context, pid peer.ID) {
 	}
 }
 
-// MyTopologyLoopState represents that state of a topology loop
-type MyTopologyLoopState struct {
-	lastNodeUpdate NodeUpdate
-}
-
 // getNodeUpdate computes the NodeUpdate based on GetForkHeadsResponse
 func getNodeUpdate(forkHeads *types.ForkHeads, heightInterestReach uint64) NodeUpdate {
 	if len(forkHeads.ForkHeads) == 0 {
@@ -373,6 +369,11 @@ func getNodeUpdate(forkHeads *types.ForkHeads, heightInterestReach uint64) NodeU
 
 // forkHeadConnects returns true if b connects to some existing fork head, false otherwise
 func (p *BdmiProvider) forkHeadConnects(b types.BlockTopology) bool {
+	// Genesis level blocks always connect
+	if b.Height == 1 {
+		return true
+	}
+
 	for _, h := range p.forkHeads.ForkHeads {
 		if h.ID.Equals(&b.ID) {
 			return true

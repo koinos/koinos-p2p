@@ -10,8 +10,8 @@ import (
 // TODO:  Add context to all these functions
 type RPC interface {
 	GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error)
-	ApplyBlock(ctx context.Context, block *types.Block) (bool, error)
-	ApplyTransaction(ctx context.Context, block *types.Transaction) (bool, error)
+	ApplyBlock(ctx context.Context, block *types.Block) (*types.SubmitBlockResponse, error)
+	ApplyTransaction(ctx context.Context, block *types.Transaction) (*types.SubmitTransactionResponse, error)
 	GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error)
 	GetChainID(ctx context.Context) (*types.GetChainIDResponse, error)
 	GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error)
