@@ -255,8 +255,8 @@ func TestSyncChainID(t *testing.T) {
 		sendError, hasSendError := sendNode.SyncManager.Blacklist.GetBlacklistEntry(listenNode.Host.ID())
 		if hasListenError &&
 			hasSendError &&
-			strings.HasSuffix(listenError.Error.Error(), "peer's chain id does not match") &&
-			strings.HasSuffix(sendError.Error.Error(), "peer's chain id does not match") {
+			strings.Contains(listenError.Error.Error(), "Peer's chain ID does not match") &&
+			strings.Contains(sendError.Error.Error(), "Peer's chain ID does not match") {
 			ok = true
 			break
 		}
