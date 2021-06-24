@@ -144,14 +144,15 @@ type PeerConnectionHandler interface {
 
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
-	rpc           rpc.RPC
-	Block         *GossipManager
-	Transaction   *GossipManager
-	Peer          *GossipManager
-	PubSub        *pubsub.PubSub
-	PeerErrorChan chan<- PeerError
-	Connector     PeerConnectionHandler
-	myPeerID      peer.ID
+	rpc                   rpc.RPC
+	Block                 *GossipManager
+	Transaction           *GossipManager
+	Peer                  *GossipManager
+	PubSub                *pubsub.PubSub
+	PeerErrorChan         chan<- PeerError
+	Connector             PeerConnectionHandler
+	myPeerID              peer.ID
+	lastIrreversibleBlock types.BlockHeightType
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
@@ -201,6 +202,10 @@ func (kg *KoinosGossip) StopGossip() {
 	log.Info("Stopping gossip mode")
 	kg.Block.Stop()
 	kg.Transaction.Stop()
+}
+
+func (kg *KoinosGossip) HandleForkHeads(fh *types.ForkHeads) {
+	kg.lastIrreversibleBlock = fh.LastIrreversibleBlock.Height
 }
 
 func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
@@ -253,6 +258,10 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
 	if msg.GetFrom() == kg.myPeerID {
 		return nil
+	}
+
+	if blockBroadcast.Block.Header.Height < kg.lastIrreversibleBlock {
+		return errors.New("block is earlier than irreversibility window")
 	}
 
 	// TODO: Fix nil argument
