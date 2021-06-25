@@ -204,6 +204,7 @@ func (kg *KoinosGossip) StopGossip() {
 	kg.Transaction.Stop()
 }
 
+// HandleForkHeads updates gossip with fork head information
 func (kg *KoinosGossip) HandleForkHeads(fh *types.ForkHeads) {
 	kg.lastIrreversibleBlock = fh.LastIrreversibleBlock.Height
 }
