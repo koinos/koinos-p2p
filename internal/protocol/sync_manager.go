@@ -166,32 +166,39 @@ func (m *SyncManager) RemovePeer(ctx context.Context, pid peer.ID) {
 	return
 }
 
+func (m *SyncManager) checkChainID(ctx context.Context, pid peer.ID) error {
+	peerChainID := GetChainIDResponse{}
+	{
+		req := GetChainIDRequest{}
+		subctx, cancel := context.WithTimeout(ctx, time.Duration(m.Options.RPCTimeoutMs)*time.Millisecond)
+		defer cancel()
+		err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, &peerChainID)
+		if err != nil {
+			log.Warnf("%v: error getting peer chain id, %v", pid, err)
+			return err
+		}
+	}
+
+	chainID, err := m.rpc.GetChainID(ctx)
+	if err != nil {
+		log.Errorf("%v: error getting chain id, %v", pid, err)
+		return err
+	}
+
+	if !chainID.ChainID.Equals(&peerChainID.ChainID) {
+		log.Warnf("%v: peer's chain id %v does not match my chain ID %v", pid, peerChainID.ChainID, chainID.ChainID)
+		return fmt.Errorf("%v: peer's chain id does not match", pid)
+	}
+	return nil
+}
+
 func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 
 	err := func() error {
 		log.Debugf("connecting to peer for sync: %v", pid)
-
-		peerChainID := GetChainIDResponse{}
-		{
-			req := GetChainIDRequest{}
-			subctx, cancel := context.WithTimeout(ctx, time.Duration(m.Options.RPCTimeoutMs)*time.Millisecond)
-			defer cancel()
-			err := m.client.CallContext(subctx, pid, "SyncService", "GetChainID", req, &peerChainID)
-			if err != nil {
-				log.Warnf("%v: error getting peer chain id, %v", pid, err)
-				return err
-			}
-		}
-
-		chainID, err := m.rpc.GetChainID(ctx)
+		err := m.checkChainID(ctx, pid)
 		if err != nil {
-			log.Errorf("%v: error getting chain id, %v", pid, err)
 			return err
-		}
-
-		if !chainID.ChainID.Equals(&peerChainID.ChainID) {
-			log.Warnf("%v: peer's chain id %v does not match my chain ID %v", pid, peerChainID.ChainID, chainID.ChainID)
-			return fmt.Errorf("%v: peer's chain id does not match", pid)
 		}
 
 		select {
