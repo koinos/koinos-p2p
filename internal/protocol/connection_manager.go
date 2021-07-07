@@ -35,7 +35,7 @@ type ConnectionManager struct {
 	syncManager *SyncManager
 	gossip      *KoinosGossip
 
-	blacklist    *Blacklist
+	Blacklist    *Blacklist
 	initialPeers map[peer.ID]peer.AddrInfo
 	rescanTicker *time.Ticker
 
@@ -51,7 +51,7 @@ func NewConnectionManager(host host.Host, syncManager *SyncManager, gossip *Koin
 		host:                 host,
 		syncManager:          syncManager,
 		gossip:               gossip,
-		blacklist:            NewBlacklist(*blacklistOptions),
+		Blacklist:            NewBlacklist(*blacklistOptions),
 		initialPeers:         make(map[peer.ID]peer.AddrInfo),
 		rescanTicker:         time.NewTicker(time.Duration(blacklistOptions.BlacklistRescanMs) * time.Millisecond),
 		peerConnectedChan:    make(chan connectionMessage),
@@ -107,7 +107,7 @@ func (p *ConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr
 func (p *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
 
-	if p.blacklist.IsPeerBlacklisted(msg.conn.RemotePeer()) {
+	if p.Blacklist.IsPeerBlacklisted(msg.conn.RemotePeer()) {
 		p.host.Network().ClosePeer(msg.conn.RemotePeer())
 		log.Infof("Rejecting connection from blacklisted peer: %s", s)
 	}
@@ -144,7 +144,7 @@ func (p *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 func (p *ConnectionManager) handlePeerError(ctx context.Context, peerErr PeerError) {
 	// TODO: When we implenent naughty points, here might be a good place to switch on different errors (#5)
 	// If peer quits with an error, blacklist it for a while so we don't spam reconnection attempts
-	p.blacklist.AddPeerToBlacklist(peerErr)
+	p.Blacklist.AddPeerToBlacklist(peerErr)
 	p.host.Network().ClosePeer(peerErr.PeerID)
 }
 
@@ -197,7 +197,7 @@ func (p *ConnectionManager) managerLoop(ctx context.Context) {
 		case peerErr := <-p.peerErrorChan:
 			p.handlePeerError(ctx, peerErr)
 		case <-p.rescanBlacklist:
-			p.blacklist.RemoveExpiredBlacklistEntries()
+			p.Blacklist.RemoveExpiredBlacklistEntries()
 
 		case <-ctx.Done():
 			return
@@ -205,6 +205,7 @@ func (p *ConnectionManager) managerLoop(ctx context.Context) {
 	}
 }
 
+// Start the connection manager
 func (p *ConnectionManager) Start(ctx context.Context) {
 	go func() {
 		for _, peer := range p.host.Network().Peers() {
