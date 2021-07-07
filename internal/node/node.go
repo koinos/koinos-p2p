@@ -31,11 +31,12 @@ import (
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
-	Host          host.Host
-	RPC           rpc.RPC
-	Gossip        *protocol.KoinosGossip
-	SyncManager   *protocol.SyncManager
-	PeerErrorChan chan protocol.PeerError
+	Host              host.Host
+	RPC               rpc.RPC
+	Gossip            *protocol.KoinosGossip
+	SyncManager       *protocol.SyncManager
+	ConnectionManager *protocol.ConnectionManager
+	PeerErrorChan     chan protocol.PeerError
 
 	Options options.NodeOptions
 }
@@ -108,6 +109,13 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	}
 	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.PeerErrorChan, node, node.Host.ID())
 	node.SyncManager.SetGossipEnableHandler(node.Gossip)
+	node.ConnectionManager = protocol.NewConnectionManager(
+		node.Host,
+		node.SyncManager,
+		node.Gossip,
+		&config.BlacklistOptions,
+		node.Options.InitialPeers,
+		node.PeerErrorChan)
 
 	return node, nil
 }
@@ -219,8 +227,7 @@ func (n *KoinosP2PNode) Close() error {
 
 // Start starts background goroutines
 func (n *KoinosP2PNode) Start(ctx context.Context) {
-	connectionManager := NewPeerConnectionManager(ctx, n, n.Options.InitialPeers)
-	n.Host.Network().Notify(connectionManager)
+	n.Host.Network().Notify(n.ConnectionManager)
 	n.SyncManager.Start(ctx)
 
 	// Start gossip if forced
@@ -230,8 +237,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 
 	// Start peer gossip
 	n.Gossip.StartPeerGossip(ctx)
-
-	go connectionManager.ConnectInitialPeers()
+	n.ConnectionManager.Start(ctx)
 }
 
 // ----------------------------------------------------------------------------
