@@ -64,6 +64,9 @@ type SyncManager struct {
 	downloadManager *BlockDownloadManager
 	bdmiProvider    *BdmiProvider
 
+	// Checkpoints
+	checkpoints types.VectorBlockTopology
+
 	// Channel for new peer ID's we want to connect to
 	newPeers chan peer.ID
 
@@ -192,11 +195,77 @@ func (m *SyncManager) checkChainID(ctx context.Context, pid peer.ID) error {
 	return nil
 }
 
+func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
+	headBlockResp := GetHeadBlockResponse{}
+	{
+		req := GetHeadBlockRequest{}
+		subctx, cancel := context.WithTimeout(ctx, time.Duration(m.Options.RPCTimeoutMs)*time.Millisecond)
+		defer cancel()
+		err := m.client.CallContext(subctx, pid, "SyncService", "GetHeadBlock", req, &headBlockResp)
+		if err != nil {
+			log.Warnf("%v: error getting peer head block, %v", pid, err)
+			return err
+		}
+	}
+
+	//
+	// For each checkpoint, we call GetBlocksResponse / GetBlocksRequest
+	// and throw away the block because the block store doesn't expose GetAncestorIDAtHeight().
+	//
+	// TODO: For speed and bandwidth efficiency, we should optimize these API calls
+	// to a single batch call that only returns the needed information,
+	// so we don't need an RPC round-trip to process each checkpoint,
+	// nor do we get sent a block that we're going to throw away.
+	//
+	for _, checkpoint := range m.checkpoints {
+		if checkpoint.Height > headBlockResp.Height {
+			continue
+		}
+		if checkpoint.Height == headBlockResp.Height {
+			if !checkpoint.ID.Equals(&headBlockResp.ID) {
+				log.Warnf("%v: peer's head block at height %d is %v and does not match checkpoint %v",
+					pid, headBlockResp.Height, headBlockResp.ID, checkpoint.ID)
+				return fmt.Errorf("%v: peer's head block at height %d is %v and does not match checkpoint %v",
+					pid, headBlockResp.Height, headBlockResp.ID, checkpoint.ID)
+			}
+			continue
+		}
+		req := GetBlocksRequest{}
+		req.HeadBlockID = headBlockResp.ID
+		req.StartBlockHeight = checkpoint.Height
+		req.BatchSize = 1
+		resp := GetBlocksResponse{}
+		subctx, cancel := context.WithTimeout(ctx, time.Duration(m.Options.RPCTimeoutMs)*time.Millisecond)
+		defer cancel()
+		err := m.client.CallContext(subctx, pid, "SyncService", "GetBlocks", req, &resp)
+		if err != nil {
+			log.Warnf("%v: error getting peer chain id, %v", pid, err)
+			return err
+		}
+		if len(resp.BlockItems) != 1 {
+			log.Warnf("%v: expected 1 block to be returned, got %d blocks instead", pid, len(resp.BlockItems))
+			return fmt.Errorf("%v: expected 1 block to be returned, got %d blocks instead", pid, len(resp.BlockItems))
+		}
+		if !checkpoint.ID.Equals(&resp.BlockItems[0].BlockID) {
+			log.Warnf("%v: peer's block at height %d is %v and does not match checkpoint %v",
+				pid, checkpoint.Height, resp.BlockItems[0].BlockID, checkpoint.ID)
+			return fmt.Errorf("%v: peer's block at height %d is %v and does not match checkpoint %v",
+				pid, checkpoint.Height, resp.BlockItems[0].BlockID, checkpoint.ID)
+		}
+	}
+	return nil
+}
+
 func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 
 	err := func() error {
 		log.Debugf("connecting to peer for sync: %v", pid)
 		err := m.checkChainID(ctx, pid)
+		if err != nil {
+			return err
+		}
+
+		err = m.checkCheckpoints(ctx, pid)
 		if err != nil {
 			return err
 		}
