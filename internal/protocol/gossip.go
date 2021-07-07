@@ -236,11 +236,16 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
 	err := kg.applyBlock(ctx, pid, msg)
 	if err != nil {
-		log.Warnf("Gossiped block not applied from peer %v: %s", msg.ReceivedFrom, err)
-		select {
-		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
-		case <-ctx.Done():
+		if errors.Is(err, ErrBlockIrreversibility) {
+			log.Debug(err.Error())
+		} else {
+			log.Warnf("Gossiped block not applied from peer %v: %s", msg.ReceivedFrom, err)
+			select {
+			case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
+			case <-ctx.Done():
+			}
 		}
+
 		return false
 	}
 	return true
@@ -253,7 +258,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
 	if err != nil {
 		// TODO: (Issue #5) Bad message, assign naughty points
-		return errors.New("block deserialization failed, " + err.Error())
+		return fmt.Errorf("%w, %v", ErrDeserialization, err.Error())
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
@@ -262,13 +267,13 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	}
 
 	if blockBroadcast.Block.Header.Height < kg.lastIrreversibleBlock {
-		return errors.New("block is earlier than irreversibility window")
+		return ErrBlockIrreversibility
 	}
 
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if _, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); err != nil {
-		return errors.New("block application failed - " + util.BlockString(&blockBroadcast.Block) + ", " + err.Error())
+		return fmt.Errorf("%w - %s, %v", ErrBlockApplication, util.BlockString(&blockBroadcast.Block), err.Error())
 	}
 
 	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)

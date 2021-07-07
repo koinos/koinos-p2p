@@ -70,20 +70,14 @@ type SyncManager struct {
 	// Channel for peers to remove
 	removedPeers chan peer.ID
 
-	// Channel for reporting peer errors
-	PeerErrorChan chan PeerError
+	// Channel for reporting peer errors.
+	peerErrorChan chan<- PeerError
 
 	// Channel for peer to notify when handshake is done
 	handshakeDonePeers chan peer.ID
 
-	// rescanBlacklist is a ticker channel to rescan the Blacklist
-	rescanBlacklist <-chan time.Time
-
 	// Peer ID map.  Only updated in the internal SyncManager thread
 	peers map[peer.ID]util.Void
-
-	// Blacklist of peers.
-	Blacklist *Blacklist
 }
 
 // NewSyncManager factory
@@ -91,7 +85,7 @@ func NewSyncManager(
 	ctx context.Context,
 	h host.Host,
 	rpc rpc.RPC,
-	peerErrorChan chan PeerError,
+	peerErrorChan chan<- PeerError,
 	config *options.Config) *SyncManager {
 
 	// TODO pass rng as parameter
@@ -108,16 +102,12 @@ func NewSyncManager(
 		newPeers:           make(chan peer.ID),
 		handshakeDonePeers: make(chan peer.ID),
 		removedPeers:       make(chan peer.ID),
-		PeerErrorChan:      peerErrorChan,
+		peerErrorChan:      peerErrorChan,
 
-		peers:     make(map[peer.ID]util.Void),
-		Blacklist: NewBlacklist(config.BlacklistOptions),
+		peers: make(map[peer.ID]util.Void),
 	}
 	manager.bdmiProvider = NewBdmiProvider(manager.client, rpc, config.BdmiProviderOptions, config.PeerHandlerOptions)
 	manager.downloadManager = NewBlockDownloadManager(manager.rng, manager.bdmiProvider, config.DownloadManagerOptions)
-	// TODO: Find a good place to call ticker.Stop() to avoid leak
-	ticker := time.NewTicker(time.Duration(config.BlacklistOptions.BlacklistRescanMs) * time.Millisecond)
-	manager.rescanBlacklist = ticker.C
 
 	log.Debug("Registering SyncService")
 	err := manager.server.Register(NewSyncService(&rpc, manager.bdmiProvider, &manager.downloadManager.MyTopoCache, config.SyncServiceOptions))
@@ -126,10 +116,6 @@ func NewSyncManager(
 		panic(err)
 	}
 	log.Debugf("SyncService successfully registered")
-
-	// TODO: What is context?
-	peerAdder := NewSyncManagerPeerAdder(ctx, h, &manager)
-	h.Network().Notify(&peerAdder)
 
 	return &manager
 }
@@ -205,7 +191,7 @@ func (m *SyncManager) doPeerHandshake(ctx context.Context, pid peer.ID) {
 
 	if err != nil {
 		select {
-		case m.PeerErrorChan <- PeerError{pid, err}:
+		case m.peerErrorChan <- PeerError{pid, err}:
 		case <-ctx.Done():
 		}
 	}
@@ -224,10 +210,7 @@ func (m *SyncManager) run(ctx context.Context) {
 	for {
 		select {
 		case pid := <-m.newPeers:
-			isBlacklisted := m.Blacklist.IsPeerBlacklisted(pid)
-			if !isBlacklisted {
-				go m.doPeerHandshake(ctx, pid)
-			}
+			go m.doPeerHandshake(ctx, pid)
 		case pid := <-m.handshakeDonePeers:
 			m.peers[pid] = util.Void{}
 			// Now that our data structures are all set up, we're ready to send it off to the BdmiProvider
@@ -235,12 +218,7 @@ func (m *SyncManager) run(ctx context.Context) {
 		case pid := <-m.removedPeers:
 			go m.doRemovePeer(ctx, pid)
 			delete(m.peers, pid)
-		case perr := <-m.PeerErrorChan:
-			// If peer quit with error, blacklist it for a while so we don't spam reconnection attempts
-			m.Blacklist.AddPeerToBlacklist(perr)
-			delete(m.peers, perr.PeerID)
-		case <-m.rescanBlacklist:
-			m.Blacklist.RemoveExpiredBlacklistEntries()
+
 		case <-ctx.Done():
 			return
 		}

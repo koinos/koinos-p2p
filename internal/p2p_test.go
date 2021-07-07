@@ -251,8 +251,8 @@ func TestSyncChainID(t *testing.T) {
 	ok := false
 	for i := 0; i < 20; i++ {
 		time.Sleep(time.Duration(100) * time.Duration(time.Millisecond))
-		listenError, hasListenError := listenNode.SyncManager.Blacklist.GetBlacklistEntry(sendNode.Host.ID())
-		sendError, hasSendError := sendNode.SyncManager.Blacklist.GetBlacklistEntry(listenNode.Host.ID())
+		listenError, hasListenError := listenNode.ConnectionManager.Blacklist.GetBlacklistEntry(sendNode.Host.ID())
+		sendError, hasSendError := sendNode.ConnectionManager.Blacklist.GetBlacklistEntry(listenNode.Host.ID())
 		if hasListenError &&
 			hasSendError &&
 			strings.HasSuffix(listenError.Error.Error(), "peer's chain id does not match") &&
