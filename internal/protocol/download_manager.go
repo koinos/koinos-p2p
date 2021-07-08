@@ -355,6 +355,54 @@ func (m *BlockDownloadManager) rescan(ctx context.Context) {
 	// TODO:  Expire obsolete entries (behind LIB)
 }
 
+func (m *BlockDownloadManager) clearPeerRequests(peerID peer.ID) int {
+	// When a peer closes, we have to delete all of its in-flight blocks
+	// from Downloading (this solves issue #151).
+
+	numDeleted := 0
+
+	toClear := make([]util.BlockTopologyCmp, 0)
+	for k, v := range m.Downloading {
+		if v.PeerID == peerID {
+			toClear = append(toClear, k)
+		}
+	}
+	numDeleted += len(toClear)
+	for _, k := range toClear {
+		delete(m.Downloading, k)
+	}
+
+	// I don't think it's necessary to clear Applying / WaitingToApply,
+	// as fully downloaded blocks can continue to be processed
+	// even when the peer is disconnected.  For now I'll leave the
+	// commented code here in case we decide to do this at some
+	// point in the future.
+	/*
+		toClear = make([]util.BlockTopologyCmp, 0)
+		for k, v := range m.Applying {
+			if v.PeerID == peerID {
+				toClear = append(toClear, k)
+			}
+		}
+		numDeleted += len(toClear)
+		for _, k := range toClear {
+			delete(m.Applying, k)
+		}
+
+		toClear = make([]util.BlockTopologyCmp, 0)
+		for k, v := range m.WaitingToApply {
+			if v.PeerID == peerID {
+				toClear = append(toClear, k)
+			}
+		}
+		numDeleted += len(toClear)
+		for _, k := range toClear {
+			delete(m.WaitingToApply, k)
+		}
+	*/
+	return numDeleted
+}
+
 func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 	m.needRescan = false
 	for {
@@ -387,6 +435,9 @@ func (m *BlockDownloadManager) downloadManagerLoop(ctx context.Context) {
 			}
 		case peerIsClosed := <-m.iface.PeerIsClosedChan():
 			m.TopoCache.RemovePeer(peerIsClosed.PeerID)
+			clearedRequestCount := m.clearPeerRequests(peerIsClosed.PeerID)
+			log.Infof("Deleted %d in-flight downloads when disconnecting peer %s", clearedRequestCount, peerIsClosed.PeerID)
+			m.needRescan = m.needRescan || (clearedRequestCount > 0)
 		case downloadResponse := <-m.iface.DownloadResponseChan():
 			m.handleDownloadResponse(ctx, downloadResponse)
 		case applyBlockResult := <-m.iface.ApplyBlockResultChan():
