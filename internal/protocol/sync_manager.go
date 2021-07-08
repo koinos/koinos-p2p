@@ -65,7 +65,7 @@ type SyncManager struct {
 	bdmiProvider    *BdmiProvider
 
 	// Checkpoints
-	checkpoints types.VectorBlockTopology
+	checkpoints []Checkpoint
 
 	// Channel for new peer ID's we want to connect to
 	newPeers chan peer.ID
@@ -108,6 +108,8 @@ func NewSyncManager(
 
 		Options: config.SyncManagerOptions,
 
+		checkpoints: make([]Checkpoint, 0),
+
 		newPeers:           make(chan peer.ID),
 		handshakeDonePeers: make(chan peer.ID),
 		removedPeers:       make(chan peer.ID),
@@ -121,6 +123,15 @@ func NewSyncManager(
 	// TODO: Find a good place to call ticker.Stop() to avoid leak
 	ticker := time.NewTicker(time.Duration(config.BlacklistOptions.BlacklistRescanMs) * time.Millisecond)
 	manager.rescanBlacklist = ticker.C
+
+	log.Debug("Initializing checkpoints")
+	for _, checkpointStr := range manager.Options.Checkpoints {
+		c, err := ParseCheckpoint(checkpointStr)
+		if err != nil {
+			panic("Couldn't parse checkpoint")
+		}
+		manager.checkpoints = append(manager.checkpoints, c)
+	}
 
 	log.Debug("Registering SyncService")
 	err := manager.server.Register(NewSyncService(&rpc, manager.bdmiProvider, &manager.downloadManager.MyTopoCache, config.SyncServiceOptions))
