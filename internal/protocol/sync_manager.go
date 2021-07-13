@@ -295,7 +295,7 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 			return fmt.Errorf("%v: peer has non-matching checkpoint block at height %d",
 				pid, checkpoint.Height)
 		}
-		numPassedCheckpoints += 1
+		numPassedCheckpoints++
 	}
 	log.Infof("%v: successful handshake to peer with head block %v at height %d, %d checkpoints passed",
 		pid, blkid(headBlockResp.ID), headBlockResp.Height, numPassedCheckpoints)
