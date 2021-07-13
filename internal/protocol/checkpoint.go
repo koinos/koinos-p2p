@@ -8,17 +8,18 @@ import (
 	types "github.com/koinos/koinos-types-golang"
 )
 
+// Checkpoint represents a particular fork we want to limit ourselves to
 type Checkpoint struct {
 	Height types.BlockHeightType
 	ID     types.Multihash
 }
 
-// Function to parse a checkpoint
+// ParseCheckpoint parses a Checkpoint struct from a string of the form height:blockid
 func ParseCheckpoint(checkpointStr string) (Checkpoint, error) {
 	result := Checkpoint{}
-	re_checkpoint := regexp.MustCompile(`^\s*([0-9]+):(\S+)\s*$`)
+	reCheckpoint := regexp.MustCompile(`^\s*([0-9]+):(\S+)\s*$`)
 
-	groups := re_checkpoint.FindStringSubmatch(checkpointStr)
+	groups := reCheckpoint.FindStringSubmatch(checkpointStr)
 	if groups == nil {
 		return result, errors.New("checkpoint couldn't be parsed")
 	}
