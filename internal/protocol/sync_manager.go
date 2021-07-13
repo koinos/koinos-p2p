@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -206,7 +207,20 @@ func (m *SyncManager) checkChainID(ctx context.Context, pid peer.ID) error {
 	return nil
 }
 
+// blockIDtoString returns a string representation of the BlockID
+func blockIDtoString(h types.Multihash) string {
+	id, err := json.Marshal(h)
+	if err != nil {
+		id = []byte("ERR")
+	} else {
+		id = id[1 : len(id)-1]
+	}
+	return string(id)
+}
+
 func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
+	blkid := blockIDtoString
+
 	headBlockResp := GetHeadBlockResponse{}
 	{
 		req := GetHeadBlockRequest{}
@@ -218,7 +232,7 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 			return err
 		}
 	}
-	log.Infof("%v: peer has head block %v at height %d", pid, headBlockResp.ID, headBlockResp.Height)
+	log.Infof("%v: peer has head block %v at height %d", pid, blkid(headBlockResp.ID), headBlockResp.Height)
 
 	//
 	// For each checkpoint, we call GetBlocksResponse / GetBlocksRequest
@@ -229,6 +243,7 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 	// so we don't need an RPC round-trip to process each checkpoint,
 	// nor do we get sent a block that we're going to throw away.
 	//
+	numPassedCheckpoints := 0
 	for _, checkpoint := range m.checkpoints {
 		if checkpoint.Height > headBlockResp.Height {
 			continue
@@ -236,9 +251,9 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 		if checkpoint.Height == headBlockResp.Height {
 			if !checkpoint.ID.Equals(&headBlockResp.ID) {
 				log.Warnf("%v: peer's head block at height %d is %v and does not match checkpoint %v",
-					pid, headBlockResp.Height, headBlockResp.ID, checkpoint.ID)
+					pid, headBlockResp.Height, blkid(headBlockResp.ID), blkid(checkpoint.ID))
 				return fmt.Errorf("%v: peer's head block at height %d is %v and does not match checkpoint %v",
-					pid, headBlockResp.Height, headBlockResp.ID, checkpoint.ID)
+					pid, headBlockResp.Height, blkid(headBlockResp.ID), blkid(checkpoint.ID))
 			}
 			continue
 		}
@@ -275,13 +290,15 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 		if !hasCheckpoint {
 			for _, topo := range resp.BlockTopology {
 				log.Warnf("%v: peer has non-matching checkpoint block at height %d, peer block is %v, checkpoint is %v",
-					pid, checkpoint.Height, topo.ID, checkpoint.ID)
+					pid, checkpoint.Height, blkid(topo.ID), blkid(checkpoint.ID))
 			}
 			return fmt.Errorf("%v: peer has non-matching checkpoint block at height %d",
 				pid, checkpoint.Height)
 		}
+		numPassedCheckpoints += 1
 	}
-	log.Infof("%v: successful peer handshake", pid)
+	log.Infof("%v: successful handshake to peer with head block %v at height %d, %d checkpoints passed",
+		pid, blkid(headBlockResp.ID), headBlockResp.Height, numPassedCheckpoints)
 	return nil
 }
 
