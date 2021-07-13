@@ -242,33 +242,43 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 			}
 			continue
 		}
-		req := GetBlocksRequest{}
-		req.HeadBlockID = headBlockResp.ID
-		req.StartBlockHeight = checkpoint.Height
-		req.BatchSize = 1
-		resp := GetBlocksResponse{}
+		req := GetTopologyAtHeightRequest{}
+		req.BlockHeight = checkpoint.Height
+		req.NumBlocks = 1
+		resp := GetTopologyAtHeightResponse{}
 		subctx, cancel := context.WithTimeout(ctx, time.Duration(m.Options.RPCTimeoutMs)*time.Millisecond)
 		defer cancel()
-		err := m.client.CallContext(subctx, pid, "SyncService", "GetBlocks", req, &resp)
+		err := m.client.CallContext(subctx, pid, "SyncService", "GetTopologyAtHeight", req, &resp)
 		if err != nil {
-			log.Warnf("%v: error getting peer chain id, %v", pid, err)
+			log.Warnf("%v: error calling GetTopologyAtHeight, %v", pid, err)
 			return err
 		}
-		if len(resp.BlockItems) == 0 {
+		if len(resp.BlockTopology) == 0 {
 			log.Warnf("%v: peer claimed head height of %d but could not provide checkpoint at height %d",
 				pid, headBlockResp.Height, checkpoint.Height)
 			return fmt.Errorf("%v: peer claimed head height of %d but could not provide checkpoint at height %d",
 				pid, headBlockResp.Height, checkpoint.Height)
 		}
-		if len(resp.BlockItems) != 1 {
-			log.Warnf("%v: expected 1 block to be returned, got %d blocks instead", pid, len(resp.BlockItems))
-			return fmt.Errorf("%v: expected 1 block to be returned, got %d blocks instead", pid, len(resp.BlockItems))
+		hasCheckpoint := false
+		for _, topo := range resp.BlockTopology {
+			if topo.Height != checkpoint.Height {
+				log.Warnf("%v: peer sent unexpected height %d when height %d was requested",
+					pid, topo.Height, checkpoint.Height)
+				return fmt.Errorf("%v: peer sent unexpected height %d when height %d was requested",
+					pid, topo.Height, checkpoint.Height)
+			}
+			if topo.ID.Equals(&checkpoint.ID) {
+				hasCheckpoint = true
+			}
 		}
-		if !checkpoint.ID.Equals(&resp.BlockItems[0].BlockID) {
-			log.Warnf("%v: peer's block at height %d is %v and does not match checkpoint %v",
-				pid, checkpoint.Height, resp.BlockItems[0].BlockID, checkpoint.ID)
-			return fmt.Errorf("%v: peer's block at height %d is %v and does not match checkpoint %v",
-				pid, checkpoint.Height, resp.BlockItems[0].BlockID, checkpoint.ID)
+
+		if !hasCheckpoint {
+			for _, topo := range resp.BlockTopology {
+				log.Warnf("%v: peer has non-matching checkpoint block at height %d, peer block is %v, checkpoint is %v",
+					pid, checkpoint.Height, topo.ID, checkpoint.ID)
+			}
+			return fmt.Errorf("%v: peer has non-matching checkpoint block at height %d",
+				pid, checkpoint.Height)
 		}
 	}
 	log.Infof("%v: successful peer handshake", pid)
