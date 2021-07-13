@@ -253,6 +253,10 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 			log.Warnf("%v: error getting peer chain id, %v", pid, err)
 			return err
 		}
+		if len(resp.BlockItems) == 0 {
+			log.Debugf("%v: peer does not have checkpoint for height %d", pid, checkpoint.Height)
+			continue
+		}
 		if len(resp.BlockItems) != 1 {
 			log.Warnf("%v: expected 1 block to be returned, got %d blocks instead", pid, len(resp.BlockItems))
 			return fmt.Errorf("%v: expected 1 block to be returned, got %d blocks instead", pid, len(resp.BlockItems))
