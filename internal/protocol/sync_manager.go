@@ -218,6 +218,7 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 			return err
 		}
 	}
+	log.Infof("%v: peer has head block %v at height %d", pid, headBlockResp.ID, headBlockResp.Height)
 
 	//
 	// For each checkpoint, we call GetBlocksResponse / GetBlocksRequest
@@ -254,8 +255,10 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 			return err
 		}
 		if len(resp.BlockItems) == 0 {
-			log.Debugf("%v: peer does not have checkpoint for height %d", pid, checkpoint.Height)
-			continue
+			log.Warnf("%v: peer claimed head height of %d but could not provide checkpoint at height %d",
+				pid, headBlockResp.Height, checkpoint.Height)
+			return fmt.Errorf("%v: peer claimed head height of %d but could not provide checkpoint at height %d",
+				pid, headBlockResp.Height, checkpoint.Height)
 		}
 		if len(resp.BlockItems) != 1 {
 			log.Warnf("%v: expected 1 block to be returned, got %d blocks instead", pid, len(resp.BlockItems))
@@ -268,6 +271,7 @@ func (m *SyncManager) checkCheckpoints(ctx context.Context, pid peer.ID) error {
 				pid, checkpoint.Height, resp.BlockItems[0].BlockID, checkpoint.ID)
 		}
 	}
+	log.Infof("%v: successful peer handshake", pid)
 	return nil
 }
 
