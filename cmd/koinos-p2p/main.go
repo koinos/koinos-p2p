@@ -26,6 +26,7 @@ const (
 	seedOption         = "seed"
 	peerOption         = "peer"
 	directOption       = "direct"
+	checkpointOption   = "checkpoint"
 	peerExchangeOption = "pex"
 	bootstrapOption    = "bootstrap"
 	gossipOption       = "gossip"
@@ -67,6 +68,7 @@ func main() {
 	seed := flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
 	peerAddresses := flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
 	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
+	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
 	peerExchange := flag.BoolP(peerExchangeOption, "x", true, "Exchange peers with other nodes")
 	bootstrap := flag.BoolP(bootstrapOption, "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
 	gossip := flag.BoolP(gossipOption, "g", true, "Enable gossip mode")
@@ -85,6 +87,7 @@ func main() {
 	*seed = util.GetStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
 	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P)
 	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P)
+	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints, yamlConfig.P2P)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 
@@ -107,6 +110,8 @@ func main() {
 
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
+
+	config.SyncManagerOptions.Checkpoints = *checkpoints
 
 	if !(*gossip) {
 		config.DownloadManagerOptions.GossipAlwaysDisable = true
