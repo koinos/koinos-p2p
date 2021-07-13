@@ -68,7 +68,7 @@ func main() {
 	seed := flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
 	peerAddresses := flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
 	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
-	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
+	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Checkpoint of the form height:blockid (may specify multiple)")
 	peerExchange := flag.BoolP(peerExchangeOption, "x", true, "Exchange peers with other nodes")
 	bootstrap := flag.BoolP(bootstrapOption, "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
 	gossip := flag.BoolP(gossipOption, "g", true, "Enable gossip mode")
