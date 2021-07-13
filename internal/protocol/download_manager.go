@@ -372,11 +372,9 @@ func (m *BlockDownloadManager) clearPeerRequests(peerID peer.ID) int {
 		delete(m.Downloading, k)
 	}
 
-	// I don't think it's necessary to clear Applying / WaitingToApply,
-	// as fully downloaded blocks can continue to be processed
-	// even when the peer is disconnected.  For now I'll leave the
-	// commented code here in case we decide to do this at some
-	// point in the future.
+	// The following code clears Applying / WaitingToApply.
+	// This code should be either un-commented or removed as
+	// part of the resolution of issue #155.
 	/*
 		toClear = make([]util.BlockTopologyCmp, 0)
 		for k, v := range m.Applying {
