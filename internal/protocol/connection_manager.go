@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -142,6 +143,10 @@ func (p *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 }
 
 func (p *ConnectionManager) handlePeerError(ctx context.Context, peerErr PeerError) {
+	if errors.Is(peerErr.Error, ErrGossip) {
+		return
+	}
+
 	// TODO: When we implenent naughty points, here might be a good place to switch on different errors (#5)
 	// If peer quits with an error, blacklist it for a while so we don't spam reconnection attempts
 	p.Blacklist.AddPeerToBlacklist(peerErr)

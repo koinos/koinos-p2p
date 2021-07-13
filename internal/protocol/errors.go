@@ -5,6 +5,9 @@ import (
 )
 
 var (
+	// ErrGossip wraps all errors that take place during gossip
+	ErrGossip = errors.New("gossip error")
+
 	// ErrDeserialization represents any sort of error deserializing a type using Koinos types
 	ErrDeserialization = errors.New("error during deserialization")
 
