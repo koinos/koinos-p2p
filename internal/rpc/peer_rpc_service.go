@@ -86,7 +86,7 @@ func (p *PeerRPCService) GetAncestorBlockID(ctx context.Context, request *GetAnc
 		return errors.New("unexpected number of blocks returned")
 	}
 
-	response.ID = rpcResult.BlockItems[1].BlockId
+	response.ID = rpcResult.BlockItems[0].BlockId
 	return nil
 }
 
