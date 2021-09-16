@@ -53,20 +53,23 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		return nil
 	}
 
-	// Check if my LIB connect's to peer's head block
-	log.Info("Checking if my LIB connects to peer's head block")
-	rpcContext, cancelB := context.WithTimeout(ctx, time.Second*3)
-	defer cancelB()
-	ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height)
-	if err != nil {
-		log.Info(err.Error())
-		return err
-	}
+	// If LIB is 0, we are still at genesis and could connec to any chain
+	if p.lastIrreversibleBlock.Height > 0 {
+		// Check if my LIB connect's to peer's head block
+		log.Info("Checking if my LIB connects to peer's head block")
+		rpcContext, cancelB := context.WithTimeout(ctx, time.Second*3)
+		defer cancelB()
+		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height)
+		if err != nil {
+			log.Info(err.Error())
+			return err
+		}
 
-	log.Infof("Got back %s", ancestorBlock.String())
+		log.Infof("Got back %s", ancestorBlock.String())
 
-	if bytes.Compare([]byte(*ancestorBlock), []byte(p.lastIrreversibleBlock.Id)) != 0 {
-		return errors.New("my irreversible block is not an ancestor of peer's head block")
+		if bytes.Compare([]byte(*ancestorBlock), []byte(p.lastIrreversibleBlock.Id)) != 0 {
+			return errors.New("my irreversible block is not an ancestor of peer's head block")
+		}
 	}
 
 	// Request blocks
