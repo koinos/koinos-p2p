@@ -104,9 +104,9 @@ func (p *PeerRPCService) GetBlocks(ctx context.Context, request *GetBlocksReques
 
 	response.Blocks = make([][]byte, len(rpcResult.BlockItems))
 	for i, block := range rpcResult.BlockItems {
-		json, _ := protojson.Marshal(block)
+		json, _ := protojson.Marshal(block.Block)
 		log.Info(string(json))
-		response.Blocks[i], err = proto.Marshal(block)
+		response.Blocks[i], err = proto.Marshal(block.Block)
 		log.Info(hex.EncodeToString(response.Blocks[i]))
 		if err != nil {
 			return err
