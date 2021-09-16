@@ -6,6 +6,7 @@ import (
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/multiformats/go-multihash"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -102,7 +103,8 @@ func (p *PeerRPCService) GetBlocks(ctx context.Context, request *GetBlocksReques
 
 	response.Blocks = make([][]byte, len(rpcResult.BlockItems))
 	for i, block := range rpcResult.BlockItems {
-		log.Info(block.String())
+		json, _ := protojson.Marshal(block)
+		log.Info(string(json))
 		response.Blocks[i], err = proto.Marshal(block)
 		if err != nil {
 			return err

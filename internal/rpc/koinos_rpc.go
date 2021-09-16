@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	log "github.com/koinos/koinos-log-golang"
@@ -229,6 +230,8 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *multihash.Mu
 		},
 	}
 
+	json, _ := protojson.Marshal(args)
+	log.Info(string(json))
 	data, err := proto.Marshal(args)
 
 	if err != nil {
