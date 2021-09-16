@@ -16,5 +16,4 @@ require (
 	github.com/multiformats/go-multihash v0.0.16
 	github.com/spf13/pflag v1.0.5
 	google.golang.org/protobuf v1.27.1
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

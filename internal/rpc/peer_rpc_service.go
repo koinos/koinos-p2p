@@ -76,7 +76,7 @@ func (p *PeerRPCService) GetHeadBlock(ctx context.Context, request *GetHeadBlock
 	return nil
 }
 
-func (p *PeerRPCService) GetAncestorBlockId(ctx context.Context, request *GetAncestorBlockIDRequest, response *GetAncestorBlockIDResponse) error {
+func (p *PeerRPCService) GetAncestorBlockID(ctx context.Context, request *GetAncestorBlockIDRequest, response *GetAncestorBlockIDResponse) error {
 	rpcResult, err := p.local.GetBlocksByHeight(ctx, request.ParentID, request.ChildHeight, 1)
 	if err != nil {
 		return err
