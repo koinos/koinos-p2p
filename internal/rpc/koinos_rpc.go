@@ -87,6 +87,8 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 		},
 	}
 
+	log.Infof("%s", args.String())
+
 	data, err := proto.Marshal(args)
 
 	if err != nil {

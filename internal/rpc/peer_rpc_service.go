@@ -78,7 +78,7 @@ func (p *PeerRPCService) GetHeadBlock(ctx context.Context, request *GetHeadBlock
 }
 
 func (p *PeerRPCService) GetAncestorBlockID(ctx context.Context, request *GetAncestorBlockIDRequest, response *GetAncestorBlockIDResponse) error {
-	log.Infof("Getting ancestor block parent: %s child_height: %v", request.ParentID.HexString(), request.ChildHeight)
+	log.Infof("Getting ancestor block parent: %s child_height: %s", request.ParentID.HexString(), request.ChildHeight)
 	rpcResult, err := p.local.GetBlocksByHeight(ctx, request.ParentID, request.ChildHeight, 1)
 	if err != nil {
 		return err
@@ -102,6 +102,7 @@ func (p *PeerRPCService) GetBlocks(ctx context.Context, request *GetBlocksReques
 
 	response.Blocks = make([][]byte, len(rpcResult.BlockItems))
 	for i, block := range rpcResult.BlockItems {
+		log.Info(block.String())
 		response.Blocks[i], err = proto.Marshal(block)
 		if err != nil {
 			return err

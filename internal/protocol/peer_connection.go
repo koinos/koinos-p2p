@@ -52,6 +52,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		time.AfterFunc(time.Second*3, p.requestBlocks)
 		return nil
 	}
+	log.Infof("%s", p.lastIrreversibleBlock.Height)
 
 	// If LIB is 0, we are still at genesis and could connec to any chain
 	if p.lastIrreversibleBlock.Height > 0 {
@@ -75,7 +76,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Request blocks
 	rpcContext, cancelC := context.WithTimeout(ctx, time.Second*5)
 	defer cancelC()
-	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height, 1000)
+	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height+1, 1)
 	if err != nil {
 		return err
 	}

@@ -194,6 +194,8 @@ func (c *ConnectionManager) handlePeerError(ctx context.Context, peerErr PeerErr
 		return
 	}
 
+	log.Infof("Encountered peer error: %s, %s", peerErr.id, peerErr.err.Error())
+
 	// TODO: When we implenent naughty points, here might be a good place to switch on different errors (#5)
 	// If peer quits with an error, blacklist it for a while so we don't spam reconnection attempts
 	c.host.Network().ClosePeer(peerErr.id)
