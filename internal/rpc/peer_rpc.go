@@ -15,6 +15,10 @@ type PeerRPC struct {
 	peerID peer.ID
 }
 
+func NewPeerRPC(client *gorpc.Client, peerID peer.ID) *PeerRPC {
+	return &PeerRPC{client: client, peerID: peerID}
+}
+
 func (p *PeerRPC) GetChainID(ctx context.Context) (id *multihash.Multihash, err error) {
 	rpcReq := &GetChainIDRequest{}
 	rpcResp := &GetChainIDResponse{}

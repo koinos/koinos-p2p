@@ -106,12 +106,29 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	if err != nil {
 		return nil, err
 	}
-	node.Gossip = protocol.NewKoinosGossip(ctx, localRPC, ps, node.PeerErrorChan, node, node.Host.ID())
+
+	rpcContext, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	forkHeads, err := localRPC.GetForkHeads(rpcContext)
+	if err != nil {
+		return nil, err
+	}
+
+	node.Gossip = protocol.NewKoinosGossip(
+		ctx,
+		node.localRPC,
+		ps,
+		node.PeerErrorChan,
+		node,
+		node.Host.ID())
+
 	node.ConnectionManager = protocol.NewConnectionManager(
 		node.Host,
 		node.Gossip,
+		node.localRPC,
 		node.Options.InitialPeers,
-		node.PeerErrorChan)
+		node.PeerErrorChan,
+		forkHeads.GetLastIrreversibleBlock())
 
 	return node, nil
 }

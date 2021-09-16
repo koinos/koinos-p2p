@@ -8,6 +8,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// PeerRPCID Identifies the peer rpc service
+const PeerRPCID = "/koinos/peerrpc/1.0.0"
+
 type GetChainIDRequest struct {
 }
 
