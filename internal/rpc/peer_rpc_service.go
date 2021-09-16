@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 
 	log "github.com/koinos/koinos-log-golang"
@@ -106,6 +107,7 @@ func (p *PeerRPCService) GetBlocks(ctx context.Context, request *GetBlocksReques
 		json, _ := protojson.Marshal(block)
 		log.Info(string(json))
 		response.Blocks[i], err = proto.Marshal(block)
+		log.Info(hex.EncodeToString(response.Blocks[i]))
 		if err != nil {
 			return err
 		}
