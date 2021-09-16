@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	log "github.com/koinos/koinos-log-golang"
 	"github.com/multiformats/go-multihash"
 	"google.golang.org/protobuf/proto"
 )
@@ -77,10 +78,13 @@ func (p *PeerRPCService) GetHeadBlock(ctx context.Context, request *GetHeadBlock
 }
 
 func (p *PeerRPCService) GetAncestorBlockID(ctx context.Context, request *GetAncestorBlockIDRequest, response *GetAncestorBlockIDResponse) error {
+	log.Infof("Getting ancestor block parent: %s child_height: %v", request.ParentID.HexString(), request.ChildHeight)
 	rpcResult, err := p.local.GetBlocksByHeight(ctx, request.ParentID, request.ChildHeight, 1)
 	if err != nil {
 		return err
 	}
+
+	log.Infof("Result: %s", rpcResult.String())
 
 	if len(rpcResult.BlockItems) != 1 {
 		return errors.New("unexpected number of blocks returned")
