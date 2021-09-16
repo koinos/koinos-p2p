@@ -2,12 +2,17 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+
+	"google.golang.org/protobuf/proto"
 
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
-	types "github.com/koinos/koinos-types-golang"
+	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/koinos/rpc"
+	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
+	"github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
+	"github.com/multiformats/go-multihash"
 )
 
 // RPC service constants
@@ -29,36 +34,39 @@ func NewKoinosRPC(mq *koinosmq.Client) *KoinosRPC {
 }
 
 // GetHeadBlock rpc call
-func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error) {
-	args := types.ChainRPCRequest{
-		Value: types.NewGetHeadInfoRequest(),
+func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
+	args := &chain.ChainRequest{
+		Request: &chain.ChainRequest_GetHeadInfo{
+			GetHeadInfo: &chain.GetHeadInfoRequest{},
+		},
 	}
-	data, err := json.Marshal(args)
+
+	data, err := proto.Marshal(args)
 
 	if err != nil {
 		return nil, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
 
 	if err != nil {
 		return nil, err
 	}
 
-	responseVariant := types.NewChainRPCResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &chain.ChainResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *types.GetHeadInfoResponse
+	var response *chain.GetHeadInfoResponse
 
-	switch t := responseVariant.Value.(type) {
-	case *types.GetHeadInfoResponse:
-		response = t
-	case *types.ChainErrorResponse:
-		err = errors.New("chain rpc error, " + string(t.ErrorText))
+	switch t := responseVariant.Response.(type) {
+	case *chain.ChainResponse_GetHeadInfo:
+		response = t.GetHeadInfo
+	case *chain.ChainResponse_Error:
+		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
 	default:
 		err = errors.New("unexpected chain rpc response")
 	}
@@ -67,43 +75,44 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoRespons
 }
 
 // ApplyBlock rpc call
-func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (*types.SubmitBlockResponse, error) {
-	blockSub := types.NewSubmitBlockRequest()
-	blockSub.Block = *block
-
-	blockSub.VerifyPassiveData = true
-	blockSub.VerifyBlockSignature = true
-	blockSub.VerifyTransactionSignatures = true
-
-	args := types.ChainRPCRequest{
-		Value: blockSub,
+func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain.SubmitBlockResponse, error) {
+	args := &chain.ChainRequest{
+		Request: &chain.ChainRequest_SubmitBlock{
+			SubmitBlock: &chain.SubmitBlockRequest{
+				Block:                      block,
+				VerifyPassiveData:          true,
+				VerifyBlockSignature:       true,
+				VerifyTransactionSignature: true,
+			},
+		},
 	}
-	data, err := json.Marshal(args)
+
+	data, err := proto.Marshal(args)
 
 	if err != nil {
 		return nil, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
 
 	if err != nil {
 		return nil, err
 	}
 
-	responseVariant := types.NewChainRPCResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &chain.ChainResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *types.SubmitBlockResponse
+	var response *chain.SubmitBlockResponse
 
-	switch t := responseVariant.Value.(type) {
-	case *types.SubmitBlockResponse:
-		response = (*types.SubmitBlockResponse)(t)
-	case *types.ChainErrorResponse:
-		err = errors.New("chain rpc error, " + string(t.ErrorText))
+	switch t := responseVariant.Response.(type) {
+	case *chain.ChainResponse_SubmitBlock:
+		response = t.SubmitBlock
+	case *chain.ChainResponse_Error:
+		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
 	default:
 		err = errors.New("unexpected chain rpc response")
 	}
@@ -112,42 +121,41 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *types.Block) (*types.
 }
 
 // ApplyTransaction rpc call
-func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction) (*types.SubmitTransactionResponse, error) {
-	trxSub := types.NewSubmitTransactionRequest()
-	trxSub.Transaction = *trx
-
-	trxSub.VerifyPassiveData = true
-	trxSub.VerifyTransactionSignatures = true
-
-	args := types.ChainRPCRequest{
-		Value: trxSub,
+func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
+	args := &chain.ChainRequest{
+		Request: &chain.ChainRequest_SubmitTransaction{
+			SubmitTransaction: &chain.SubmitTransactionRequest{
+				Transaction: trx,
+			},
+		},
 	}
-	data, err := json.Marshal(args)
+
+	data, err := proto.Marshal(args)
 
 	if err != nil {
 		return nil, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
 
 	if err != nil {
 		return nil, err
 	}
 
-	responseVariant := types.NewChainRPCResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &chain.ChainResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *types.SubmitTransactionResponse
+	var response *chain.SubmitTransactionResponse
 
-	switch t := responseVariant.Value.(type) {
-	case *types.SubmitTransactionResponse:
-		response = (*types.SubmitTransactionResponse)(t)
-	case *types.ChainErrorResponse:
-		err = errors.New("chain rpc error, " + string(t.ErrorText))
+	switch t := responseVariant.Response.(type) {
+	case *chain.ChainResponse_SubmitTransaction:
+		response = t.SubmitTransaction
+	case *chain.ChainResponse_Error:
+		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
 	default:
 		err = errors.New("unexpected chain rpc response")
 	}
@@ -156,40 +164,48 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *types.Transaction
 }
 
 // GetBlocksByID rpc call
-func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
-	args := types.BlockStoreRequest{
-		Value: &types.GetBlocksByIDRequest{
-			BlockID:           *blockID,
-			ReturnBlockBlob:   true,
-			ReturnReceiptBlob: false,
+func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error) {
+	var idBytes = make([][]byte, len(blockIDs))
+	for i, id := range blockIDs {
+		idBytes[i] = []byte(id)
+	}
+
+	args := &block_store.BlockStoreRequest{
+		Request: &block_store.BlockStoreRequest_GetBlocksById{
+			GetBlocksById: &block_store.GetBlocksByIdRequest{
+				BlockId:       idBytes,
+				ReturnBlock:   true,
+				ReturnReceipt: false,
+			},
 		},
 	}
-	data, err := json.Marshal(args)
+
+	data, err := proto.Marshal(args)
 	if err != nil {
 		return nil, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", BlockStoreRPC, data)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Debugf("GetBlocksByID() response: %s", responseBytes)
 
-	responseVariant := types.NewBlockStoreResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &block_store.BlockStoreResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *types.GetBlocksByIDResponse
+	var response *block_store.GetBlocksByIdResponse
 
-	switch t := responseVariant.Value.(type) {
-	case *types.GetBlocksByIDResponse:
-		response = (*types.GetBlocksByIDResponse)(t)
-	case *types.BlockStoreErrorResponse:
-		err = errors.New("block_store rpc error, " + string(t.ErrorText))
+	switch t := responseVariant.Response.(type) {
+	case *block_store.BlockStoreResponse_GetBlocksById:
+		response = t.GetBlocksById
+	case *block_store.BlockStoreResponse_Error:
+		err = errors.New("block_store rpc error, " + string(t.Error.GetMessage()))
 	default:
 		err = errors.New("unexpected block_store rpc response")
 	}
@@ -198,42 +214,45 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMult
 }
 
 // GetBlocksByHeight rpc call
-func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
-	args := types.BlockStoreRequest{
-		Value: &types.GetBlocksByHeightRequest{
-			HeadBlockID:         *blockID,
-			AncestorStartHeight: height,
-			NumBlocks:           numBlocks,
-			ReturnBlock:         true,
-			ReturnReceipt:       false,
+func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
+	args := &block_store.BlockStoreRequest{
+		Request: &block_store.BlockStoreRequest_GetBlocksByHeight{
+			GetBlocksByHeight: &block_store.GetBlocksByHeightRequest{
+				HeadBlockId:         *blockID,
+				AncestorStartHeight: height,
+				NumBlocks:           numBlocks,
+				ReturnBlock:         true,
+				ReturnReceipt:       false,
+			},
 		},
 	}
-	data, err := json.Marshal(args)
+
+	data, err := proto.Marshal(args)
 
 	if err != nil {
 		return nil, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", BlockStoreRPC, data)
 
 	if err != nil {
 		return nil, err
 	}
 
-	responseVariant := types.NewBlockStoreResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &block_store.BlockStoreResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *types.GetBlocksByHeightResponse
+	var response *block_store.GetBlocksByHeightResponse
 
-	switch t := responseVariant.Value.(type) {
-	case *types.GetBlocksByHeightResponse:
-		response = (*types.GetBlocksByHeightResponse)(t)
-	case *types.BlockStoreErrorResponse:
-		err = errors.New("block_store rpc error, " + string(t.ErrorText))
+	switch t := responseVariant.Response.(type) {
+	case *block_store.BlockStoreResponse_GetBlocksByHeight:
+		response = t.GetBlocksByHeight
+	case *block_store.BlockStoreResponse_Error:
+		err = errors.New("block_store rpc error, " + string(t.Error.GetMessage()))
 	default:
 		err = errors.New("unexpected block_store rpc response")
 	}
@@ -242,37 +261,40 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multih
 }
 
 // GetChainID rpc call
-func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, error) {
-	args := types.ChainRPCRequest{
-		Value: types.NewGetChainIDRequest(),
+func (k *KoinosRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, error) {
+	args := &chain.ChainRequest{
+		Request: &chain.ChainRequest_GetChainId{
+			GetChainId: &chain.GetChainIdRequest{},
+		},
 	}
-	data, err := json.Marshal(args)
+
+	data, err := proto.Marshal(args)
 
 	if err != nil {
 		return nil, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
 	log.Debugf("GetChainID() response was %s", responseBytes)
 
 	if err != nil {
 		return nil, err
 	}
 
-	responseVariant := types.NewChainRPCResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &chain.ChainResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *types.GetChainIDResponse
+	var response *chain.GetChainIdResponse
 
-	switch t := responseVariant.Value.(type) {
-	case *types.GetChainIDResponse:
-		response = (*types.GetChainIDResponse)(t)
-	case *types.ChainErrorResponse:
-		err = errors.New("chain rpc error, " + string(t.ErrorText))
+	switch t := responseVariant.Response.(type) {
+	case *chain.ChainResponse_GetChainId:
+		response = t.GetChainId
+	case *chain.ChainResponse_Error:
+		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
 	default:
 		err = errors.New("unexpected chain rpc response")
 	}
@@ -281,37 +303,39 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, 
 }
 
 // GetForkHeads rpc call
-func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error) {
-	args := types.ChainRPCRequest{
-		Value: types.NewGetForkHeadsRequest(),
+func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error) {
+	args := &chain.ChainRequest{
+		Request: &chain.ChainRequest_GetForkHeads{
+			GetForkHeads: &chain.GetForkHeadsRequest{},
+		},
 	}
 
-	data, err := json.Marshal(args)
+	data, err := proto.Marshal(args)
 
 	if err != nil {
 		return nil, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
 
 	if err != nil {
 		return nil, err
 	}
 
-	responseVariant := types.NewChainRPCResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &chain.ChainResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, err
 	}
 
-	var response *types.GetForkHeadsResponse
+	var response *chain.GetForkHeadsResponse
 
-	switch t := responseVariant.Value.(type) {
-	case *types.GetForkHeadsResponse:
-		response = (*types.GetForkHeadsResponse)(t)
-	case *types.ChainErrorResponse:
-		err = errors.New("chain rpc error, " + string(t.ErrorText))
+	switch t := responseVariant.Response.(type) {
+	case *chain.ChainResponse_GetForkHeads:
+		response = t.GetForkHeads
+	case *chain.ChainResponse_Error:
+		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
 	default:
 		err = errors.New("unexpected chain rpc response")
 	}
@@ -322,25 +346,27 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsRespon
 // IsConnectedToBlockStore returns if the AMQP connection can currently communicate
 // with the block store microservice.
 func (k *KoinosRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
-	args := types.BlockStoreRequest{
-		Value: &types.BlockStoreReservedRequest{},
+	args := &block_store.BlockStoreRequest{
+		Request: &block_store.BlockStoreRequest_Reserved{
+			Reserved: &rpc.ReservedRpc{},
+		},
 	}
 
-	data, err := json.Marshal(args)
+	data, err := proto.Marshal(args)
 
 	if err != nil {
 		return false, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", BlockStoreRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", BlockStoreRPC, data)
 
 	if err != nil {
 		return false, err
 	}
 
-	responseVariant := types.NewBlockStoreResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &block_store.BlockStoreResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return false, err
 	}
@@ -351,25 +377,27 @@ func (k *KoinosRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 // IsConnectedToChain returns if the AMQP connection can currently communicate
 // with the chain microservice.
 func (k *KoinosRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
-	args := types.ChainRPCRequest{
-		Value: &types.ChainReservedRequest{},
+	args := &chain.ChainRequest{
+		Request: &chain.ChainRequest_Reserved{
+			Reserved: &rpc.ReservedRpc{},
+		},
 	}
 
-	data, err := json.Marshal(args)
+	data, err := proto.Marshal(args)
 
 	if err != nil {
 		return false, err
 	}
 
 	var responseBytes []byte
-	responseBytes, err = k.mq.RPCContext(ctx, "application/json", ChainRPC, data)
+	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
 
 	if err != nil {
 		return false, err
 	}
 
-	responseVariant := types.NewChainRPCResponse()
-	err = json.Unmarshal(responseBytes, responseVariant)
+	responseVariant := &chain.ChainResponse{}
+	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return false, err
 	}

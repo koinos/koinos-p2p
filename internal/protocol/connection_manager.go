@@ -7,8 +7,6 @@ import (
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
-	"github.com/koinos/koinos-p2p/internal/options"
-	types "github.com/koinos/koinos-types-golang"
 	util "github.com/koinos/koinos-util-golang"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -30,31 +28,30 @@ type connectionMessage struct {
 	conn network.Conn
 }
 
+type PeerError struct {
+	id  peer.ID
+	err error
+}
+
 // ConnectionManager attempts to reconnect to peers using the network.Notifiee interface.
 type ConnectionManager struct {
-	host        host.Host
-	syncManager *SyncManager
-	gossip      *KoinosGossip
+	host   host.Host
+	gossip *KoinosGossip
 
-	Blacklist    *Blacklist
-	initialPeers map[peer.ID]peer.AddrInfo
-	rescanTicker *time.Ticker
+	initialPeers   map[peer.ID]peer.AddrInfo
+	connectedPeers map[peer.ID]*PeerConnection
 
 	peerConnectedChan    chan connectionMessage
 	peerDisconnectedChan chan connectionMessage
 	peerErrorChan        <-chan PeerError
-	rescanBlacklist      <-chan time.Time
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
-func NewConnectionManager(host host.Host, syncManager *SyncManager, gossip *KoinosGossip, blacklistOptions *options.BlacklistOptions, initialPeers []string, peerErrorChan <-chan PeerError) *ConnectionManager {
+func NewConnectionManager(host host.Host, gossip *KoinosGossip, initialPeers []string, peerErrorChan <-chan PeerError) *ConnectionManager {
 	connectionManager := ConnectionManager{
 		host:                 host,
-		syncManager:          syncManager,
 		gossip:               gossip,
-		Blacklist:            NewBlacklist(*blacklistOptions),
 		initialPeers:         make(map[peer.ID]peer.AddrInfo),
-		rescanTicker:         time.NewTicker(time.Duration(blacklistOptions.BlacklistRescanMs) * time.Millisecond),
 		peerConnectedChan:    make(chan connectionMessage),
 		peerDisconnectedChan: make(chan connectionMessage),
 		peerErrorChan:        peerErrorChan,
@@ -73,8 +70,6 @@ func NewConnectionManager(host host.Host, syncManager *SyncManager, gossip *Koin
 
 		connectionManager.initialPeers[addr.ID] = *addr
 	}
-
-	connectionManager.rescanBlacklist = connectionManager.rescanTicker.C
 
 	return &connectionManager
 }
@@ -106,27 +101,31 @@ func (p *ConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr
 }
 
 func (p *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
-	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
-
-	if p.Blacklist.IsPeerBlacklisted(msg.conn.RemotePeer()) {
-		p.host.Network().ClosePeer(msg.conn.RemotePeer())
-		log.Infof("Rejecting connection from blacklisted peer: %s", s)
-	}
+	pid := msg.conn.RemotePeer()
+	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), pid)
 
 	log.Infof("Connected to peer: %s", s)
 
-	p.syncManager.AddPeer(ctx, msg.conn.RemotePeer())
+	if _, ok := p.connectedPeers[msg.conn.RemotePeer()]; !ok {
+		peer := NewPeerConnection()
+		peer.Start()
+		p.connectedPeers[pid] = peer
+	}
 
-	vb := types.VariableBlob((s))
-	p.gossip.Peer.PublishMessage(ctx, &vb)
+	p.gossip.Peer.PublishMessage(ctx, []byte(s))
 }
 
 func (p *ConnectionManager) handleDisconnected(ctx context.Context, msg connectionMessage) {
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
 	log.Infof("Disconnected from peer: %s", s)
-	p.syncManager.RemovePeer(ctx, msg.conn.RemotePeer())
+	pid := msg.conn.RemotePeer()
 
-	if addr, ok := p.initialPeers[msg.conn.RemotePeer()]; ok {
+	if peer, ok := p.connectedPeers[pid]; ok {
+		peer.Stop()
+		delete(p.connectedPeers, pid)
+	}
+
+	if addr, ok := p.initialPeers[pid]; ok {
 		go func() {
 			sleepTimeSeconds := 1
 			for {
@@ -143,14 +142,13 @@ func (p *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 }
 
 func (p *ConnectionManager) handlePeerError(ctx context.Context, peerErr PeerError) {
-	if errors.Is(peerErr.Error, ErrGossip) {
+	if errors.Is(peerErr.err, ErrGossip) {
 		return
 	}
 
 	// TODO: When we implenent naughty points, here might be a good place to switch on different errors (#5)
 	// If peer quits with an error, blacklist it for a while so we don't spam reconnection attempts
-	p.Blacklist.AddPeerToBlacklist(peerErr)
-	p.host.Network().ClosePeer(peerErr.PeerID)
+	p.host.Network().ClosePeer(peerErr.id)
 }
 
 func (p *ConnectionManager) connectInitialPeers() {
@@ -191,8 +189,6 @@ func (p *ConnectionManager) connectToPeer(addr peer.AddrInfo) error {
 }
 
 func (p *ConnectionManager) managerLoop(ctx context.Context) {
-	defer p.rescanTicker.Stop()
-
 	for {
 		select {
 		case connMsg := <-p.peerConnectedChan:
@@ -201,8 +197,6 @@ func (p *ConnectionManager) managerLoop(ctx context.Context) {
 			p.handleDisconnected(ctx, connMsg)
 		case peerErr := <-p.peerErrorChan:
 			p.handlePeerError(ctx, peerErr)
-		case <-p.rescanBlacklist:
-			p.Blacklist.RemoveExpiredBlacklistEntries()
 
 		case <-ctx.Done():
 			return
@@ -214,7 +208,10 @@ func (p *ConnectionManager) managerLoop(ctx context.Context) {
 func (p *ConnectionManager) Start(ctx context.Context) {
 	go func() {
 		for _, peer := range p.host.Network().Peers() {
-			p.syncManager.AddPeer(ctx, peer)
+			conns := p.host.Network().ConnsToPeer(peer)
+			if len(conns) > 0 {
+				p.peerConnectedChan <- connectionMessage{net: p.host.Network(), conn: conns[0]}
+			}
 		}
 
 		go p.connectInitialPeers()
