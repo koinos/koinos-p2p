@@ -11,7 +11,7 @@ var (
 	// ErrDeserialization represents any sort of error deserializing a type using Koinos types
 	ErrDeserialization = errors.New("error during deserialization")
 
-	// ErrSeerialization represents any sort of error deserializing a type using Koinos types
+	// ErrSerialization represents any sort of error deserializing a type using Koinos types
 	ErrSerialization = errors.New("error during serialization")
 
 	// ErrBlockIrreversibility is when a block is earlier than irreversibility
@@ -29,10 +29,10 @@ var (
 	// ErrChainNotConnected represents that progress can not be made from peer
 	ErrChainNotConnected = errors.New("last irreversible block does not connect to peer chain")
 
-	// ErrLocalRPCTimeout represents an error occurred during a local rpc
+	// ErrLocalRPC represents an error occurred during a local rpc
 	ErrLocalRPC = errors.New("local RPC error")
 
-	// ErrPeerRPCTimeout represents an error occurred during a peer rpc
+	// ErrPeerRPC represents an error occurred during a peer rpc
 	ErrPeerRPC = errors.New("peer RPC error")
 
 	// ErrLocalRPCTimeout represents a local rpc timed out

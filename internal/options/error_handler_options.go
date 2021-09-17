@@ -17,6 +17,7 @@ const (
 	unknownErrorScoreDefault              = blockApplicationErrorScoreDefault
 )
 
+// PeerErrorHandlerOptions are options for PeerErrorHandler
 type PeerErrorHandlerOptions struct {
 	ErrorScoreDecayHalflife time.Duration
 	ErrorScoreThreshold     uint64
@@ -32,6 +33,7 @@ type PeerErrorHandlerOptions struct {
 	UnknownErrorScore              uint64
 }
 
+// NewPeerErrorHandlerOptions returns default initialized PeerErrorHandlerOptions
 func NewPeerErrorHandlerOptions() *PeerErrorHandlerOptions {
 	return &PeerErrorHandlerOptions{
 		ErrorScoreDecayHalflife:        errorScoreDecayHalflifeDefault,

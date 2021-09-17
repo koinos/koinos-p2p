@@ -29,6 +29,8 @@ type canConnectRequest struct {
 	resultChan chan bool
 }
 
+// PeerErrorHandler handles PeerErrors and tracks errors over time
+// to determine if a peer should be disconnected from
 type PeerErrorHandler struct {
 	errorScores    map[peer.ID]*errorScoreRecord
 	peerNetwork    network.Network
@@ -38,6 +40,7 @@ type PeerErrorHandler struct {
 	opts options.PeerErrorHandlerOptions
 }
 
+// CanConnect to peer if the peer's error score is below the error score threshold
 func (p *PeerErrorHandler) CanConnect(ctx context.Context, id peer.ID) bool {
 	resultChan := make(chan bool, 1)
 	p.canConnectChan <- canConnectRequest{
@@ -104,12 +107,13 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 }
 
 func (p *PeerErrorHandler) decayErrorScore(record *errorScoreRecord) {
-	decay_constant := float64(p.opts.ErrorScoreDecayHalflife) / math.Log(2)
+	decayConstant := float64(p.opts.ErrorScoreDecayHalflife) / math.Log(2)
 	now := time.Now()
-	record.score = uint64(float64(record.score) * math.Exp(-1*decay_constant*float64(now.Sub(record.lastUpdate))))
+	record.score = uint64(float64(record.score) * math.Exp(-1*decayConstant*float64(now.Sub(record.lastUpdate))))
 	record.lastUpdate = now
 }
 
+// Start processing peer errors
 func (p *PeerErrorHandler) Start(ctx context.Context) {
 	go func() {
 		for {
@@ -126,6 +130,7 @@ func (p *PeerErrorHandler) Start(ctx context.Context) {
 	}()
 }
 
+// NewPeerErrorHandler creates a new PeerErrorHandler
 func NewPeerErrorHandler(peerNetwork network.Network, peerErrorChan chan PeerError, opts options.PeerErrorHandlerOptions) *PeerErrorHandler {
 	return &PeerErrorHandler{
 		errorScores:    make(map[peer.ID]*errorScoreRecord),
