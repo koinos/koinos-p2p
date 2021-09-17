@@ -24,4 +24,14 @@ var (
 
 	// ErrBlockApplication represents any error applying the block in chain
 	ErrBlockApplication = errors.New("block application failed")
+
+	// ErrChainIDMismatch represents the peer has a different chain id
+	ErrChainIDMismatch = errors.New("chain id does not match peer's")
+
+	// ErrChainNotConnected represents that progress can not be made from peer
+	ErrChainNotConnected = errors.New("last irreversible block does not connect to peer chain")
+
+	ErrLocalRPCTimeout = errors.New("local RPC request timed out")
+
+	ErrPeerRPCTimeout = errors.New("peer RPC request timed out")
 )
