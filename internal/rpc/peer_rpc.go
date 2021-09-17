@@ -2,14 +2,11 @@ package rpc
 
 import (
 	"context"
-	"encoding/hex"
 
-	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/multiformats/go-multihash"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -61,13 +58,10 @@ func (p *PeerRPC) GetBlocks(ctx context.Context, headBlockID *multihash.Multihas
 	blocks = make([]protocol.Block, len(rpcResp.Blocks))
 
 	for i, blockBytes := range rpcResp.Blocks {
-		log.Info(hex.EncodeToString(blockBytes))
 		err = proto.Unmarshal(blockBytes, &blocks[i])
 		if err != nil {
 			return nil, err
 		}
-		bytes, _ := protojson.Marshal(&blocks[i])
-		log.Info(string(bytes))
 	}
 
 	return blocks, nil

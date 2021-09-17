@@ -36,6 +36,15 @@ func (p *PeerConnection) requestBlocks() {
 }
 
 func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
+	// Get my head info
+	rpcContext, cancelZ := context.WithTimeout(ctx, time.Second*3)
+	defer cancelZ()
+	forkHeads, err := p.localRPC.GetForkHeads(rpcContext)
+	if err != nil {
+		return err
+	}
+	p.lastIrreversibleBlock = (*koinos.BlockTopology)(forkHeads.LastIrreversibleBlock)
+
 	// Get peer's head block
 	log.Info("Getting peer head block")
 	rpcContext, cancelA := context.WithTimeout(ctx, time.Second*3)
@@ -45,14 +54,14 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		return err
 	}
 	log.Infof("head block: %s, height: %s", hex.EncodeToString(*peerHeadID), peerHeadHeight)
-	log.Infof("my irreversible block: %s", p.lastIrreversibleBlock.String())
+	log.Infof("my irreversible block: %s", hex.EncodeToString(p.lastIrreversibleBlock.Id))
 
 	// If the peer is in the past, it is not an error, but we don't need anything from them
 	if peerHeadHeight <= p.lastIrreversibleBlock.Height {
 		time.AfterFunc(time.Second*3, p.requestBlocks)
 		return nil
 	}
-	log.Infof("%s", p.lastIrreversibleBlock.Height)
+	log.Infof("%v", p.lastIrreversibleBlock.Height)
 
 	// If LIB is 0, we are still at genesis and could connec to any chain
 	if p.lastIrreversibleBlock.Height > 0 {
@@ -69,14 +78,20 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		log.Infof("Got back %s", ancestorBlock.String())
 
 		if bytes.Compare([]byte(*ancestorBlock), []byte(p.lastIrreversibleBlock.Id)) != 0 {
+			log.Infof("Doesn't match")
 			return errors.New("my irreversible block is not an ancestor of peer's head block")
 		}
+	}
+
+	blocksToRequest := peerHeadHeight - p.lastIrreversibleBlock.Height
+	if blocksToRequest > 100 {
+		blocksToRequest = 100
 	}
 
 	// Request blocks
 	rpcContext, cancelC := context.WithTimeout(ctx, time.Second*5)
 	defer cancelC()
-	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height+1, 1)
+	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height+1, uint32(blocksToRequest))
 	if err != nil {
 		return err
 	}
@@ -91,7 +106,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		}
 	}
 
-	p.requestBlocks()
+	go p.requestBlocks()
 	return nil
 }
 

@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc"
@@ -87,8 +85,6 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 			},
 		},
 	}
-
-	log.Infof("%s", args.String())
 
 	data, err := proto.Marshal(args)
 
@@ -194,8 +190,6 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Mult
 		return nil, err
 	}
 
-	log.Debugf("GetBlocksByID() response: %s", responseBytes)
-
 	responseVariant := &block_store.BlockStoreResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
@@ -230,8 +224,6 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *multihash.Mu
 		},
 	}
 
-	json, _ := protojson.Marshal(args)
-	log.Info(string(json))
 	data, err := proto.Marshal(args)
 
 	if err != nil {
@@ -281,7 +273,6 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, 
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
-	log.Debugf("GetChainID() response was %s", responseBytes)
 
 	if err != nil {
 		return nil, err

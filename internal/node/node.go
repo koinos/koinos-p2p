@@ -176,6 +176,7 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 		return
 	}
 	n.Gossip.HandleForkHeads(forkHeads)
+	n.ConnectionManager.HandleForkHeads(forkHeads)
 }
 
 // PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string
