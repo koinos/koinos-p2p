@@ -26,11 +26,33 @@ type PeerConnection struct {
 }
 
 func (p *PeerConnection) UpdateLastIrreversibleBlock(lib *koinos.BlockTopology) {
-	p.libChan <- lib
+	//p.libChan <- lib
 }
 
 func (p *PeerConnection) requestBlocks() {
 	p.requestBlockChan <- signalRequestBlocks{}
+}
+
+func (p *PeerConnection) handshake(ctx context.Context) error {
+	rpcContext, cancelLocalGetChainID := context.WithTimeout(ctx, time.Second*3)
+	defer cancelLocalGetChainID()
+	myChainID, err := p.localRPC.GetChainID(rpcContext)
+	if err != nil {
+		return err
+	}
+
+	rpcContext, cancelPeerGetChainID := context.WithTimeout(ctx, time.Second*3)
+	defer cancelPeerGetChainID()
+	peerChainID, err := p.peerRPC.GetChainID(rpcContext)
+	if err != nil {
+		return err
+	}
+
+	if bytes.Compare(myChainID.ChainId, *peerChainID) != 0 {
+		return errors.New("my irreversible block is not an ancestor of peer's head block")
+	}
+
+	return nil
 }
 
 func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
@@ -73,8 +95,8 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	blocksToRequest := peerHeadHeight - p.lastIrreversibleBlock.Height
-	if blocksToRequest > 100 {
-		blocksToRequest = 100
+	if blocksToRequest > 500 {
+		blocksToRequest = 500
 	}
 
 	// Request blocks
@@ -111,25 +133,32 @@ func (p *PeerConnection) handleUpdateLastIrreversibleBlock(ctx context.Context, 
 }
 
 func (p *PeerConnection) Start(ctx context.Context) {
-	go func() {
-		for {
-			select {
-			case <-p.requestBlockChan:
-				err := p.handleRequestBlocks(ctx)
-				if err != nil {
-					p.peerErrorChan <- PeerError{id: p.id, err: err}
-					time.AfterFunc(time.Second, p.requestBlocks)
+	err := p.handshake(ctx)
+	if err != nil {
+		go func() {
+			p.peerErrorChan <- PeerError{id: p.id, err: err}
+		}()
+	} else {
+		go func() {
+			for {
+				select {
+				case <-p.requestBlockChan:
+					err := p.handleRequestBlocks(ctx)
+					if err != nil {
+						p.peerErrorChan <- PeerError{id: p.id, err: err}
+						time.AfterFunc(time.Second, p.requestBlocks)
+					}
+				case lib := <-p.libChan:
+					p.handleUpdateLastIrreversibleBlock(ctx, lib)
+
+				case <-ctx.Done():
+					return
 				}
-			case lib := <-p.libChan:
-				p.handleUpdateLastIrreversibleBlock(ctx, lib)
-
-			case <-ctx.Done():
-				return
 			}
-		}
-	}()
+		}()
 
-	p.requestBlocks()
+		go p.requestBlocks()
+	}
 }
 
 func NewPeerConnection(id peer.ID, lib *koinos.BlockTopology, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError) *PeerConnection {
