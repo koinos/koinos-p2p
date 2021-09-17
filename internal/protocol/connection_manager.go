@@ -8,7 +8,6 @@ import (
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
 
@@ -34,11 +33,6 @@ type connectionMessage struct {
 	conn network.Conn
 }
 
-type PeerError struct {
-	id  peer.ID
-	err error
-}
-
 type peerConnectionContext struct {
 	peer   *PeerConnection
 	cancel context.CancelFunc
@@ -56,8 +50,6 @@ type ConnectionManager struct {
 	initialPeers   map[peer.ID]peer.AddrInfo
 	connectedPeers map[peer.ID]*peerConnectionContext
 
-	lastIrreversibleBlock koinos.BlockTopology
-
 	peerConnectedChan    chan connectionMessage
 	peerDisconnectedChan chan connectionMessage
 	forkHeadsChan        chan *broadcast.ForkHeads
@@ -65,20 +57,19 @@ type ConnectionManager struct {
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
-func NewConnectionManager(host host.Host, gossip *KoinosGossip, localRPC rpc.LocalRPC, initialPeers []string, peerErrorChan chan PeerError, lib *koinos.BlockTopology) *ConnectionManager {
+func NewConnectionManager(host host.Host, gossip *KoinosGossip, localRPC rpc.LocalRPC, initialPeers []string, peerErrorChan chan PeerError) *ConnectionManager {
 	connectionManager := ConnectionManager{
-		host:                  host,
-		client:                gorpc.NewClient(host, rpc.PeerRPCID),
-		server:                gorpc.NewServer(host, rpc.PeerRPCID),
-		gossip:                gossip,
-		localRPC:              localRPC,
-		initialPeers:          make(map[peer.ID]peer.AddrInfo),
-		connectedPeers:        make(map[peer.ID]*peerConnectionContext),
-		lastIrreversibleBlock: *lib,
-		peerConnectedChan:     make(chan connectionMessage),
-		peerDisconnectedChan:  make(chan connectionMessage),
-		forkHeadsChan:         make(chan *broadcast.ForkHeads),
-		peerErrorChan:         peerErrorChan,
+		host:                 host,
+		client:               gorpc.NewClient(host, rpc.PeerRPCID),
+		server:               gorpc.NewServer(host, rpc.PeerRPCID),
+		gossip:               gossip,
+		localRPC:             localRPC,
+		initialPeers:         make(map[peer.ID]peer.AddrInfo),
+		connectedPeers:       make(map[peer.ID]*peerConnectionContext),
+		peerConnectedChan:    make(chan connectionMessage),
+		peerDisconnectedChan: make(chan connectionMessage),
+		forkHeadsChan:        make(chan *broadcast.ForkHeads),
+		peerErrorChan:        peerErrorChan,
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -148,7 +139,6 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 		peerConn := &peerConnectionContext{
 			peer: NewPeerConnection(
 				pid,
-				&c.lastIrreversibleBlock,
 				c.localRPC,
 				rpc.NewPeerRPC(c.client, pid),
 				c.peerErrorChan,
@@ -201,13 +191,6 @@ func (c *ConnectionManager) handlePeerError(ctx context.Context, peerErr PeerErr
 	c.host.Network().ClosePeer(peerErr.id)
 }
 
-func (c *ConnectionManager) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
-	c.lastIrreversibleBlock = *forkHeads.LastIrreversibleBlock
-	for _, peerConn := range c.connectedPeers {
-		peerConn.peer.UpdateLastIrreversibleBlock(&c.lastIrreversibleBlock)
-	}
-}
-
 func (c *ConnectionManager) connectInitialPeers() {
 	newlyConnectedPeers := make(map[peer.ID]util.Void)
 	peersToConnect := make(map[peer.ID]peer.AddrInfo)
@@ -254,8 +237,6 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleDisconnected(ctx, connMsg)
 		case peerErr := <-c.peerErrorChan:
 			c.handlePeerError(ctx, peerErr)
-		case forkHeads := <-c.forkHeadsChan:
-			c.handleForkHeads(ctx, forkHeads)
 
 		case <-ctx.Done():
 			return

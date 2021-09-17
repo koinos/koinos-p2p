@@ -20,7 +20,7 @@ const (
 	BlockStoreRPC = "block_store"
 )
 
-// KoinosRPC Implementation of RPC Interface
+// KoinosRPC implements LocalRPC implementation by communicating with a local Koinos node via AMQP
 type KoinosRPC struct {
 	mq *koinosmq.Client
 }

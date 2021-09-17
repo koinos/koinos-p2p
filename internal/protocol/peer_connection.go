@@ -7,26 +7,20 @@ import (
 	"time"
 
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 type signalRequestBlocks struct{}
 
+// PeerConnection handles the sync portion of a connection to a peer
 type PeerConnection struct {
-	id                    peer.ID
-	lastIrreversibleBlock *koinos.BlockTopology
+	id peer.ID
 
 	requestBlockChan chan signalRequestBlocks
-	libChan          chan *koinos.BlockTopology
 
 	localRPC      rpc.LocalRPC
 	peerRPC       rpc.RemoteRPC
 	peerErrorChan chan<- PeerError
-}
-
-func (p *PeerConnection) UpdateLastIrreversibleBlock(lib *koinos.BlockTopology) {
-	//p.libChan <- lib
 }
 
 func (p *PeerConnection) requestBlocks() {
@@ -63,7 +57,6 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.lastIrreversibleBlock = (*koinos.BlockTopology)(forkHeads.LastIrreversibleBlock)
 
 	// Get peer's head block
 	rpcContext, cancelA := context.WithTimeout(ctx, time.Second*3)
@@ -74,27 +67,27 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// If the peer is in the past, it is not an error, but we don't need anything from them
-	if peerHeadHeight <= p.lastIrreversibleBlock.Height {
+	if peerHeadHeight <= forkHeads.LastIrreversibleBlock.Height {
 		time.AfterFunc(time.Second*3, p.requestBlocks)
 		return nil
 	}
 
 	// If LIB is 0, we are still at genesis and could connec to any chain
-	if p.lastIrreversibleBlock.Height > 0 {
+	if forkHeads.LastIrreversibleBlock.Height > 0 {
 		// Check if my LIB connect's to peer's head block
 		rpcContext, cancelB := context.WithTimeout(ctx, time.Second*3)
 		defer cancelB()
-		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height)
+		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height)
 		if err != nil {
 			return err
 		}
 
-		if bytes.Compare([]byte(*ancestorBlock), []byte(p.lastIrreversibleBlock.Id)) != 0 {
+		if bytes.Compare([]byte(*ancestorBlock), []byte(forkHeads.LastIrreversibleBlock.Id)) != 0 {
 			return errors.New("my irreversible block is not an ancestor of peer's head block")
 		}
 	}
 
-	blocksToRequest := peerHeadHeight - p.lastIrreversibleBlock.Height
+	blocksToRequest := peerHeadHeight - forkHeads.LastIrreversibleBlock.Height
 	if blocksToRequest > 500 {
 		blocksToRequest = 500
 	}
@@ -102,7 +95,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Request blocks
 	rpcContext, cancelC := context.WithTimeout(ctx, time.Second*5)
 	defer cancelC()
-	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height+1, uint32(blocksToRequest))
+	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height+1, uint32(blocksToRequest))
 	if err != nil {
 		return err
 	}
@@ -128,10 +121,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	return nil
 }
 
-func (p *PeerConnection) handleUpdateLastIrreversibleBlock(ctx context.Context, lib *koinos.BlockTopology) {
-	p.lastIrreversibleBlock = lib
-}
-
+// Start syncing to the peer
 func (p *PeerConnection) Start(ctx context.Context) {
 	err := p.handshake(ctx)
 	if err != nil {
@@ -148,8 +138,6 @@ func (p *PeerConnection) Start(ctx context.Context) {
 						p.peerErrorChan <- PeerError{id: p.id, err: err}
 						time.AfterFunc(time.Second, p.requestBlocks)
 					}
-				case lib := <-p.libChan:
-					p.handleUpdateLastIrreversibleBlock(ctx, lib)
 
 				case <-ctx.Done():
 					return
@@ -161,14 +149,13 @@ func (p *PeerConnection) Start(ctx context.Context) {
 	}
 }
 
-func NewPeerConnection(id peer.ID, lib *koinos.BlockTopology, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError) *PeerConnection {
+// NewPeerConnection creates a PeerConnection
+func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError) *PeerConnection {
 	return &PeerConnection{
-		id:                    id,
-		lastIrreversibleBlock: lib,
-		requestBlockChan:      make(chan signalRequestBlocks),
-		libChan:               make(chan *koinos.BlockTopology),
-		localRPC:              localRPC,
-		peerRPC:               peerRPC,
-		peerErrorChan:         peerErrorChan,
+		id:               id,
+		requestBlockChan: make(chan signalRequestBlocks),
+		localRPC:         localRPC,
+		peerRPC:          peerRPC,
+		peerErrorChan:    peerErrorChan,
 	}
 }

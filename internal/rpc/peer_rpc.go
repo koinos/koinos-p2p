@@ -10,15 +10,18 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// PeerRPC implements RemoteRPC interface by communicating via libp2p's gorpc
 type PeerRPC struct {
 	client *gorpc.Client
 	peerID peer.ID
 }
 
+// NewPeerRPC creates a PeerRPC
 func NewPeerRPC(client *gorpc.Client, peerID peer.ID) *PeerRPC {
 	return &PeerRPC{client: client, peerID: peerID}
 }
 
+// GetChainID rpc call
 func (p *PeerRPC) GetChainID(ctx context.Context) (id *multihash.Multihash, err error) {
 	rpcReq := &GetChainIDRequest{}
 	rpcResp := &GetChainIDResponse{}
@@ -26,6 +29,7 @@ func (p *PeerRPC) GetChainID(ctx context.Context) (id *multihash.Multihash, err 
 	return &rpcResp.ID, err
 }
 
+// GetHeadBlock rpc call
 func (p *PeerRPC) GetHeadBlock(ctx context.Context) (id *multihash.Multihash, height uint64, err error) {
 	rpcReq := &GetHeadBlockRequest{}
 	rpcResp := &GetHeadBlockResponse{}
@@ -33,6 +37,7 @@ func (p *PeerRPC) GetHeadBlock(ctx context.Context) (id *multihash.Multihash, he
 	return &rpcResp.ID, rpcResp.Height, err
 }
 
+// GetAncestorBlockID rpc call
 func (p *PeerRPC) GetAncestorBlockID(ctx context.Context, parentID *multihash.Multihash, childHeight uint64) (id *multihash.Multihash, err error) {
 	rpcReq := &GetAncestorBlockIDRequest{
 		ParentID:    parentID,
@@ -43,6 +48,7 @@ func (p *PeerRPC) GetAncestorBlockID(ctx context.Context, parentID *multihash.Mu
 	return &rpcResp.ID, err
 }
 
+// GetBlocks rpc call
 func (p *PeerRPC) GetBlocks(ctx context.Context, headBlockID *multihash.Multihash, startBlockHeight uint64, numBlocks uint32) (blocks []protocol.Block, err error) {
 	rpcReq := &GetBlocksRequest{
 		HeadBlockID:      headBlockID,
