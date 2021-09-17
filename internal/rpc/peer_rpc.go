@@ -29,10 +29,13 @@ func (p *PeerRPC) GetChainID(ctx context.Context) (id multihash.Multihash, err e
 	rpcReq := &GetChainIDRequest{}
 	rpcResp := &GetChainIDResponse{}
 	err = p.client.CallContext(ctx, p.peerID, "PeerRPCService", "GetChainID", rpcReq, rpcResp)
-	if errors.Is(err, context.DeadlineExceeded) {
-		return rpcResp.ID, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
+		}
+		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
 	}
-	return rpcResp.ID, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
+	return rpcResp.ID, err
 }
 
 // GetHeadBlock rpc call
@@ -40,10 +43,13 @@ func (p *PeerRPC) GetHeadBlock(ctx context.Context) (id multihash.Multihash, hei
 	rpcReq := &GetHeadBlockRequest{}
 	rpcResp := &GetHeadBlockResponse{}
 	err = p.client.CallContext(ctx, p.peerID, "PeerRPCService", "GetHeadBlock", rpcReq, rpcResp)
-	if errors.Is(err, context.DeadlineExceeded) {
-		return rpcResp.ID, rpcResp.Height, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
+		}
+		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
 	}
-	return rpcResp.ID, rpcResp.Height, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
+	return rpcResp.ID, rpcResp.Height, err
 }
 
 // GetAncestorBlockID rpc call
@@ -54,10 +60,13 @@ func (p *PeerRPC) GetAncestorBlockID(ctx context.Context, parentID multihash.Mul
 	}
 	rpcResp := &GetAncestorBlockIDResponse{}
 	err = p.client.CallContext(ctx, p.peerID, "PeerRPCService", "GetAncestorBlockID", rpcReq, rpcResp)
-	if errors.Is(err, context.DeadlineExceeded) {
-		return rpcResp.ID, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
+		}
+		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
 	}
-	return rpcResp.ID, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
+	return rpcResp.ID, err
 }
 
 // GetBlocks rpc call
