@@ -3,10 +3,12 @@ package rpc
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"google.golang.org/protobuf/proto"
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
+	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
@@ -41,22 +43,23 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoRespons
 	}
 
 	data, err := proto.Marshal(args)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
-
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &chain.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	var response *chain.GetHeadInfoResponse
@@ -65,9 +68,9 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoRespons
 	case *chain.ChainResponse_GetHeadInfo:
 		response = t.GetHeadInfo
 	case *chain.ChainResponse_Error:
-		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
+		err = fmt.Errorf("%w, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
-		err = errors.New("unexpected chain rpc response")
+		err = fmt.Errorf("%w, unexpected chain rpc response", p2perrors.ErrLocalRPC)
 	}
 
 	return response, err
@@ -87,22 +90,23 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 	}
 
 	data, err := proto.Marshal(args)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
-
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &chain.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	var response *chain.SubmitBlockResponse
@@ -111,9 +115,9 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 	case *chain.ChainResponse_SubmitBlock:
 		response = t.SubmitBlock
 	case *chain.ChainResponse_Error:
-		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
+		err = fmt.Errorf("%w, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
-		err = errors.New("unexpected chain rpc response")
+		err = fmt.Errorf("%w, unexpected chain rpc response", p2perrors.ErrLocalRPC)
 	}
 
 	return response, err
@@ -130,22 +134,23 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transact
 	}
 
 	data, err := proto.Marshal(args)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
-
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &chain.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	var response *chain.SubmitTransactionResponse
@@ -154,9 +159,9 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transact
 	case *chain.ChainResponse_SubmitTransaction:
 		response = t.SubmitTransaction
 	case *chain.ChainResponse_Error:
-		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
+		err = fmt.Errorf("%w, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
-		err = errors.New("unexpected chain rpc response")
+		err = fmt.Errorf("%w, unexpected chain rpc response", p2perrors.ErrLocalRPC)
 	}
 
 	return response, err
@@ -181,19 +186,22 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Mult
 
 	data, err := proto.Marshal(args)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", BlockStoreRPC, data)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &block_store.BlockStoreResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	var response *block_store.GetBlocksByIdResponse
@@ -202,20 +210,20 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Mult
 	case *block_store.BlockStoreResponse_GetBlocksById:
 		response = t.GetBlocksById
 	case *block_store.BlockStoreResponse_Error:
-		err = errors.New("block_store rpc error, " + string(t.Error.GetMessage()))
+		err = fmt.Errorf("%w, block_store rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
-		err = errors.New("unexpected block_store rpc response")
+		err = fmt.Errorf("%w, unexpected block_store rpc response", p2perrors.ErrLocalRPC)
 	}
 
 	return response, err
 }
 
 // GetBlocksByHeight rpc call
-func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
+func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
 	args := &block_store.BlockStoreRequest{
 		Request: &block_store.BlockStoreRequest_GetBlocksByHeight{
 			GetBlocksByHeight: &block_store.GetBlocksByHeightRequest{
-				HeadBlockId:         *blockID,
+				HeadBlockId:         blockID,
 				AncestorStartHeight: height,
 				NumBlocks:           numBlocks,
 				ReturnBlock:         true,
@@ -225,22 +233,23 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *multihash.Mu
 	}
 
 	data, err := proto.Marshal(args)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", BlockStoreRPC, data)
-
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &block_store.BlockStoreResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	var response *block_store.GetBlocksByHeightResponse
@@ -249,9 +258,9 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID *multihash.Mu
 	case *block_store.BlockStoreResponse_GetBlocksByHeight:
 		response = t.GetBlocksByHeight
 	case *block_store.BlockStoreResponse_Error:
-		err = errors.New("block_store rpc error, " + string(t.Error.GetMessage()))
+		err = fmt.Errorf("%w, block_store rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
-		err = errors.New("unexpected block_store rpc response")
+		err = fmt.Errorf("%w, unexpected block_store rpc response", p2perrors.ErrLocalRPC)
 	}
 
 	return response, err
@@ -266,22 +275,23 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, 
 	}
 
 	data, err := proto.Marshal(args)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
-
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &chain.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	var response *chain.GetChainIdResponse
@@ -290,9 +300,9 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, 
 	case *chain.ChainResponse_GetChainId:
 		response = t.GetChainId
 	case *chain.ChainResponse_Error:
-		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
+		err = fmt.Errorf("%w, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
-		err = errors.New("unexpected chain rpc response")
+		err = fmt.Errorf("%w, unexpected chain rpc response", p2perrors.ErrLocalRPC)
 	}
 
 	return response, err
@@ -307,22 +317,23 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsRespon
 	}
 
 	data, err := proto.Marshal(args)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
-
 	if err != nil {
-		return nil, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &chain.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	var response *chain.GetForkHeadsResponse
@@ -331,9 +342,9 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsRespon
 	case *chain.ChainResponse_GetForkHeads:
 		response = t.GetForkHeads
 	case *chain.ChainResponse_Error:
-		err = errors.New("chain rpc error, " + string(t.Error.GetMessage()))
+		err = fmt.Errorf("%w, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
-		err = errors.New("unexpected chain rpc response")
+		err = fmt.Errorf("%w, unexpected chain rpc response", p2perrors.ErrLocalRPC)
 	}
 
 	return response, err
@@ -349,22 +360,23 @@ func (k *KoinosRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 	}
 
 	data, err := proto.Marshal(args)
-
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", BlockStoreRPC, data)
-
 	if err != nil {
-		return false, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return false, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return false, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &block_store.BlockStoreResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	return true, nil
@@ -380,22 +392,23 @@ func (k *KoinosRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
 	}
 
 	data, err := proto.Marshal(args)
-
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", ChainRPC, data)
-
 	if err != nil {
-		return false, err
+		if errors.Is(err, context.DeadlineExceeded) {
+			return false, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPCTimeout, err)
+		}
+		return false, fmt.Errorf("%w, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &chain.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
 	return true, nil

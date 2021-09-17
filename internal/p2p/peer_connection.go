@@ -1,12 +1,12 @@
-package protocol
+package p2p
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
@@ -35,9 +35,6 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 	defer cancelLocalGetChainID()
 	myChainID, err := p.localRPC.GetChainID(rpcContext)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return ErrLocalRPCTimeout
-		}
 		return err
 	}
 
@@ -46,14 +43,11 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 	defer cancelPeerGetChainID()
 	peerChainID, err := p.peerRPC.GetChainID(rpcContext)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return ErrPeerRPCTimeout
-		}
 		return err
 	}
 
-	if bytes.Compare(myChainID.ChainId, *peerChainID) != 0 {
-		return ErrChainIDMismatch
+	if bytes.Compare(myChainID.ChainId, peerChainID) != 0 {
+		return p2perrors.ErrChainIDMismatch
 	}
 
 	// TODO: Check checkpoints (#165)
@@ -67,9 +61,6 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	defer cancelGetForkHeads()
 	forkHeads, err := p.localRPC.GetForkHeads(rpcContext)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return ErrLocalRPCTimeout
-		}
 		return err
 	}
 
@@ -78,9 +69,6 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	defer cancelGetPeerHead()
 	peerHeadID, peerHeadHeight, err := p.peerRPC.GetHeadBlock(rpcContext)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return ErrPeerRPCTimeout
-		}
 		return err
 	}
 
@@ -97,14 +85,11 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		defer cancelGetAncestorBlock()
 		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return ErrPeerRPCTimeout
-			}
 			return err
 		}
 
-		if bytes.Compare([]byte(*ancestorBlock), []byte(forkHeads.LastIrreversibleBlock.Id)) != 0 {
-			return ErrChainNotConnected
+		if bytes.Compare([]byte(ancestorBlock), []byte(forkHeads.LastIrreversibleBlock.Id)) != 0 {
+			return p2perrors.ErrChainNotConnected
 		}
 	}
 
@@ -118,9 +103,6 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	defer cancelGetBlocks()
 	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height+1, uint32(blocksToRequest))
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return ErrPeerRPCTimeout
-		}
 		return err
 	}
 
@@ -130,10 +112,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		defer cancelApplyBlock()
 		_, err = p.localRPC.ApplyBlock(rpcContext, &block)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return ErrLocalRPCTimeout
-			}
-			return fmt.Errorf("%w: %s", ErrBlockApplication, err.Error())
+			return fmt.Errorf("%w: %s", p2perrors.ErrBlockApplication, err.Error())
 		}
 	}
 

@@ -13,7 +13,7 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
-	"github.com/koinos/koinos-p2p/internal/protocol"
+	"github.com/koinos/koinos-p2p/internal/p2p"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
@@ -34,9 +34,10 @@ import (
 type KoinosP2PNode struct {
 	Host              host.Host
 	localRPC          rpc.LocalRPC
-	Gossip            *protocol.KoinosGossip
-	ConnectionManager *protocol.ConnectionManager
-	PeerErrorChan     chan protocol.PeerError
+	Gossip            *p2p.KoinosGossip
+	ConnectionManager *p2p.ConnectionManager
+	PeerErrorHandler  *p2p.PeerErrorHandler
+	PeerErrorChan     chan p2p.PeerError
 
 	Options options.NodeOptions
 }
@@ -75,7 +76,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	}
 
 	node.Options = config.NodeOptions
-	node.PeerErrorChan = make(chan protocol.PeerError)
+	node.PeerErrorChan = make(chan p2p.PeerError)
 
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {
@@ -107,7 +108,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		return nil, err
 	}
 
-	node.Gossip = protocol.NewKoinosGossip(
+	node.Gossip = p2p.NewKoinosGossip(
 		ctx,
 		node.localRPC,
 		ps,
@@ -115,9 +116,15 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node,
 		node.Host.ID())
 
-	node.ConnectionManager = protocol.NewConnectionManager(
+	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
+		node.Host.Network(),
+		node.PeerErrorChan,
+		config.PeerErrorHandlerOptions)
+
+	node.ConnectionManager = p2p.NewConnectionManager(
 		node.Host,
 		node.Gossip,
+		node.PeerErrorHandler,
 		node.localRPC,
 		node.Options.InitialPeers,
 		node.PeerErrorChan)
@@ -246,6 +253,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 
 	// Start peer gossip
 	n.Gossip.StartPeerGossip(ctx)
+	n.PeerErrorHandler.Start(ctx)
 	n.ConnectionManager.Start(ctx)
 }
 
@@ -286,7 +294,7 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 func generateMessageID(msg *pb.Message) string {
 	// Use the default unique ID function for peer exchange
 	switch *msg.Topic {
-	case protocol.BlockTopicName, protocol.TransactionTopicName, protocol.PeerTopicName:
+	case p2p.BlockTopicName, p2p.TransactionTopicName, p2p.PeerTopicName:
 		// Hash the data
 		h := sha256.New()
 		h.Write(msg.Data)

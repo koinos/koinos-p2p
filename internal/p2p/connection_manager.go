@@ -1,8 +1,7 @@
-package protocol
+package p2p
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -44,8 +43,9 @@ type ConnectionManager struct {
 	server *gorpc.Server
 	client *gorpc.Client
 
-	gossip   *KoinosGossip
-	localRPC rpc.LocalRPC
+	gossip       *KoinosGossip
+	errorHandler *PeerErrorHandler
+	localRPC     rpc.LocalRPC
 
 	initialPeers   map[peer.ID]peer.AddrInfo
 	connectedPeers map[peer.ID]*peerConnectionContext
@@ -53,11 +53,11 @@ type ConnectionManager struct {
 	peerConnectedChan    chan connectionMessage
 	peerDisconnectedChan chan connectionMessage
 	forkHeadsChan        chan *broadcast.ForkHeads
-	peerErrorChan        chan PeerError
+	peerErrorChan        chan<- PeerError
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
-func NewConnectionManager(host host.Host, gossip *KoinosGossip, localRPC rpc.LocalRPC, initialPeers []string, peerErrorChan chan PeerError) *ConnectionManager {
+func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *PeerErrorHandler, localRPC rpc.LocalRPC, initialPeers []string, peerErrorChan chan<- PeerError) *ConnectionManager {
 	connectionManager := ConnectionManager{
 		host:                 host,
 		client:               gorpc.NewClient(host, rpc.PeerRPCID),
@@ -179,18 +179,6 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 	}
 }
 
-func (c *ConnectionManager) handlePeerError(ctx context.Context, peerErr PeerError) {
-	if errors.Is(peerErr.err, ErrGossip) {
-		return
-	}
-
-	log.Infof("Encountered peer error: %s, %s", peerErr.id, peerErr.err.Error())
-
-	// TODO: When we implenent naughty points, here might be a good place to switch on different errors (#5)
-	// If peer quits with an error, blacklist it for a while so we don't spam reconnection attempts
-	c.host.Network().ClosePeer(peerErr.id)
-}
-
 func (c *ConnectionManager) connectInitialPeers() {
 	newlyConnectedPeers := make(map[peer.ID]util.Void)
 	peersToConnect := make(map[peer.ID]peer.AddrInfo)
@@ -235,8 +223,6 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleConnected(ctx, connMsg)
 		case connMsg := <-c.peerDisconnectedChan:
 			c.handleDisconnected(ctx, connMsg)
-		case peerErr := <-c.peerErrorChan:
-			c.handlePeerError(ctx, peerErr)
 
 		case <-ctx.Done():
 			return

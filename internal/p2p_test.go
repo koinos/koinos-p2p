@@ -119,7 +119,7 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multih
 }
 
 // GetBlocksByHeight rpc call
-func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
+func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
 	blocks := &block_store.GetBlocksByHeightResponse{}
 	for i := uint64(0); i < uint64(numBlocks); i++ {
 		if height+i > k.Height {
