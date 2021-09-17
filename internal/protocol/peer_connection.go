@@ -3,11 +3,9 @@ package protocol
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"time"
 
-	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -46,39 +44,30 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	p.lastIrreversibleBlock = (*koinos.BlockTopology)(forkHeads.LastIrreversibleBlock)
 
 	// Get peer's head block
-	log.Info("Getting peer head block")
 	rpcContext, cancelA := context.WithTimeout(ctx, time.Second*3)
 	defer cancelA()
 	peerHeadID, peerHeadHeight, err := p.peerRPC.GetHeadBlock(rpcContext)
 	if err != nil {
 		return err
 	}
-	log.Infof("head block: %s, height: %s", hex.EncodeToString(*peerHeadID), peerHeadHeight)
-	log.Infof("my irreversible block: %s", hex.EncodeToString(p.lastIrreversibleBlock.Id))
 
 	// If the peer is in the past, it is not an error, but we don't need anything from them
 	if peerHeadHeight <= p.lastIrreversibleBlock.Height {
 		time.AfterFunc(time.Second*3, p.requestBlocks)
 		return nil
 	}
-	log.Infof("%v", p.lastIrreversibleBlock.Height)
 
 	// If LIB is 0, we are still at genesis and could connec to any chain
 	if p.lastIrreversibleBlock.Height > 0 {
 		// Check if my LIB connect's to peer's head block
-		log.Info("Checking if my LIB connects to peer's head block")
 		rpcContext, cancelB := context.WithTimeout(ctx, time.Second*3)
 		defer cancelB()
 		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, p.lastIrreversibleBlock.Height)
 		if err != nil {
-			log.Info(err.Error())
 			return err
 		}
 
-		log.Infof("Got back %s", ancestorBlock.String())
-
 		if bytes.Compare([]byte(*ancestorBlock), []byte(p.lastIrreversibleBlock.Id)) != 0 {
-			log.Infof("Doesn't match")
 			return errors.New("my irreversible block is not an ancestor of peer's head block")
 		}
 	}
@@ -106,7 +95,14 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		}
 	}
 
-	go p.requestBlocks()
+	if peerHeadHeight-blocks[len(blocks)-1].Header.Height < 5 {
+		// If we think we are caught up, slow down how often we poll
+		// TODO: Enable gossip
+		time.AfterFunc(time.Second*10, p.requestBlocks)
+	} else {
+		go p.requestBlocks()
+	}
+
 	return nil
 }
 
