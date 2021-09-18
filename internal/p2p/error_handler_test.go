@@ -23,7 +23,6 @@ func TestErrorHanlder(t *testing.T) {
 	errorHandler := NewPeerErrorHandler(disconnectPeerChan, peerErrorChan, *opts)
 	errorHandler.Start(ctx)
 
-	
 	for i := 0; i < 12; i++ {
 		peerErrorChan <- PeerError{id: "peerA", err: p2perrors.ErrBlockApplication}
 	}
@@ -31,13 +30,13 @@ func TestErrorHanlder(t *testing.T) {
 	exp, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
 	select {
 	case peer := <-disconnectPeerChan:
-		cancel()
 		if peer != "peerA" {
 			t.Errorf("Incorrect peer requested for disconnect. Expected: peerA, Was %s", peer)
 		}
 	case <-exp.Done():
 		t.Errorf("Expected request to disconnect from peerA never received")
 	}
+	cancel()
 
 	if errorHandler.CanConnect(ctx, "peerA") {
 		t.Errorf("Expected failed connection to peerA")
@@ -54,13 +53,13 @@ func TestErrorHanlder(t *testing.T) {
 	exp, cancel = context.WithTimeout(context.Background(), time.Millisecond*10)
 	select {
 	case peer := <-disconnectPeerChan:
-		cancel()
 		if peer != "peerA" {
 			t.Errorf("Incorrect peer requested for disconnect. Expected: peerA, Was %s", peer)
 		}
 	case <-exp.Done():
 		t.Errorf("Expected request to disconnect from peerA never received")
 	}
+	cancel()
 
 	if errorHandler.CanConnect(ctx, "peerA") {
 		t.Errorf("Expected failed connection to peerA")
