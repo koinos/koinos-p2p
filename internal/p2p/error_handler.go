@@ -84,23 +84,37 @@ func (p *PeerErrorHandler) handleError(peerErr PeerError) {
 }
 
 func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
+	// These should be ordered from most common error to least
 	switch {
-	case errors.Is(err, p2perrors.ErrGossip):
-		return p.opts.GossipErrorScore
+
+	// Errors that are commonly expected during normal use or potential attack vectors
+	case errors.Is(err, p2perrors.ErrTransactionApplication):
+		return p.opts.TransactionApplicationErrorScore
+	case errors.Is(err, p2perrors.ErrBlockApplication):
+		return p.opts.BlockApplicationErrorScore
 	case errors.Is(err, p2perrors.ErrDeserialization):
 		return p.opts.DeserializationErrorScore
 	case errors.Is(err, p2perrors.ErrBlockIrreversibility):
 		return p.opts.BlockIrreversibilityErrorScore
-	case errors.Is(err, p2perrors.ErrBlockApplication):
-		return p.opts.BlockApplicationErrorScore
+	case errors.Is(err, p2perrors.ErrPeerRPC):
+		return p.opts.PeerRPCErrorScore
+	case errors.Is(err, p2perrors.ErrPeerRPCTimeout):
+		return p.opts.PeerRPCTimeoutErrorScore
+
+	// These errors are expected, but result in instant disconnection
 	case errors.Is(err, p2perrors.ErrChainIDMismatch):
 		return p.opts.ChainIDMismatchErrorScore
 	case errors.Is(err, p2perrors.ErrChainNotConnected):
 		return p.opts.ChainNotConnectedErrorScore
+
+	// Errors that should only originate from the local process or local node
+	case errors.Is(err, p2perrors.ErrLocalRPC):
+		return p.opts.LocalRPCErrorScore
 	case errors.Is(err, p2perrors.ErrLocalRPCTimeout):
 		return p.opts.LocalRPCTimeoutErrorScore
-	case errors.Is(err, p2perrors.ErrPeerRPCTimeout):
-		return p.opts.PeerRPCTimeoutErrorScore
+	case errors.Is(err, p2perrors.ErrSerialization):
+		return p.opts.SerializationErrorScore
+
 	default:
 		return p.opts.UnknownErrorScore
 	}
