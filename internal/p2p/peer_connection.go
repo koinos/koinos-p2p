@@ -15,14 +15,16 @@ type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
 type PeerConnection struct {
-	id        peer.ID
-	isSyncing bool
+	id         peer.ID
+	isSyncing  bool
+	gossipVote bool
 
 	requestBlockChan chan signalRequestBlocks
 
-	localRPC      rpc.LocalRPC
-	peerRPC       rpc.RemoteRPC
-	peerErrorChan chan<- PeerError
+	localRPC       rpc.LocalRPC
+	peerRPC        rpc.RemoteRPC
+	peerErrorChan  chan<- PeerError
+	gossipVoteChan chan<- GossipVote
 }
 
 func (p *PeerConnection) requestBlocks() {
@@ -129,13 +131,28 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 			err := p.handleRequestBlocks(ctx)
 			if err != nil {
 				time.AfterFunc(time.Second, p.requestBlocks)
-				p.peerErrorChan <- PeerError{id: p.id, err: err}
+				select {
+				case p.peerErrorChan <- PeerError{id: p.id, err: err}:
+				case <-ctx.Done():
+				}
 			} else if p.isSyncing {
 				go p.requestBlocks()
-				// TODO: disable gossip (#164)
+				if p.gossipVote {
+					p.gossipVote = false
+					select {
+					case p.gossipVoteChan <- GossipVote{p.id, p.gossipVote}:
+					case <-ctx.Done():
+					}
+				}
 			} else {
 				time.AfterFunc(time.Second*10, p.requestBlocks)
-				// TODO: enable gossip (#164)
+				if !p.gossipVote {
+					p.gossipVote = true
+					select {
+					case p.gossipVoteChan <- GossipVote{p.id, p.gossipVote}:
+					case <-ctx.Done():
+					}
+				}
 			}
 
 		case <-ctx.Done():
@@ -170,12 +187,15 @@ func (p *PeerConnection) Start(ctx context.Context) {
 }
 
 // NewPeerConnection creates a PeerConnection
-func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError) *PeerConnection {
+func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
+		isSyncing:        true,
+		gossipVote:       false,
 		requestBlockChan: make(chan signalRequestBlocks),
 		localRPC:         localRPC,
 		peerRPC:          peerRPC,
 		peerErrorChan:    peerErrorChan,
+		gossipVoteChan:   gossipVoteChan,
 	}
 }

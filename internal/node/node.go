@@ -32,13 +32,16 @@ import (
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
-	Host               host.Host
-	localRPC           rpc.LocalRPC
-	Gossip             *p2p.KoinosGossip
-	ConnectionManager  *p2p.ConnectionManager
-	PeerErrorHandler   *p2p.PeerErrorHandler
-	PeerErrorChan      chan p2p.PeerError
-	DisconnectPeerChan chan peer.ID
+	Host                 host.Host
+	localRPC             rpc.LocalRPC
+	Gossip               *p2p.KoinosGossip
+	ConnectionManager    *p2p.ConnectionManager
+	PeerErrorHandler     *p2p.PeerErrorHandler
+	GossipToggle         *p2p.GossipToggle
+	PeerErrorChan        chan p2p.PeerError
+	DisconnectPeerChan   chan peer.ID
+	GossipVoteChan       chan p2p.GossipVote
+	PeerDisconnectedChan chan peer.ID
 
 	Options options.NodeOptions
 }
@@ -79,6 +82,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.Options = config.NodeOptions
 	node.PeerErrorChan = make(chan p2p.PeerError)
 	node.DisconnectPeerChan = make(chan peer.ID)
+	node.GossipVoteChan = make(chan p2p.GossipVote)
+	node.PeerDisconnectedChan = make(chan peer.ID)
 
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {
@@ -123,13 +128,21 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.PeerErrorChan,
 		config.PeerErrorHandlerOptions)
 
+	node.GossipToggle = p2p.NewGossipToggle(
+		node.Gossip,
+		node.GossipVoteChan,
+		node.PeerDisconnectedChan,
+		config.GossipToggleOptions)
+
 	node.ConnectionManager = p2p.NewConnectionManager(
 		node.Host,
 		node.Gossip,
 		node.PeerErrorHandler,
 		node.localRPC,
 		node.Options.InitialPeers,
-		node.PeerErrorChan)
+		node.PeerErrorChan,
+		node.GossipVoteChan,
+		node.PeerDisconnectedChan)
 
 	return node, nil
 }
@@ -248,14 +261,10 @@ func (n *KoinosP2PNode) Close() error {
 func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.Host.Network().Notify(n.ConnectionManager)
 
-	// Start gossip if forced
-	if n.Options.ForceGossip {
-		n.Gossip.StartGossip(ctx)
-	}
-
 	// Start peer gossip
 	n.Gossip.StartPeerGossip(ctx)
 	n.PeerErrorHandler.Start(ctx)
+	n.GossipToggle.Start(ctx)
 	n.ConnectionManager.Start(ctx)
 
 	go func() {

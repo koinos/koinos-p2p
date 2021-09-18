@@ -109,11 +109,10 @@ func main() {
 	config.NodeOptions.DirectPeers = *directAddresses
 
 	if !(*gossip) {
-		//config.DownloadManagerOptions.GossipAlwaysDisable = true
+		config.GossipToggleOptions.AlwaysDisable = true
 	}
 	if *forceGossip {
-		//config.DownloadManagerOptions.GossipAlwaysEnable = true
-		config.NodeOptions.ForceGossip = true
+		config.GossipToggleOptions.AlwaysEnable = true
 	}
 
 	client.Start()
