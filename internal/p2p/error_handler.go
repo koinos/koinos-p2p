@@ -110,6 +110,8 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 		return p.opts.ChainIDMismatchErrorScore
 	case errors.Is(err, p2perrors.ErrChainNotConnected):
 		return p.opts.ChainNotConnectedErrorScore
+	case errors.Is(err, p2perrors.ErrCheckpointMismatch):
+		return p.opts.CheckpointMismatchErrorScore
 
 	// Errors that should only originate from the local process or local node
 	case errors.Is(err, p2perrors.ErrLocalRPC):

@@ -139,6 +139,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.Gossip,
 		node.PeerErrorHandler,
 		node.localRPC,
+		&config.PeerConnectionOptions,
 		node.Options.InitialPeers,
 		node.PeerErrorChan,
 		node.GossipVoteChan,

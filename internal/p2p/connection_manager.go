@@ -6,6 +6,7 @@ import (
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
@@ -46,6 +47,7 @@ type ConnectionManager struct {
 	gossip       *KoinosGossip
 	errorHandler *PeerErrorHandler
 	localRPC     rpc.LocalRPC
+	peerOpts     *options.PeerConnectionOptions
 
 	initialPeers   map[peer.ID]peer.AddrInfo
 	connectedPeers map[peer.ID]*peerConnectionContext
@@ -59,13 +61,14 @@ type ConnectionManager struct {
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
-func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *PeerErrorHandler, localRPC rpc.LocalRPC, initialPeers []string, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, signalPeerDisconnectChan chan<- peer.ID) *ConnectionManager {
+func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *PeerErrorHandler, localRPC rpc.LocalRPC, peerOpts *options.PeerConnectionOptions, initialPeers []string, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, signalPeerDisconnectChan chan<- peer.ID) *ConnectionManager {
 	connectionManager := ConnectionManager{
 		host:                     host,
 		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
 		server:                   gorpc.NewServer(host, rpc.PeerRPCID),
 		gossip:                   gossip,
 		localRPC:                 localRPC,
+		peerOpts:                 peerOpts,
 		initialPeers:             make(map[peer.ID]peer.AddrInfo),
 		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
 		peerConnectedChan:        make(chan connectionMessage),
@@ -146,6 +149,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 				rpc.NewPeerRPC(c.client, pid),
 				c.peerErrorChan,
 				c.gossipVoteChan,
+				c.peerOpts,
 			),
 			cancel: cancel,
 		}

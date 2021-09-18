@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -18,6 +19,7 @@ type PeerConnection struct {
 	id         peer.ID
 	isSynced   bool
 	gossipVote bool
+	opts       *options.PeerConnectionOptions
 
 	requestBlockChan chan signalRequestBlocks
 
@@ -52,7 +54,26 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 		return p2perrors.ErrChainIDMismatch
 	}
 
-	// TODO: Check checkpoints (#165)
+	// Get peer's head block
+	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, time.Second*3)
+	defer cancelGetPeerHead()
+	peerHeadID, _, err := p.peerRPC.GetHeadBlock(rpcContext)
+	if err != nil {
+		return err
+	}
+
+	for _, checkpoint := range p.opts.Checkpoints {
+		rpcContext, cancel := context.WithTimeout(ctx, time.Second*3)
+		defer cancel()
+		peerBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, checkpoint.BlockHeight)
+		if err != nil {
+			return err
+		}
+
+		if bytes.Compare(peerBlock, checkpoint.BlockID) != 0 {
+			return p2perrors.ErrCheckpointMismatch
+		}
+	}
 
 	return nil
 }
@@ -189,11 +210,12 @@ func (p *PeerConnection) Start(ctx context.Context) {
 }
 
 // NewPeerConnection creates a PeerConnection
-func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote) *PeerConnection {
+func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, opts *options.PeerConnectionOptions) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
 		isSynced:         false,
 		gossipVote:       false,
+		opts:             opts,
 		requestBlockChan: make(chan signalRequestBlocks),
 		localRPC:         localRPC,
 		peerRPC:          peerRPC,
