@@ -9,7 +9,6 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
-	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -32,10 +31,10 @@ type canConnectRequest struct {
 // PeerErrorHandler handles PeerErrors and tracks errors over time
 // to determine if a peer should be disconnected from
 type PeerErrorHandler struct {
-	errorScores    map[peer.ID]*errorScoreRecord
-	peerNetwork    network.Network
-	peerErrorChan  <-chan PeerError
-	canConnectChan chan canConnectRequest
+	errorScores        map[peer.ID]*errorScoreRecord
+	disconnectPeerChan chan<- peer.ID
+	peerErrorChan      <-chan PeerError
+	canConnectChan     chan canConnectRequest
 
 	opts options.PeerErrorHandlerOptions
 }
@@ -59,13 +58,13 @@ func (p *PeerErrorHandler) CanConnect(ctx context.Context, id peer.ID) bool {
 func (p *PeerErrorHandler) handleCanConnect(id peer.ID) bool {
 	if record, ok := p.errorScores[id]; ok {
 		p.decayErrorScore(record)
-		return record.score <= p.opts.ErrorScoreThreshold
+		return record.score < p.opts.ErrorScoreThreshold
 	}
 
 	return true
 }
 
-func (p *PeerErrorHandler) handleError(peerErr PeerError) {
+func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
 	log.Infof("Encountered peer error: %s, %s", peerErr.id, peerErr.err.Error())
 
 	if record, ok := p.errorScores[peerErr.id]; ok {
@@ -79,7 +78,12 @@ func (p *PeerErrorHandler) handleError(peerErr PeerError) {
 	}
 
 	if p.errorScores[peerErr.id].score >= p.opts.ErrorScoreThreshold {
-		p.peerNetwork.ClosePeer(peerErr.id)
+		go func() {
+			select {
+			case p.disconnectPeerChan <- peerErr.id:
+			case <-ctx.Done():
+			}
+		}()
 	}
 }
 
@@ -121,7 +125,7 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 }
 
 func (p *PeerErrorHandler) decayErrorScore(record *errorScoreRecord) {
-	decayConstant := float64(p.opts.ErrorScoreDecayHalflife) / math.Log(2)
+	decayConstant := math.Log(2) / float64(p.opts.ErrorScoreDecayHalflife)
 	now := time.Now()
 	record.score = uint64(float64(record.score) * math.Exp(-1*decayConstant*float64(now.Sub(record.lastUpdate))))
 	record.lastUpdate = now
@@ -133,7 +137,7 @@ func (p *PeerErrorHandler) Start(ctx context.Context) {
 		for {
 			select {
 			case perr := <-p.peerErrorChan:
-				p.handleError(perr)
+				p.handleError(ctx, perr)
 			case req := <-p.canConnectChan:
 				req.resultChan <- p.handleCanConnect(req.id)
 
@@ -145,12 +149,12 @@ func (p *PeerErrorHandler) Start(ctx context.Context) {
 }
 
 // NewPeerErrorHandler creates a new PeerErrorHandler
-func NewPeerErrorHandler(peerNetwork network.Network, peerErrorChan chan PeerError, opts options.PeerErrorHandlerOptions) *PeerErrorHandler {
+func NewPeerErrorHandler(disconnectPeerChan chan<- peer.ID, peerErrorChan <-chan PeerError, opts options.PeerErrorHandlerOptions) *PeerErrorHandler {
 	return &PeerErrorHandler{
-		errorScores:    make(map[peer.ID]*errorScoreRecord),
-		peerNetwork:    peerNetwork,
-		peerErrorChan:  peerErrorChan,
-		canConnectChan: make(chan canConnectRequest),
-		opts:           opts,
+		errorScores:        make(map[peer.ID]*errorScoreRecord),
+		disconnectPeerChan: disconnectPeerChan,
+		peerErrorChan:      peerErrorChan,
+		canConnectChan:     make(chan canConnectRequest),
+		opts:               opts,
 	}
 }

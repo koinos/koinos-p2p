@@ -32,12 +32,13 @@ import (
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
-	Host              host.Host
-	localRPC          rpc.LocalRPC
-	Gossip            *p2p.KoinosGossip
-	ConnectionManager *p2p.ConnectionManager
-	PeerErrorHandler  *p2p.PeerErrorHandler
-	PeerErrorChan     chan p2p.PeerError
+	Host               host.Host
+	localRPC           rpc.LocalRPC
+	Gossip             *p2p.KoinosGossip
+	ConnectionManager  *p2p.ConnectionManager
+	PeerErrorHandler   *p2p.PeerErrorHandler
+	PeerErrorChan      chan p2p.PeerError
+	DisconnectPeerChan chan peer.ID
 
 	Options options.NodeOptions
 }
@@ -77,6 +78,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.Options = config.NodeOptions
 	node.PeerErrorChan = make(chan p2p.PeerError)
+	node.DisconnectPeerChan = make(chan peer.ID)
 
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {
@@ -117,7 +119,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.Host.ID())
 
 	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
-		node.Host.Network(),
+		node.DisconnectPeerChan,
 		node.PeerErrorChan,
 		config.PeerErrorHandlerOptions)
 
@@ -255,6 +257,17 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.Gossip.StartPeerGossip(ctx)
 	n.PeerErrorHandler.Start(ctx)
 	n.ConnectionManager.Start(ctx)
+
+	go func() {
+		for {
+			select {
+			case id := <-n.DisconnectPeerChan:
+				n.Host.Network().ClosePeer(id)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 // ----------------------------------------------------------------------------

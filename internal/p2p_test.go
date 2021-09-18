@@ -1,4 +1,4 @@
-package protocol
+package p2p
 
 import (
 	"context"
@@ -287,4 +287,8 @@ func TestApplyBlockFailure(t *testing.T) {
 	if len(sendRPC.BlocksApplied) != expectedBlocksApplied {
 		t.Errorf("Incorrect number of blocks applied, expected %d, got %d", expectedBlocksApplied, len(sendRPC.BlocksApplied))
 	}
+}
+
+func ErrorHandlerTest(t *testing.T) {
+
 }
