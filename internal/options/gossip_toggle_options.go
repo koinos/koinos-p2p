@@ -1,8 +1,8 @@
 package options
 
 const (
-	enableThresholdDefault  = 0.66
-	disableThresholdDefault = 0.33
+	enableThresholdDefault  = 2.0 / 3.0
+	disableThresholdDefault = 1.0 / 3.0
 	alwaysEnableDefault     = false
 	alwaysDisableDefault    = false
 )

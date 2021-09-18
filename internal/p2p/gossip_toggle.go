@@ -7,6 +7,9 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+// https://stackoverflow.com/questions/22185636/easiest-way-to-get-the-machine-epsilon-in-go
+const epsilon = float64(7.)/3 - float64(4.)/3 - float64(1.)
+
 // GossipVote is a vote from a peer to enable gossip or not
 type GossipVote struct {
 	peer   peer.ID
@@ -15,22 +18,27 @@ type GossipVote struct {
 
 // GossipToggle tracks peer gossip votes and toggles gossip accordingly
 type GossipToggle struct {
-	gossipEnabler      GossipEnableHandler
-	enabled            bool
-	peerVotes          map[peer.ID]bool
-	yesCount           int
-	voteChan           <-chan GossipVote
-	peerDisconnectChan <-chan peer.ID
+	gossipEnabler        GossipEnableHandler
+	enabled              bool
+	peerVotes            map[peer.ID]bool
+	yesCount             int
+	voteChan             <-chan GossipVote
+	peerDisconnectedChan <-chan peer.ID
 
 	opts options.GossipToggleOptions
 }
 
 func (g *GossipToggle) checkThresholds(ctx context.Context) {
+	if len(g.peerVotes) == 0 {
+		return
+	}
+
 	threshold := float64(g.yesCount) / float64(len(g.peerVotes))
-	if threshold >= g.opts.EnableThreshold && !g.enabled {
+
+	if threshold-g.opts.EnableThreshold >= -epsilon && !g.enabled {
 		g.enabled = true
 		g.gossipEnabler.EnableGossip(ctx, true)
-	} else if threshold <= g.opts.DisableThreshold && g.enabled {
+	} else if g.opts.DisableThreshold-threshold >= -epsilon && g.enabled {
 		g.enabled = false
 		g.gossipEnabler.EnableGossip(ctx, false)
 	}
@@ -49,16 +57,16 @@ func (g *GossipToggle) handleVote(ctx context.Context, vote GossipVote) {
 			g.yesCount--
 		}
 	} else {
-		g.peerVotes[vote.peer] = vote.synced
 		if vote.synced {
 			g.yesCount++
 		}
 	}
 
+	g.peerVotes[vote.peer] = vote.synced
 	g.checkThresholds(ctx)
 }
 
-func (g *GossipToggle) handlePeerDisconnect(ctx context.Context, peer peer.ID) {
+func (g *GossipToggle) handlepeerDisconnected(ctx context.Context, peer peer.ID) {
 	if g.opts.AlwaysEnable || g.opts.AlwaysDisable {
 		return
 	}
@@ -85,8 +93,8 @@ func (g *GossipToggle) Start(ctx context.Context) {
 			select {
 			case vote := <-g.voteChan:
 				g.handleVote(ctx, vote)
-			case peer := <-g.peerDisconnectChan:
-				g.handlePeerDisconnect(ctx, peer)
+			case peer := <-g.peerDisconnectedChan:
+				g.handlepeerDisconnected(ctx, peer)
 
 			case <-ctx.Done():
 				return
@@ -96,14 +104,14 @@ func (g *GossipToggle) Start(ctx context.Context) {
 }
 
 // NewGossipToggle creates a GossipToggle
-func NewGossipToggle(gossipEnabler GossipEnableHandler, voteChan <-chan GossipVote, peerDisconnectChan <-chan peer.ID, opts options.GossipToggleOptions) *GossipToggle {
+func NewGossipToggle(gossipEnabler GossipEnableHandler, voteChan <-chan GossipVote, peerDisconnectedChan <-chan peer.ID, opts options.GossipToggleOptions) *GossipToggle {
 	return &GossipToggle{
-		gossipEnabler:      gossipEnabler,
-		enabled:            false,
-		peerVotes:          make(map[peer.ID]bool),
-		yesCount:           0,
-		voteChan:           voteChan,
-		peerDisconnectChan: peerDisconnectChan,
-		opts:               opts,
+		gossipEnabler:        gossipEnabler,
+		enabled:              false,
+		peerVotes:            make(map[peer.ID]bool),
+		yesCount:             0,
+		voteChan:             voteChan,
+		peerDisconnectedChan: peerDisconnectedChan,
+		opts:                 opts,
 	}
 }

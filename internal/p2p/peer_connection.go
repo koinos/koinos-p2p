@@ -16,7 +16,7 @@ type signalRequestBlocks struct{}
 // PeerConnection handles the sync portion of a connection to a peer
 type PeerConnection struct {
 	id         peer.ID
-	isSyncing  bool
+	isSynced   bool
 	gossipVote bool
 
 	requestBlockChan chan signalRequestBlocks
@@ -76,7 +76,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// If the peer is in the past, it is not an error, but we don't need anything from them
 	if peerHeadHeight <= forkHeads.LastIrreversibleBlock.Height {
-		p.isSyncing = false
+		p.isSynced = true
 		return nil
 	}
 
@@ -119,9 +119,19 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// We will consider ourselves as syncing if we have more than 5 blocks to sync
-	p.isSyncing = peerHeadHeight-blocks[len(blocks)-1].Header.Height >= 5
+	p.isSynced = peerHeadHeight-blocks[len(blocks)-1].Header.Height < 5
 
 	return nil
+}
+
+func (p *PeerConnection) reportGossipVote(ctx context.Context) {
+	p.gossipVote = p.isSynced
+	go func() {
+		select {
+		case p.gossipVoteChan <- GossipVote{p.id, p.gossipVote}:
+		case <-ctx.Done():
+		}
+	}()
 }
 
 func (p *PeerConnection) connectionLoop(ctx context.Context) {
@@ -135,23 +145,14 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 				case p.peerErrorChan <- PeerError{id: p.id, err: err}:
 				case <-ctx.Done():
 				}
-			} else if p.isSyncing {
-				go p.requestBlocks()
-				if p.gossipVote {
-					p.gossipVote = false
-					select {
-					case p.gossipVoteChan <- GossipVote{p.id, p.gossipVote}:
-					case <-ctx.Done():
-					}
-				}
 			} else {
-				time.AfterFunc(time.Second*10, p.requestBlocks)
-				if !p.gossipVote {
-					p.gossipVote = true
-					select {
-					case p.gossipVoteChan <- GossipVote{p.id, p.gossipVote}:
-					case <-ctx.Done():
-					}
+				if p.gossipVote != p.isSynced {
+					p.reportGossipVote(ctx)
+				}
+				if p.isSynced {
+					time.AfterFunc(time.Second*10, p.requestBlocks)
+				} else {
+					go p.requestBlocks()
 				}
 			}
 
@@ -173,6 +174,7 @@ func (p *PeerConnection) Start(ctx context.Context) {
 					p.peerErrorChan <- PeerError{id: p.id, err: err}
 				}()
 			} else {
+				p.reportGossipVote(ctx)
 				go p.connectionLoop(ctx)
 				go p.requestBlocks()
 				return
@@ -190,7 +192,7 @@ func (p *PeerConnection) Start(ctx context.Context) {
 func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
-		isSyncing:        true,
+		isSynced:         false,
 		gossipVote:       false,
 		requestBlockChan: make(chan signalRequestBlocks),
 		localRPC:         localRPC,
