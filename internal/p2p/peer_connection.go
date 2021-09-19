@@ -35,7 +35,7 @@ func (p *PeerConnection) requestBlocks() {
 
 func (p *PeerConnection) handshake(ctx context.Context) error {
 	// Get my chain id
-	rpcContext, cancelLocalGetChainID := context.WithTimeout(ctx, time.Second*3)
+	rpcContext, cancelLocalGetChainID := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
 	defer cancelLocalGetChainID()
 	myChainID, err := p.localRPC.GetChainID(rpcContext)
 	if err != nil {
@@ -43,7 +43,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 	}
 
 	// Get peer's chain id
-	rpcContext, cancelPeerGetChainID := context.WithTimeout(ctx, time.Second*3)
+	rpcContext, cancelPeerGetChainID := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
 	defer cancelPeerGetChainID()
 	peerChainID, err := p.peerRPC.GetChainID(rpcContext)
 	if err != nil {
@@ -55,7 +55,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 	}
 
 	// Get peer's head block
-	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, time.Second*3)
+	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
 	defer cancelGetPeerHead()
 	peerHeadID, _, err := p.peerRPC.GetHeadBlock(rpcContext)
 	if err != nil {
@@ -63,7 +63,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 	}
 
 	for _, checkpoint := range p.opts.Checkpoints {
-		rpcContext, cancel := context.WithTimeout(ctx, time.Second*3)
+		rpcContext, cancel := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
 		defer cancel()
 		peerBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, checkpoint.BlockHeight)
 		if err != nil {
@@ -80,7 +80,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 
 func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Get my head info
-	rpcContext, cancelGetForkHeads := context.WithTimeout(ctx, time.Second*3)
+	rpcContext, cancelGetForkHeads := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
 	defer cancelGetForkHeads()
 	forkHeads, err := p.localRPC.GetForkHeads(rpcContext)
 	if err != nil {
@@ -88,7 +88,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// Get peer's head block
-	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, time.Second*3)
+	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
 	defer cancelGetPeerHead()
 	peerHeadID, peerHeadHeight, err := p.peerRPC.GetHeadBlock(rpcContext)
 	if err != nil {
@@ -104,7 +104,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// If LIB is 0, we are still at genesis and could connec to any chain
 	if forkHeads.LastIrreversibleBlock.Height > 0 {
 		// Check if my LIB connect's to peer's head block
-		rpcContext, cancelGetAncestorBlock := context.WithTimeout(ctx, time.Second*3)
+		rpcContext, cancelGetAncestorBlock := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
 		defer cancelGetAncestorBlock()
 		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height)
 		if err != nil {
@@ -117,12 +117,12 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	blocksToRequest := peerHeadHeight - forkHeads.LastIrreversibleBlock.Height
-	if blocksToRequest > 500 {
-		blocksToRequest = 500
+	if blocksToRequest > p.opts.BlockRequestBatchSize {
+		blocksToRequest = p.opts.BlockRequestBatchSize
 	}
 
 	// Request blocks
-	rpcContext, cancelGetBlocks := context.WithTimeout(ctx, time.Second*5)
+	rpcContext, cancelGetBlocks := context.WithTimeout(ctx, p.opts.BlockRequestTimeout)
 	defer cancelGetBlocks()
 	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height+1, uint32(blocksToRequest))
 	if err != nil {
@@ -140,7 +140,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// We will consider ourselves as syncing if we have more than 5 blocks to sync
-	p.isSynced = peerHeadHeight-blocks[len(blocks)-1].Header.Height < 5
+	p.isSynced = peerHeadHeight-blocks[len(blocks)-1].Header.Height < p.opts.SyncedBlockDelta
 
 	return nil
 }
@@ -171,7 +171,7 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 					p.reportGossipVote(ctx)
 				}
 				if p.isSynced {
-					time.AfterFunc(time.Second*10, p.requestBlocks)
+					time.AfterFunc(p.opts.SyncedPingTime, p.requestBlocks)
 				} else {
 					go p.requestBlocks()
 				}
@@ -201,7 +201,7 @@ func (p *PeerConnection) Start(ctx context.Context) {
 				return
 			}
 			select {
-			case <-time.After(time.Second * 3):
+			case <-time.After(p.opts.HandshakeRetryTime):
 			case <-ctx.Done():
 				return
 			}
