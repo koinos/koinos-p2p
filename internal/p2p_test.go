@@ -191,16 +191,14 @@ func NewTestRPC(height uint64) *TestRPC {
 func SetUnitTestOptions(config *options.Config) {
 }
 
-func createTestClients(listenRPC rpc.LocalRPC, sendRPC rpc.LocalRPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
-	config := options.NewConfig()
-	SetUnitTestOptions(config)
-	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, nil, "test1", config)
+func createTestClients(listenRPC rpc.LocalRPC, listenConfig *options.Config, sendRPC rpc.LocalRPC, sendConfig *options.Config) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
+	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, nil, "test1", listenConfig)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 	listenNode.Start(context.Background())
 
-	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, nil, "test2", config)
+	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, nil, "test2", sendConfig)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -213,7 +211,9 @@ func TestSyncNoError(t *testing.T) {
 	// Test no error sync
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
+	sendConfig := options.NewConfig()
+	sendConfig.PeerConnectionOptions.Checkpoints = []options.Checkpoint{{BlockHeight: 10, BlockID: listenRPC.getDummyBlockIDAtHeight(10)}}
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, sendConfig)
 	if err != nil {
 		t.Error(err)
 	}
@@ -241,7 +241,7 @@ func TestSyncChainID(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
 	sendRPC.ChainID = 2
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -270,7 +270,7 @@ func TestApplyBlockFailure(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
 	sendRPC.ApplyBlocks = 18
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -289,6 +289,29 @@ func TestApplyBlockFailure(t *testing.T) {
 	}
 }
 
-func ErrorHandlerTest(t *testing.T) {
+func TestCheckpointFailure(t *testing.T) {
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(5)
+	sendConfig := options.NewConfig()
+	sendConfig.PeerConnectionOptions.Checkpoints = []options.Checkpoint{{BlockHeight: 10, BlockID: listenRPC.getDummyBlockIDAtHeight(11)}}
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, sendConfig)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
 
+	_, err = sendNode.ConnectToPeerString(peer.String())
+	if err != nil {
+		t.Error(err)
+	}
+
+	time.Sleep(time.Duration(1000) * time.Duration(time.Millisecond))
+
+	expectedBlocksApplied := 0
+
+	// SendRPC should have applied 0 blocks
+	if len(sendRPC.BlocksApplied) != expectedBlocksApplied {
+		t.Errorf("Incorrect number of blocks applied, expected %d, got %d", expectedBlocksApplied, len(sendRPC.BlocksApplied))
+	}
 }
