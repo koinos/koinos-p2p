@@ -2,7 +2,15 @@ package protocol
 
 import (
 	"errors"
+
+	"github.com/libp2p/go-libp2p-core/peer"
 )
+
+// PeerError represents an error originating from a peer
+type PeerError struct {
+	id  peer.ID
+	err error
+}
 
 var (
 	// ErrGossip wraps all errors that take place during gossip

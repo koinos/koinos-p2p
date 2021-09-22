@@ -8,11 +8,13 @@ import (
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	types "github.com/koinos/koinos-types-golang"
+	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
+	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	util "github.com/koinos/koinos-util-golang"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -58,7 +60,7 @@ func (gm *GossipManager) RegisterValidator(val interface{}) {
 }
 
 // Start starts gossiping on this topic
-func (gm *GossipManager) Start(ctx context.Context, ch chan<- types.VariableBlob) error {
+func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 	if gm.enabled {
 		return nil
 	}
@@ -95,18 +97,18 @@ func (gm *GossipManager) Stop() {
 }
 
 // PublishMessage publishes the given object to this manager's topic
-func (gm *GossipManager) PublishMessage(ctx context.Context, vb *types.VariableBlob) bool {
+func (gm *GossipManager) PublishMessage(ctx context.Context, bytes []byte) bool {
 	if !gm.enabled {
 		return false
 	}
 
 	log.Debugf("Publishing message")
-	gm.topic.Publish(ctx, *vb)
+	gm.topic.Publish(ctx, bytes)
 
 	return true
 }
 
-func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.VariableBlob) {
+func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- []byte) {
 	//
 	// The purpose of this function is to move messages from each topic's gm.sub.Next()
 	// and send them to a single channel.
@@ -123,7 +125,7 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- types.Varia
 		}
 
 		select {
-		case ch <- types.VariableBlob(msg.Data):
+		case ch <- msg.Data:
 		case <-ctx.Done():
 			return
 		}
@@ -144,7 +146,7 @@ type PeerConnectionHandler interface {
 
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
-	rpc                   rpc.RPC
+	rpc                   rpc.LocalRPC
 	Block                 *GossipManager
 	Transaction           *GossipManager
 	Peer                  *GossipManager
@@ -152,13 +154,13 @@ type KoinosGossip struct {
 	PeerErrorChan         chan<- PeerError
 	Connector             PeerConnectionHandler
 	myPeerID              peer.ID
-	lastIrreversibleBlock types.BlockHeightType
+	lastIrreversibleBlock uint64
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
 func NewKoinosGossip(
 	ctx context.Context,
-	rpc rpc.RPC,
+	rpc rpc.LocalRPC,
 	ps *pubsub.PubSub,
 	peerErrorChan chan<- PeerError,
 	connector PeerConnectionHandler,
@@ -205,13 +207,13 @@ func (kg *KoinosGossip) StopGossip() {
 }
 
 // HandleForkHeads updates gossip with fork head information
-func (kg *KoinosGossip) HandleForkHeads(fh *types.ForkHeads) {
+func (kg *KoinosGossip) HandleForkHeads(fh *broadcast.ForkHeads) {
 	kg.lastIrreversibleBlock = fh.LastIrreversibleBlock.Height
 }
 
 func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 	go func() {
-		blockChan := make(chan types.VariableBlob, blockBuffer)
+		blockChan := make(chan []byte, blockBuffer)
 		defer close(blockChan)
 		kg.Block.RegisterValidator(kg.validateBlock)
 		kg.Block.Start(ctx, blockChan)
@@ -252,10 +254,9 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 }
 
 func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
-	vb := types.VariableBlob(msg.Data)
-
 	log.Debug("Received block via gossip")
-	_, blockBroadcast, err := types.DeserializeBlockAccepted(&vb)
+	var block *protocol.Block
+	err := proto.Unmarshal(msg.Data, block)
 	if err != nil {
 		// TODO: (Issue #5) Bad message, assign naughty points
 		return fmt.Errorf("%w, %v", ErrDeserialization, err.Error())
@@ -266,23 +267,23 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 		return nil
 	}
 
-	if blockBroadcast.Block.Header.Height < kg.lastIrreversibleBlock {
+	if block.Header.Height < kg.lastIrreversibleBlock {
 		return ErrBlockIrreversibility
 	}
 
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
-	if _, err := kg.rpc.ApplyBlock(ctx, &blockBroadcast.Block); err != nil {
-		return fmt.Errorf("%w - %s, %v", ErrBlockApplication, util.BlockString(&blockBroadcast.Block), err.Error())
+	if _, err := kg.rpc.ApplyBlock(ctx, block); err != nil {
+		return fmt.Errorf("%w - %s, %v", ErrBlockApplication, util.BlockString(block), err.Error())
 	}
 
-	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(&blockBroadcast.Block), msg.ReceivedFrom)
+	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
 	return nil
 }
 
 func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 	go func() {
-		transactionChan := make(chan types.VariableBlob, transactionBuffer)
+		transactionChan := make(chan []byte, transactionBuffer)
 		defer close(transactionChan)
 		kg.Transaction.RegisterValidator(kg.validateTransaction)
 		kg.Transaction.Start(ctx, transactionChan)
@@ -318,10 +319,13 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 }
 
 func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
-	vb := types.VariableBlob(msg.Data)
-
 	log.Debug("Received transaction via gossip")
-	_, transaction, err := types.DeserializeTransaction(&vb)
+	var transaction *protocol.Transaction
+	err := proto.Unmarshal(msg.Data, transaction)
+	if err != nil {
+		// TODO: (Issue #5) Bad message, assign naughty points
+		return fmt.Errorf("%w, %v", ErrDeserialization, err.Error())
+	}
 	if err != nil {
 		// TODO: (Issue #5) Bad message, assign naughty points
 		return errors.New("transaction deserialization failed, " + err.Error())
@@ -388,8 +392,7 @@ func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
 		for _, conn := range kg.Connector.GetConnections() {
 			s := fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
 			log.Debugf("Published peer: %s", s)
-			vb := types.VariableBlob((s))
-			kg.Peer.PublishMessage(ctx, &vb)
+			kg.Peer.PublishMessage(ctx, []byte(s))
 		}
 	}
 }
@@ -397,7 +400,7 @@ func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
 // StartPeerGossip begins exchanging peers over gossip
 func (kg *KoinosGossip) StartPeerGossip(ctx context.Context) {
 	go func() {
-		ch := make(chan types.VariableBlob, transactionBuffer)
+		ch := make(chan []byte, transactionBuffer)
 		kg.Peer.RegisterValidator(kg.validatePeer)
 		kg.Peer.Start(ctx, ch)
 		log.Info("Started peer gossip")
