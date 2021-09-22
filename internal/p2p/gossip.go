@@ -1,4 +1,4 @@
-package protocol
+package p2p
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
+	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
@@ -238,12 +239,12 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
 	err := kg.applyBlock(ctx, pid, msg)
 	if err != nil {
-		if errors.Is(err, ErrBlockIrreversibility) {
+		if errors.Is(err, p2perrors.ErrBlockIrreversibility) {
 			log.Debug(err.Error())
 		} else {
 			log.Warnf("Gossiped block not applied from peer %v: %s", msg.ReceivedFrom, err)
 			select {
-			case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, fmt.Errorf("%w, %v", ErrGossip, err.Error())}:
+			case kg.PeerErrorChan <- PeerError{id: msg.ReceivedFrom, err: err}:
 			case <-ctx.Done():
 			}
 		}
@@ -258,8 +259,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	var block *protocol.Block
 	err := proto.Unmarshal(msg.Data, block)
 	if err != nil {
-		// TODO: (Issue #5) Bad message, assign naughty points
-		return fmt.Errorf("%w, %v", ErrDeserialization, err.Error())
+		return fmt.Errorf("%w, %v", p2perrors.ErrDeserialization, err.Error())
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
@@ -268,13 +268,13 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	}
 
 	if block.Header.Height < kg.lastIrreversibleBlock {
-		return ErrBlockIrreversibility
+		return p2perrors.ErrBlockIrreversibility
 	}
 
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if _, err := kg.rpc.ApplyBlock(ctx, block); err != nil {
-		return fmt.Errorf("%w - %s, %v", ErrBlockApplication, util.BlockString(block), err.Error())
+		return fmt.Errorf("%w - %s, %v", p2perrors.ErrBlockApplication, util.BlockString(block), err.Error())
 	}
 
 	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
@@ -310,7 +310,7 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	if err != nil {
 		log.Warnf("Gossiped transaction not applied from peer %v: %s", msg.ReceivedFrom, err)
 		select {
-		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, fmt.Errorf("%w", err)}:
+		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
 		case <-ctx.Done():
 		}
 		return false
@@ -323,12 +323,7 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	var transaction *protocol.Transaction
 	err := proto.Unmarshal(msg.Data, transaction)
 	if err != nil {
-		// TODO: (Issue #5) Bad message, assign naughty points
-		return fmt.Errorf("%w, %v", ErrDeserialization, err.Error())
-	}
-	if err != nil {
-		// TODO: (Issue #5) Bad message, assign naughty points
-		return errors.New("transaction deserialization failed, " + err.Error())
+		return fmt.Errorf("%w, %v", p2perrors.ErrDeserialization, err.Error())
 	}
 
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
@@ -337,7 +332,7 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	}
 
 	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {
-		return errors.New("transaction application failed - " + util.TransactionString(transaction) + ", " + err.Error())
+		return fmt.Errorf("%w - %s, %v", p2perrors.ErrTransactionApplication, util.TransactionString(transaction), err.Error())
 	}
 
 	log.Infof("Gossiped transaction applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)

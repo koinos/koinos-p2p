@@ -14,7 +14,7 @@ type LocalRPC interface {
 	GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error)
 	ApplyBlock(ctx context.Context, block *protocol.Block) (*chain.SubmitBlockResponse, error)
 	ApplyTransaction(ctx context.Context, block *protocol.Transaction) (*chain.SubmitTransactionResponse, error)
-	GetBlocksByHeight(ctx context.Context, blockID *multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error)
+	GetBlocksByHeight(ctx context.Context, blockIDs multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error)
 	GetChainID(ctx context.Context) (*chain.GetChainIdResponse, error)
 	GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error)
 	GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error)

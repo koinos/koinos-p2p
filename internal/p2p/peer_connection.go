@@ -1,11 +1,12 @@
-package protocol
+package p2p
 
 import (
 	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
@@ -14,7 +15,8 @@ type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
 type PeerConnection struct {
-	id peer.ID
+	id        peer.ID
+	isSyncing bool
 
 	requestBlockChan chan signalRequestBlocks
 
@@ -28,6 +30,7 @@ func (p *PeerConnection) requestBlocks() {
 }
 
 func (p *PeerConnection) handshake(ctx context.Context) error {
+	// Get my chain id
 	rpcContext, cancelLocalGetChainID := context.WithTimeout(ctx, time.Second*3)
 	defer cancelLocalGetChainID()
 	myChainID, err := p.localRPC.GetChainID(rpcContext)
@@ -35,6 +38,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 		return err
 	}
 
+	// Get peer's chain id
 	rpcContext, cancelPeerGetChainID := context.WithTimeout(ctx, time.Second*3)
 	defer cancelPeerGetChainID()
 	peerChainID, err := p.peerRPC.GetChainID(rpcContext)
@@ -42,25 +46,27 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 		return err
 	}
 
-	if bytes.Compare(myChainID.ChainId, *peerChainID) != 0 {
-		return errors.New("my irreversible block is not an ancestor of peer's head block")
+	if bytes.Compare(myChainID.ChainId, peerChainID) != 0 {
+		return p2perrors.ErrChainIDMismatch
 	}
+
+	// TODO: Check checkpoints (#165)
 
 	return nil
 }
 
 func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Get my head info
-	rpcContext, cancelZ := context.WithTimeout(ctx, time.Second*3)
-	defer cancelZ()
+	rpcContext, cancelGetForkHeads := context.WithTimeout(ctx, time.Second*3)
+	defer cancelGetForkHeads()
 	forkHeads, err := p.localRPC.GetForkHeads(rpcContext)
 	if err != nil {
 		return err
 	}
 
 	// Get peer's head block
-	rpcContext, cancelA := context.WithTimeout(ctx, time.Second*3)
-	defer cancelA()
+	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, time.Second*3)
+	defer cancelGetPeerHead()
 	peerHeadID, peerHeadHeight, err := p.peerRPC.GetHeadBlock(rpcContext)
 	if err != nil {
 		return err
@@ -68,22 +74,22 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// If the peer is in the past, it is not an error, but we don't need anything from them
 	if peerHeadHeight <= forkHeads.LastIrreversibleBlock.Height {
-		time.AfterFunc(time.Second*3, p.requestBlocks)
+		p.isSyncing = false
 		return nil
 	}
 
 	// If LIB is 0, we are still at genesis and could connec to any chain
 	if forkHeads.LastIrreversibleBlock.Height > 0 {
 		// Check if my LIB connect's to peer's head block
-		rpcContext, cancelB := context.WithTimeout(ctx, time.Second*3)
-		defer cancelB()
+		rpcContext, cancelGetAncestorBlock := context.WithTimeout(ctx, time.Second*3)
+		defer cancelGetAncestorBlock()
 		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height)
 		if err != nil {
 			return err
 		}
 
-		if bytes.Compare([]byte(*ancestorBlock), []byte(forkHeads.LastIrreversibleBlock.Id)) != 0 {
-			return errors.New("my irreversible block is not an ancestor of peer's head block")
+		if bytes.Compare([]byte(ancestorBlock), []byte(forkHeads.LastIrreversibleBlock.Id)) != 0 {
+			return p2perrors.ErrChainNotConnected
 		}
 	}
 
@@ -93,8 +99,8 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// Request blocks
-	rpcContext, cancelC := context.WithTimeout(ctx, time.Second*5)
-	defer cancelC()
+	rpcContext, cancelGetBlocks := context.WithTimeout(ctx, time.Second*5)
+	defer cancelGetBlocks()
 	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height+1, uint32(blocksToRequest))
 	if err != nil {
 		return err
@@ -102,51 +108,65 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// Apply blocks to local node
 	for _, block := range blocks {
-		rpcContext, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
+		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, time.Second)
+		defer cancelApplyBlock()
 		_, err = p.localRPC.ApplyBlock(rpcContext, &block)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %s", p2perrors.ErrBlockApplication, err.Error())
 		}
 	}
 
-	if peerHeadHeight-blocks[len(blocks)-1].Header.Height < 5 {
-		// If we think we are caught up, slow down how often we poll
-		// TODO: Enable gossip
-		time.AfterFunc(time.Second*10, p.requestBlocks)
-	} else {
-		go p.requestBlocks()
-	}
+	// We will consider ourselves as syncing if we have more than 5 blocks to sync
+	p.isSyncing = peerHeadHeight-blocks[len(blocks)-1].Header.Height >= 5
 
 	return nil
 }
 
+func (p *PeerConnection) connectionLoop(ctx context.Context) {
+	for {
+		select {
+		case <-p.requestBlockChan:
+			err := p.handleRequestBlocks(ctx)
+			if err != nil {
+				time.AfterFunc(time.Second, p.requestBlocks)
+				p.peerErrorChan <- PeerError{id: p.id, err: err}
+			} else if p.isSyncing {
+				go p.requestBlocks()
+				// TODO: disable gossip (#164)
+			} else {
+				time.AfterFunc(time.Second*10, p.requestBlocks)
+				// TODO: enable gossip (#164)
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 // Start syncing to the peer
 func (p *PeerConnection) Start(ctx context.Context) {
-	err := p.handshake(ctx)
-	if err != nil {
-		go func() {
-			p.peerErrorChan <- PeerError{id: p.id, err: err}
-		}()
-	} else {
-		go func() {
-			for {
-				select {
-				case <-p.requestBlockChan:
-					err := p.handleRequestBlocks(ctx)
-					if err != nil {
-						p.peerErrorChan <- PeerError{id: p.id, err: err}
-						time.AfterFunc(time.Second, p.requestBlocks)
-					}
-
-				case <-ctx.Done():
-					return
-				}
+	go func() {
+		for {
+			// Does the handshake in a loop until we are successful
+			// or the connection is closed, sleeping between attempts
+			err := p.handshake(ctx)
+			if err != nil {
+				go func() {
+					p.peerErrorChan <- PeerError{id: p.id, err: err}
+				}()
+			} else {
+				go p.connectionLoop(ctx)
+				go p.requestBlocks()
+				return
 			}
-		}()
-
-		go p.requestBlocks()
-	}
+			select {
+			case <-time.After(time.Second * 3):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 // NewPeerConnection creates a PeerConnection

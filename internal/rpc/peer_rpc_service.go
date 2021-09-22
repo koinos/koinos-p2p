@@ -32,7 +32,7 @@ type GetHeadBlockResponse struct {
 
 // GetAncestorBlockIDRequest args
 type GetAncestorBlockIDRequest struct {
-	ParentID    *multihash.Multihash
+	ParentID    multihash.Multihash
 	ChildHeight uint64
 }
 
@@ -43,7 +43,7 @@ type GetAncestorBlockIDResponse struct {
 
 // GetBlocksRequest args
 type GetBlocksRequest struct {
-	HeadBlockID      *multihash.Multihash
+	HeadBlockID      multihash.Multihash
 	StartBlockHeight uint64
 	NumBlocks        uint32
 }
