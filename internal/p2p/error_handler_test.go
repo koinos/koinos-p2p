@@ -10,7 +10,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-func TestErrorHanlder(t *testing.T) {
+func TestErrorHandler(t *testing.T) {
 	disconnectPeerChan := make(chan peer.ID)
 	peerErrorChan := make(chan PeerError)
 	opts := options.NewPeerErrorHandlerOptions()
