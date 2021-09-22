@@ -15,14 +15,16 @@ type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
 type PeerConnection struct {
-	id        peer.ID
-	isSyncing bool
+	id         peer.ID
+	isSynced   bool
+	gossipVote bool
 
 	requestBlockChan chan signalRequestBlocks
 
-	localRPC      rpc.LocalRPC
-	peerRPC       rpc.RemoteRPC
-	peerErrorChan chan<- PeerError
+	localRPC       rpc.LocalRPC
+	peerRPC        rpc.RemoteRPC
+	peerErrorChan  chan<- PeerError
+	gossipVoteChan chan<- GossipVote
 }
 
 func (p *PeerConnection) requestBlocks() {
@@ -74,7 +76,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// If the peer is in the past, it is not an error, but we don't need anything from them
 	if peerHeadHeight <= forkHeads.LastIrreversibleBlock.Height {
-		p.isSyncing = false
+		p.isSynced = true
 		return nil
 	}
 
@@ -117,9 +119,19 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// We will consider ourselves as syncing if we have more than 5 blocks to sync
-	p.isSyncing = peerHeadHeight-blocks[len(blocks)-1].Header.Height >= 5
+	p.isSynced = peerHeadHeight-blocks[len(blocks)-1].Header.Height < 5
 
 	return nil
+}
+
+func (p *PeerConnection) reportGossipVote(ctx context.Context) {
+	p.gossipVote = p.isSynced
+	go func() {
+		select {
+		case p.gossipVoteChan <- GossipVote{p.id, p.gossipVote}:
+		case <-ctx.Done():
+		}
+	}()
 }
 
 func (p *PeerConnection) connectionLoop(ctx context.Context) {
@@ -129,13 +141,19 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 			err := p.handleRequestBlocks(ctx)
 			if err != nil {
 				time.AfterFunc(time.Second, p.requestBlocks)
-				p.peerErrorChan <- PeerError{id: p.id, err: err}
-			} else if p.isSyncing {
-				go p.requestBlocks()
-				// TODO: disable gossip (#164)
+				select {
+				case p.peerErrorChan <- PeerError{id: p.id, err: err}:
+				case <-ctx.Done():
+				}
 			} else {
-				time.AfterFunc(time.Second*10, p.requestBlocks)
-				// TODO: enable gossip (#164)
+				if p.gossipVote != p.isSynced {
+					p.reportGossipVote(ctx)
+				}
+				if p.isSynced {
+					time.AfterFunc(time.Second*10, p.requestBlocks)
+				} else {
+					go p.requestBlocks()
+				}
 			}
 
 		case <-ctx.Done():
@@ -156,6 +174,7 @@ func (p *PeerConnection) Start(ctx context.Context) {
 					p.peerErrorChan <- PeerError{id: p.id, err: err}
 				}()
 			} else {
+				p.reportGossipVote(ctx)
 				go p.connectionLoop(ctx)
 				go p.requestBlocks()
 				return
@@ -170,12 +189,15 @@ func (p *PeerConnection) Start(ctx context.Context) {
 }
 
 // NewPeerConnection creates a PeerConnection
-func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError) *PeerConnection {
+func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
+		isSynced:         false,
+		gossipVote:       false,
 		requestBlockChan: make(chan signalRequestBlocks),
 		localRPC:         localRPC,
 		peerRPC:          peerRPC,
 		peerErrorChan:    peerErrorChan,
+		gossipVoteChan:   gossipVoteChan,
 	}
 }

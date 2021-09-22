@@ -50,26 +50,29 @@ type ConnectionManager struct {
 	initialPeers   map[peer.ID]peer.AddrInfo
 	connectedPeers map[peer.ID]*peerConnectionContext
 
-	peerConnectedChan    chan connectionMessage
-	peerDisconnectedChan chan connectionMessage
-	forkHeadsChan        chan *broadcast.ForkHeads
-	peerErrorChan        chan<- PeerError
+	peerConnectedChan        chan connectionMessage
+	peerDisconnectedChan     chan connectionMessage
+	forkHeadsChan            chan *broadcast.ForkHeads
+	peerErrorChan            chan<- PeerError
+	gossipVoteChan           chan<- GossipVote
+	signalPeerDisconnectChan chan<- peer.ID
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
-func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *PeerErrorHandler, localRPC rpc.LocalRPC, initialPeers []string, peerErrorChan chan<- PeerError) *ConnectionManager {
+func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *PeerErrorHandler, localRPC rpc.LocalRPC, initialPeers []string, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, signalPeerDisconnectChan chan<- peer.ID) *ConnectionManager {
 	connectionManager := ConnectionManager{
-		host:                 host,
-		client:               gorpc.NewClient(host, rpc.PeerRPCID),
-		server:               gorpc.NewServer(host, rpc.PeerRPCID),
-		gossip:               gossip,
-		localRPC:             localRPC,
-		initialPeers:         make(map[peer.ID]peer.AddrInfo),
-		connectedPeers:       make(map[peer.ID]*peerConnectionContext),
-		peerConnectedChan:    make(chan connectionMessage),
-		peerDisconnectedChan: make(chan connectionMessage),
-		forkHeadsChan:        make(chan *broadcast.ForkHeads),
-		peerErrorChan:        peerErrorChan,
+		host:                     host,
+		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
+		server:                   gorpc.NewServer(host, rpc.PeerRPCID),
+		gossip:                   gossip,
+		localRPC:                 localRPC,
+		initialPeers:             make(map[peer.ID]peer.AddrInfo),
+		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
+		peerConnectedChan:        make(chan connectionMessage),
+		peerDisconnectedChan:     make(chan connectionMessage),
+		forkHeadsChan:            make(chan *broadcast.ForkHeads),
+		peerErrorChan:            peerErrorChan,
+		signalPeerDisconnectChan: signalPeerDisconnectChan,
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -142,6 +145,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 				c.localRPC,
 				rpc.NewPeerRPC(c.client, pid),
 				c.peerErrorChan,
+				c.gossipVoteChan,
 			),
 			cancel: cancel,
 		}
@@ -176,6 +180,11 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 				sleepTimeSeconds = min(maxSleepBackoff, sleepTimeSeconds*2)
 			}
 		}()
+	}
+
+	select {
+	case c.signalPeerDisconnectChan <- pid:
+	case <-ctx.Done():
 	}
 }
 
