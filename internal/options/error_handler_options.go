@@ -13,6 +13,7 @@ const (
 	transactionApplicationErrorScoreDefault = 1000
 	chainIDMismatchErrorScoreDefault        = uint64(^uint32(0))
 	chainNotConnectedErrorScoreDefault      = uint64(^uint32(0))
+	checkpointMismatchErrorScoreDefault     = uint64(^uint32(0))
 	localRPCErrorScoreDefault               = 0
 	peerRPCErrorScoreDefault                = 1000
 	localRPCTimeoutErrorScoreDefault        = 0
@@ -32,6 +33,7 @@ type PeerErrorHandlerOptions struct {
 	TransactionApplicationErrorScore uint64
 	ChainIDMismatchErrorScore        uint64
 	ChainNotConnectedErrorScore      uint64
+	CheckpointMismatchErrorScore     uint64
 	LocalRPCErrorScore               uint64
 	PeerRPCErrorScore                uint64
 	LocalRPCTimeoutErrorScore        uint64
@@ -51,6 +53,7 @@ func NewPeerErrorHandlerOptions() *PeerErrorHandlerOptions {
 		TransactionApplicationErrorScore: transactionApplicationErrorScoreDefault,
 		ChainIDMismatchErrorScore:        chainIDMismatchErrorScoreDefault,
 		ChainNotConnectedErrorScore:      chainNotConnectedErrorScoreDefault,
+		CheckpointMismatchErrorScore:     checkpointMismatchErrorScoreDefault,
 		LocalRPCErrorScore:               localRPCErrorScoreDefault,
 		PeerRPCErrorScore:                peerRPCErrorScoreDefault,
 		LocalRPCTimeoutErrorScore:        localRPCTimeoutErrorScoreDefault,

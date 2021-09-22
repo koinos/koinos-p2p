@@ -26,6 +26,9 @@ var (
 	// ErrChainNotConnected represents that progress can not be made from peer
 	ErrChainNotConnected = errors.New("last irreversible block does not connect to peer chain")
 
+	// ErrCheckpointMismatch represents peer does not have required checkpoint block
+	ErrCheckpointMismatch = errors.New("peer does not have checkpoint block")
+
 	// ErrLocalRPC represents an error occurred during a local rpc
 	ErrLocalRPC = errors.New("local RPC error")
 
