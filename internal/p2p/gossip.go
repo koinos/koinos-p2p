@@ -39,6 +39,7 @@ type GossipManager struct {
 	ps            *pubsub.PubSub
 	topic         *pubsub.Topic
 	sub           *pubsub.Subscription
+	cancel        context.CancelFunc
 	peerErrorChan chan<- PeerError
 	topicName     string
 	enabled       bool
@@ -77,8 +78,10 @@ func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 		return err
 	}
 	gm.sub = sub
+	subCtx, cancel := context.WithCancel(ctx)
+	gm.cancel = cancel
 
-	go gm.readMessages(ctx, ch)
+	go gm.readMessages(subCtx, ch)
 
 	gm.enabled = true
 
@@ -91,6 +94,7 @@ func (gm *GossipManager) Stop() {
 		return
 	}
 
+	gm.cancel()
 	gm.sub.Cancel()
 	gm.sub = nil
 	gm.topic = nil
@@ -117,7 +121,6 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- []byte) {
 	// Note that libp2p has already used the callback passed to RegisterValidator()
 	// to validate blocks / transactions.
 	//
-	defer close(ch)
 	for {
 		msg, err := gm.sub.Next(ctx)
 		if err != nil {
