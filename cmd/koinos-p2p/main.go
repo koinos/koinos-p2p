@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"os"
@@ -130,7 +130,10 @@ func main() {
 		if err != nil {
 			log.Errorf("Could not parse checkpoint block height '%s': %s", parts[0], err.Error())
 		}
-		blockID, err := base64.URLEncoding.DecodeString(parts[1])
+
+		// Replace with base64 later
+		//blockID, err := base64.URLEncoding.DecodeString(parts[1])
+		blockID, err := hex.DecodeString(parts[1])
 		config.PeerConnectionOptions.Checkpoints = append(config.PeerConnectionOptions.Checkpoints, options.Checkpoint{BlockHeight: blockHeight, BlockID: blockID})
 	}
 
