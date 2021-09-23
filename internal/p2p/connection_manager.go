@@ -8,7 +8,6 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -54,7 +53,6 @@ type ConnectionManager struct {
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
-	forkHeadsChan            chan *broadcast.ForkHeads
 	peerErrorChan            chan<- PeerError
 	gossipVoteChan           chan<- GossipVote
 	signalPeerDisconnectChan chan<- peer.ID
@@ -73,8 +71,8 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
 		peerConnectedChan:        make(chan connectionMessage),
 		peerDisconnectedChan:     make(chan connectionMessage),
-		forkHeadsChan:            make(chan *broadcast.ForkHeads),
 		peerErrorChan:            peerErrorChan,
+		gossipVoteChan:           gossipVoteChan,
 		signalPeerDisconnectChan: signalPeerDisconnectChan,
 	}
 
@@ -127,11 +125,6 @@ func (c *ConnectionManager) Listen(n network.Network, _ multiaddr.Multiaddr) {
 
 // ListenClose is part of the libp2p network.Notifiee interface
 func (c *ConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr) {
-}
-
-// HandleForkHeads updates peers with fork head information
-func (c *ConnectionManager) HandleForkHeads(fh *broadcast.ForkHeads) {
-	c.forkHeadsChan <- fh
 }
 
 func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {

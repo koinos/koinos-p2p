@@ -256,7 +256,7 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 
 func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
 	log.Debug("Received block via gossip")
-	var block *protocol.Block
+	block := &protocol.Block{}
 	err := proto.Unmarshal(msg.Data, block)
 	if err != nil {
 		return fmt.Errorf("%w, %v", p2perrors.ErrDeserialization, err.Error())
