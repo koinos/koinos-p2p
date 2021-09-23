@@ -55,6 +55,14 @@ func NewGossipManager(ps *pubsub.PubSub, errChan chan<- PeerError, topicName str
 		topicName:     topicName,
 		enabled:       false,
 	}
+
+	topic, err := gm.ps.Join(gm.topicName)
+	if err != nil {
+		log.Errorf("could not connect to gossip topic: %s", gm.topicName)
+	} else {
+		gm.topic = topic
+	}
+
 	return &gm
 }
 
@@ -71,13 +79,11 @@ func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 		return nil
 	}
 
-	topic, err := gm.ps.Join(gm.topicName)
-	if err != nil {
-		return err
+	if gm.topic == nil {
+		return fmt.Errorf("cannot start gossip on nil topic: %s", gm.topicName)
 	}
-	gm.topic = topic
 
-	sub, err := topic.Subscribe()
+	sub, err := gm.topic.Subscribe()
 	if err != nil {
 		return err
 	}
@@ -103,7 +109,6 @@ func (gm *GossipManager) Stop() {
 	gm.cancel()
 	gm.sub.Cancel()
 	gm.sub = nil
-	gm.topic = nil
 	gm.enabled = false
 }
 
@@ -129,7 +134,7 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- []byte) {
 	//
 	for {
 		msg, err := gm.sub.Next(ctx)
-		if err != nil {
+		if err != nil && !errors.Is(context.DeadlineExceeded, err) {
 			log.Warnf("Error getting message for topic %s: %s", gm.topicName, err)
 			return
 		}
