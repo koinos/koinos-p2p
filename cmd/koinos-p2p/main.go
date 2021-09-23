@@ -90,7 +90,7 @@ func main() {
 	*seed = util.GetStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
 	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P)
 	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P)
-	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints)
+	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints, yamlConfig.P2P, yamlConfig.BlockStore)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 
