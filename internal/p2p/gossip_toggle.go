@@ -30,6 +30,10 @@ type GossipToggle struct {
 
 func (g *GossipToggle) checkThresholds(ctx context.Context) {
 	if len(g.peerVotes) == 0 {
+		if g.enabled && !g.opts.AlwaysEnable {
+			g.enabled = false
+			g.gossipEnabler.EnableGossip(ctx, false)
+		}
 		return
 	}
 

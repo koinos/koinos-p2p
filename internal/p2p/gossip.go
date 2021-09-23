@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
@@ -42,6 +43,7 @@ type GossipManager struct {
 	cancel        context.CancelFunc
 	peerErrorChan chan<- PeerError
 	topicName     string
+	enableMutex   sync.Mutex
 	enabled       bool
 }
 
@@ -63,6 +65,8 @@ func (gm *GossipManager) RegisterValidator(val interface{}) {
 
 // Start starts gossiping on this topic
 func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
+	gm.enableMutex.Lock()
+	defer gm.enableMutex.Unlock()
 	if gm.enabled {
 		return nil
 	}
@@ -90,6 +94,8 @@ func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 
 // Stop stops all gossiping on this topic
 func (gm *GossipManager) Stop() {
+	gm.enableMutex.Lock()
+	defer gm.enableMutex.Unlock()
 	if !gm.enabled {
 		return
 	}
