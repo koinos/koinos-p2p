@@ -33,7 +33,7 @@ func (p *PeerRPC) GetChainID(ctx context.Context) (id multihash.Multihash, err e
 		if errors.Is(err, context.DeadlineExceeded) {
 			err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
 		}
-		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
+		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC, err)
 	}
 	return rpcResp.ID, err
 }
@@ -47,7 +47,7 @@ func (p *PeerRPC) GetHeadBlock(ctx context.Context) (id multihash.Multihash, hei
 		if errors.Is(err, context.DeadlineExceeded) {
 			err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
 		}
-		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
+		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC, err)
 	}
 	return rpcResp.ID, rpcResp.Height, err
 }
@@ -64,7 +64,7 @@ func (p *PeerRPC) GetAncestorBlockID(ctx context.Context, parentID multihash.Mul
 		if errors.Is(err, context.DeadlineExceeded) {
 			err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
 		}
-		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC)
+		err = fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC, err)
 	}
 	return rpcResp.ID, err
 }

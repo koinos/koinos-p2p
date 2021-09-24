@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	libp2plog "github.com/ipfs/go-log"
+
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
@@ -64,6 +66,9 @@ const (
 func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
+
+	// Set libp2p log level
+	libp2plog.SetAllLoggers(libp2plog.LevelFatal)
 
 	baseDir := flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
 	amqp := flag.StringP(amqpOption, "a", "", "AMQP server URL")
