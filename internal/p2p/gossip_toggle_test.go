@@ -146,8 +146,8 @@ func TestNormalGossipToggle(t *testing.T) {
 	voteChan <- GossipVote{peers[0], true}
 	peerDisconnectedChan <- peers[0]
 	time.Sleep(time.Millisecond * 5)
-	if !testHandler.enabled {
-		t.Errorf("Gossip was disabled when it should not have been")
+	if testHandler.enabled {
+		t.Errorf("Gossip was not disabled when it should have been")
 	}
 }
 

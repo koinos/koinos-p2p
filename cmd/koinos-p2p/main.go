@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"os"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	libp2plog "github.com/ipfs/go-log"
 
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
@@ -65,6 +67,9 @@ func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
 
+	// Set libp2p log level
+	libp2plog.SetAllLoggers(libp2plog.LevelFatal)
+
 	baseDir := flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
 	amqp := flag.StringP(amqpOption, "a", "", "AMQP server URL")
 	addr := flag.StringP(listenOption, "l", "", "The multiaddress on which the node will listen")
@@ -90,7 +95,7 @@ func main() {
 	*seed = util.GetStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
 	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P)
 	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P)
-	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints)
+	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints, yamlConfig.P2P, yamlConfig.BlockStore)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 
@@ -130,7 +135,10 @@ func main() {
 		if err != nil {
 			log.Errorf("Could not parse checkpoint block height '%s': %s", parts[0], err.Error())
 		}
-		blockID, err := base64.URLEncoding.DecodeString(parts[1])
+
+		// Replace with base64 later
+		//blockID, err := base64.URLEncoding.DecodeString(parts[1])
+		blockID, err := hex.DecodeString(parts[1])
 		config.PeerConnectionOptions.Checkpoints = append(config.PeerConnectionOptions.Checkpoints, options.Checkpoint{BlockHeight: blockHeight, BlockID: blockID})
 	}
 

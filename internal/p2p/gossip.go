@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
@@ -39,8 +40,10 @@ type GossipManager struct {
 	ps            *pubsub.PubSub
 	topic         *pubsub.Topic
 	sub           *pubsub.Subscription
+	cancel        context.CancelFunc
 	peerErrorChan chan<- PeerError
 	topicName     string
+	enableMutex   sync.Mutex
 	enabled       bool
 }
 
@@ -52,6 +55,14 @@ func NewGossipManager(ps *pubsub.PubSub, errChan chan<- PeerError, topicName str
 		topicName:     topicName,
 		enabled:       false,
 	}
+
+	topic, err := gm.ps.Join(gm.topicName)
+	if err != nil {
+		log.Errorf("could not connect to gossip topic: %s", gm.topicName)
+	} else {
+		gm.topic = topic
+	}
+
 	return &gm
 }
 
@@ -62,23 +73,25 @@ func (gm *GossipManager) RegisterValidator(val interface{}) {
 
 // Start starts gossiping on this topic
 func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
+	gm.enableMutex.Lock()
+	defer gm.enableMutex.Unlock()
 	if gm.enabled {
 		return nil
 	}
 
-	topic, err := gm.ps.Join(gm.topicName)
-	if err != nil {
-		return err
+	if gm.topic == nil {
+		return fmt.Errorf("cannot start gossip on nil topic: %s", gm.topicName)
 	}
-	gm.topic = topic
 
-	sub, err := topic.Subscribe()
+	sub, err := gm.topic.Subscribe()
 	if err != nil {
 		return err
 	}
 	gm.sub = sub
+	subCtx, cancel := context.WithCancel(ctx)
+	gm.cancel = cancel
 
-	go gm.readMessages(ctx, ch)
+	go gm.readMessages(subCtx, ch)
 
 	gm.enabled = true
 
@@ -87,13 +100,15 @@ func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 
 // Stop stops all gossiping on this topic
 func (gm *GossipManager) Stop() {
+	gm.enableMutex.Lock()
+	defer gm.enableMutex.Unlock()
 	if !gm.enabled {
 		return
 	}
 
+	gm.cancel()
 	gm.sub.Cancel()
 	gm.sub = nil
-	gm.topic = nil
 	gm.enabled = false
 }
 
@@ -117,10 +132,9 @@ func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- []byte) {
 	// Note that libp2p has already used the callback passed to RegisterValidator()
 	// to validate blocks / transactions.
 	//
-	defer close(ch)
 	for {
 		msg, err := gm.sub.Next(ctx)
-		if err != nil {
+		if err != nil && !errors.Is(context.DeadlineExceeded, err) {
 			log.Warnf("Error getting message for topic %s: %s", gm.topicName, err)
 			return
 		}
