@@ -82,7 +82,7 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		log.Errorf("Error registering Peer RPC Service: %s", err.Error())
 		panic(err)
 	}
-	log.Debug("Peer RPC Servce successfully registered")
+	log.Debug("Peer RPC Service successfully registered")
 
 	for _, peerStr := range initialPeers {
 		ma, err := multiaddr.NewMultiaddr(peerStr)

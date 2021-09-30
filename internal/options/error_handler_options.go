@@ -1,6 +1,9 @@
 package options
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 const (
 	errorScoreDecayHalflifeDefault = time.Minute * 10
@@ -11,9 +14,9 @@ const (
 	blockIrreversibilityErrorScoreDefault   = 100
 	blockApplicationErrorScoreDefault       = 5000
 	transactionApplicationErrorScoreDefault = 1000
-	chainIDMismatchErrorScoreDefault        = uint64(^uint32(0))
-	chainNotConnectedErrorScoreDefault      = uint64(^uint32(0))
-	checkpointMismatchErrorScoreDefault     = uint64(^uint32(0))
+	chainIDMismatchErrorScoreDefault        = uint64(math.MaxUint32)
+	chainNotConnectedErrorScoreDefault      = uint64(math.MaxUint32)
+	checkpointMismatchErrorScoreDefault     = uint64(math.MaxUint32)
 	localRPCErrorScoreDefault               = 0
 	peerRPCErrorScoreDefault                = 1000
 	localRPCTimeoutErrorScoreDefault        = 0
