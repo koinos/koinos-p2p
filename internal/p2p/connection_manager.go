@@ -142,6 +142,7 @@ func (c *ConnectionManager) Listen(n network.Network, _ multiaddr.Multiaddr) {
 func (c *ConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr) {
 }
 
+// GetLastIrreversibleBlock returns last irreversible block
 func (c *ConnectionManager) GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte, error) {
 	returnChan := make(chan libMessage)
 	defer close(returnChan)
@@ -161,6 +162,7 @@ func (c *ConnectionManager) GetLastIrreversibleBlock(ctx context.Context) (uint6
 	return 0, nil, ctx.Err()
 }
 
+// HandleForkHeads handles a fork heads broadcast
 func (c *ConnectionManager) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
 	c.setForkHeadsChan <- forkHeads
 }

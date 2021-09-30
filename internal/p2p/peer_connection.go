@@ -12,7 +12,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-// GossipEnableHandler is an interface for handling enable/disable gossip requests
+// LastIrreversibleBlockProvider is an interface for providing the last irreversible block to PeerConnection
 type LastIrreversibleBlockProvider interface {
 	GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte, error)
 }
