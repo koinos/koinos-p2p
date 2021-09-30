@@ -12,6 +12,11 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+// GossipEnableHandler is an interface for handling enable/disable gossip requests
+type LastIrreversibleBlockProvider interface {
+	GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte, error)
+}
+
 type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
@@ -23,6 +28,7 @@ type PeerConnection struct {
 
 	requestBlockChan chan signalRequestBlocks
 
+	libProvider    LastIrreversibleBlockProvider
 	localRPC       rpc.LocalRPC
 	peerRPC        rpc.RemoteRPC
 	peerErrorChan  chan<- PeerError
@@ -79,12 +85,12 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 }
 
 func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
-	// Get my head info
-	rpcContext, cancelGetForkHeads := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
-	defer cancelGetForkHeads()
-	forkHeads, err := p.localRPC.GetForkHeads(rpcContext)
+	// Get my last irreversible block
+	getLIBContext, cancelGetLIB := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
+	defer cancelGetLIB()
+	libNum, libID, err := p.libProvider.GetLastIrreversibleBlock(getLIBContext)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w GetLastIrreversibleBlock, %s", p2perrors.ErrProcessRequestTimeout, err)
 	}
 
 	// Get peer's head block
@@ -96,27 +102,27 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// If the peer is in the past, it is not an error, but we don't need anything from them
-	if peerHeadHeight <= forkHeads.LastIrreversibleBlock.Height {
+	if peerHeadHeight <= libNum {
 		p.isSynced = true
 		return nil
 	}
 
 	// If LIB is 0, we are still at genesis and could connec to any chain
-	if forkHeads.LastIrreversibleBlock.Height > 0 {
+	if libNum > 0 {
 		// Check if my LIB connect's to peer's head block
 		rpcContext, cancelGetAncestorBlock := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
 		defer cancelGetAncestorBlock()
-		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height)
+		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, libNum)
 		if err != nil {
 			return err
 		}
 
-		if bytes.Compare([]byte(ancestorBlock), []byte(forkHeads.LastIrreversibleBlock.Id)) != 0 {
+		if bytes.Compare([]byte(ancestorBlock), libID) != 0 {
 			return p2perrors.ErrChainNotConnected
 		}
 	}
 
-	blocksToRequest := peerHeadHeight - forkHeads.LastIrreversibleBlock.Height
+	blocksToRequest := peerHeadHeight - libNum
 	if blocksToRequest > p.opts.BlockRequestBatchSize {
 		blocksToRequest = p.opts.BlockRequestBatchSize
 	}
@@ -124,7 +130,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Request blocks
 	rpcContext, cancelGetBlocks := context.WithTimeout(ctx, p.opts.BlockRequestTimeout)
 	defer cancelGetBlocks()
-	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, forkHeads.LastIrreversibleBlock.Height+1, uint32(blocksToRequest))
+	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, libNum+1, uint32(blocksToRequest))
 	if err != nil {
 		return err
 	}
@@ -210,13 +216,14 @@ func (p *PeerConnection) Start(ctx context.Context) {
 }
 
 // NewPeerConnection creates a PeerConnection
-func NewPeerConnection(id peer.ID, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, opts *options.PeerConnectionOptions) *PeerConnection {
+func NewPeerConnection(id peer.ID, libProvider LastIrreversibleBlockProvider, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, opts *options.PeerConnectionOptions) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
 		isSynced:         false,
 		gossipVote:       false,
 		opts:             opts,
 		requestBlockChan: make(chan signalRequestBlocks),
+		libProvider:      libProvider,
 		localRPC:         localRPC,
 		peerRPC:          peerRPC,
 		peerErrorChan:    peerErrorChan,

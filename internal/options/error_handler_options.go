@@ -21,6 +21,7 @@ const (
 	peerRPCErrorScoreDefault                = 1000
 	localRPCTimeoutErrorScoreDefault        = 0
 	peerRPCTimeoutErrorScoreDefault         = 1000
+	processRequestTimeoutErrorScoreDefault  = 0
 	unknownErrorScoreDefault                = blockApplicationErrorScoreDefault
 )
 
@@ -41,6 +42,7 @@ type PeerErrorHandlerOptions struct {
 	PeerRPCErrorScore                uint64
 	LocalRPCTimeoutErrorScore        uint64
 	PeerRPCTimeoutErrorScore         uint64
+	ProcessRequestTimeoutErrorScore  uint64
 	UnknownErrorScore                uint64
 }
 
@@ -61,6 +63,7 @@ func NewPeerErrorHandlerOptions() *PeerErrorHandlerOptions {
 		PeerRPCErrorScore:                peerRPCErrorScoreDefault,
 		LocalRPCTimeoutErrorScore:        localRPCTimeoutErrorScoreDefault,
 		PeerRPCTimeoutErrorScore:         peerRPCTimeoutErrorScoreDefault,
+		ProcessRequestTimeoutErrorScore:  processRequestTimeoutErrorScoreDefault,
 		UnknownErrorScore:                unknownErrorScoreDefault,
 	}
 }

@@ -8,6 +8,7 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -37,6 +38,15 @@ type peerConnectionContext struct {
 	cancel context.CancelFunc
 }
 
+type libMessage struct {
+	num uint64
+	id  []byte
+}
+
+type libRequest struct {
+	returnChan chan<- libMessage
+}
+
 // ConnectionManager attempts to reconnect to peers using the network.Notifiee interface.
 type ConnectionManager struct {
 	host   host.Host
@@ -50,12 +60,15 @@ type ConnectionManager struct {
 
 	initialPeers   map[peer.ID]peer.AddrInfo
 	connectedPeers map[peer.ID]*peerConnectionContext
+	lib            libMessage
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
 	peerErrorChan            chan<- PeerError
 	gossipVoteChan           chan<- GossipVote
 	signalPeerDisconnectChan chan<- peer.ID
+	setForkHeadsChan         chan *broadcast.ForkHeads
+	getLIBChan               chan libRequest
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
@@ -74,6 +87,8 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		peerErrorChan:            peerErrorChan,
 		gossipVoteChan:           gossipVoteChan,
 		signalPeerDisconnectChan: signalPeerDisconnectChan,
+		setForkHeadsChan:         make(chan *broadcast.ForkHeads),
+		getLIBChan:               make(chan libRequest),
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -127,6 +142,29 @@ func (c *ConnectionManager) Listen(n network.Network, _ multiaddr.Multiaddr) {
 func (c *ConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr) {
 }
 
+func (c *ConnectionManager) GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte, error) {
+	returnChan := make(chan libMessage)
+	defer close(returnChan)
+	request := libRequest{returnChan: returnChan}
+
+	select {
+	case c.getLIBChan <- request:
+	case <-ctx.Done():
+	}
+
+	select {
+	case msg := <-returnChan:
+		return msg.num, msg.id, nil
+	case <-ctx.Done():
+	}
+
+	return 0, nil, ctx.Err()
+}
+
+func (c *ConnectionManager) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
+	c.setForkHeadsChan <- forkHeads
+}
+
 func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
 	pid := msg.conn.RemotePeer()
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), pid)
@@ -138,6 +176,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 		peerConn := &peerConnectionContext{
 			peer: NewPeerConnection(
 				pid,
+				c,
 				c.localRPC,
 				rpc.NewPeerRPC(c.client, pid),
 				c.peerErrorChan,
@@ -185,6 +224,18 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 	}
 }
 
+func (c *ConnectionManager) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
+	c.lib.num = forkHeads.LastIrreversibleBlock.Height
+	c.lib.id = forkHeads.LastIrreversibleBlock.Id
+}
+
+func (c *ConnectionManager) handleGetLastIrreversible(ctx context.Context, request libRequest) {
+	select {
+	case request.returnChan <- c.lib:
+	default:
+	}
+}
+
 func (c *ConnectionManager) connectInitialPeers() {
 	newlyConnectedPeers := make(map[peer.ID]util.Void)
 	peersToConnect := make(map[peer.ID]peer.AddrInfo)
@@ -229,6 +280,10 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleConnected(ctx, connMsg)
 		case connMsg := <-c.peerDisconnectedChan:
 			c.handleDisconnected(ctx, connMsg)
+		case forkHeads := <-c.setForkHeadsChan:
+			c.handleForkHeads(ctx, forkHeads)
+		case req := <-c.getLIBChan:
+			c.handleGetLastIrreversible(ctx, req)
 
 		case <-ctx.Done():
 			return
@@ -238,6 +293,15 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 
 // Start the connection manager
 func (c *ConnectionManager) Start(ctx context.Context) {
+	forkHeads, err := c.localRPC.GetForkHeads(ctx)
+
+	for err != nil {
+		forkHeads, err = c.localRPC.GetForkHeads(ctx)
+	}
+
+	c.lib.num = forkHeads.LastIrreversibleBlock.Height
+	c.lib.id = forkHeads.LastIrreversibleBlock.Id
+
 	go func() {
 		for _, peer := range c.host.Network().Peers() {
 			conns := c.host.Network().ConnsToPeer(peer)

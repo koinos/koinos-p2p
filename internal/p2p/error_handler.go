@@ -120,6 +120,8 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 		return p.opts.LocalRPCTimeoutErrorScore
 	case errors.Is(err, p2perrors.ErrSerialization):
 		return p.opts.SerializationErrorScore
+	case errors.Is(err, p2perrors.ErrProcessRequestTimeout):
+		return p.opts.ProcessRequestTimeoutErrorScore
 
 	default:
 		return p.opts.UnknownErrorScore

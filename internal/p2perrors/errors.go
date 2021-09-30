@@ -40,4 +40,7 @@ var (
 
 	// ErrPeerRPCTimeout represents a peer rpc timed out
 	ErrPeerRPCTimeout = errors.New("peer RPC request timed out")
+
+	// ErrProcessRequestTimeout represents an in process asynchronous request time out
+	ErrProcessRequestTimeout = errors.New("in process request timed out")
 )
