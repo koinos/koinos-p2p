@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -14,9 +13,9 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
-	"github.com/koinos/koinos-p2p/internal/protocol"
+	"github.com/koinos/koinos-p2p/internal/p2p"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	types "github.com/koinos/koinos-types-golang"
+	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
 
 	libp2p "github.com/libp2p/go-libp2p"
@@ -27,16 +26,22 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	multiaddr "github.com/multiformats/go-multiaddr"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
-	Host              host.Host
-	RPC               rpc.RPC
-	Gossip            *protocol.KoinosGossip
-	SyncManager       *protocol.SyncManager
-	ConnectionManager *protocol.ConnectionManager
-	PeerErrorChan     chan protocol.PeerError
+	Host                 host.Host
+	localRPC             rpc.LocalRPC
+	Gossip               *p2p.KoinosGossip
+	ConnectionManager    *p2p.ConnectionManager
+	PeerErrorHandler     *p2p.PeerErrorHandler
+	GossipToggle         *p2p.GossipToggle
+	PeerErrorChan        chan p2p.PeerError
+	DisconnectPeerChan   chan peer.ID
+	GossipVoteChan       chan p2p.GossipVote
+	PeerDisconnectedChan chan peer.ID
 
 	Options options.NodeOptions
 }
@@ -45,7 +50,7 @@ type KoinosP2PNode struct {
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use 0 for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, requestHandler *koinosmq.RequestHandler, seed string, config *options.Config) (*KoinosP2PNode, error) {
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.LocalRPC, requestHandler *koinosmq.RequestHandler, seed string, config *options.Config) (*KoinosP2PNode, error) {
 	privateKey, err := generatePrivateKey(seed)
 	if err != nil {
 		return nil, err
@@ -64,7 +69,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 
 	node := new(KoinosP2PNode)
 	node.Host = host
-	node.RPC = rpc
+	node.localRPC = localRPC
 
 	if requestHandler != nil {
 		requestHandler.SetBroadcastHandler("koinos.block.accept", node.handleBlockBroadcast)
@@ -75,8 +80,10 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	}
 
 	node.Options = config.NodeOptions
-	node.PeerErrorChan = make(chan protocol.PeerError)
-	node.SyncManager = protocol.NewSyncManager(ctx, node.Host, node.RPC, node.PeerErrorChan, config)
+	node.PeerErrorChan = make(chan p2p.PeerError)
+	node.DisconnectPeerChan = make(chan peer.ID)
+	node.GossipVoteChan = make(chan p2p.GossipVote)
+	node.PeerDisconnectedChan = make(chan peer.ID)
 
 	// Create the pubsub gossip
 	if node.Options.EnableBootstrap {
@@ -107,58 +114,84 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, rpc rpc.RPC, reque
 	if err != nil {
 		return nil, err
 	}
-	node.Gossip = protocol.NewKoinosGossip(ctx, rpc, ps, node.PeerErrorChan, node, node.Host.ID())
-	node.SyncManager.SetGossipEnableHandler(node.Gossip)
-	node.ConnectionManager = protocol.NewConnectionManager(
-		node.Host,
-		node.SyncManager,
+
+	node.Gossip = p2p.NewKoinosGossip(
+		ctx,
+		node.localRPC,
+		ps,
+		node.PeerErrorChan,
+		node,
+		node.Host.ID())
+
+	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
+		node.DisconnectPeerChan,
+		node.PeerErrorChan,
+		config.PeerErrorHandlerOptions)
+
+	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
-		&config.BlacklistOptions,
+		node.GossipVoteChan,
+		node.PeerDisconnectedChan,
+		config.GossipToggleOptions)
+
+	node.ConnectionManager = p2p.NewConnectionManager(
+		node.Host,
+		node.Gossip,
+		node.PeerErrorHandler,
+		node.localRPC,
+		&config.PeerConnectionOptions,
 		node.Options.InitialPeers,
-		node.PeerErrorChan)
+		node.PeerErrorChan,
+		node.GossipVoteChan,
+		node.PeerDisconnectedChan)
 
 	return node, nil
 }
 
 func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	log.Debugf("Received koinos.block.accept broadcast: %v", string(data))
-	blockBroadcast := types.NewBlockAccepted()
-	err := json.Unmarshal(data, blockBroadcast)
+	blockBroadcast := &broadcast.BlockAccepted{}
+	err := proto.Unmarshal(data, blockBroadcast)
 	if err != nil {
 		log.Warnf("Unable to parse koinos.block.accept broadcast: %v", string(data))
 		return
 	}
-	binary := types.NewVariableBlob()
-	binary = blockBroadcast.Serialize(binary)
+	binary, err := proto.Marshal(blockBroadcast.Block)
+	if err != nil {
+		log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
+		return
+	}
 	n.Gossip.Block.PublishMessage(context.Background(), binary)
-	log.Infof("Publishing block - %s", util.BlockString(&blockBroadcast.Block))
-	n.SyncManager.HandleBlockBroadcast(context.Background(), blockBroadcast)
+	log.Infof("Publishing block - %s", util.BlockString(blockBroadcast.Block))
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 	log.Debugf("Received koinos.transction.accept broadcast: %v", string(data))
-	trxBroadcast := types.NewTransactionAccepted()
-	err := json.Unmarshal(data, trxBroadcast)
+	trxBroadcast := &broadcast.TransactionAccepted{}
+	err := proto.Unmarshal(data, trxBroadcast)
 	if err != nil {
 		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", string(data))
 		return
 	}
-	binary := types.NewVariableBlob()
-	binary = trxBroadcast.Serialize(binary)
-	log.Infof("Publishing transaction - %s", util.TransactionString(&trxBroadcast.Transaction))
+	binary, err := proto.Marshal(trxBroadcast.Transaction)
+	if err != nil {
+		log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
+		return
+	}
+	log.Infof("Publishing transaction - %s", util.TransactionString(trxBroadcast.Transaction))
 	n.Gossip.Transaction.PublishMessage(context.Background(), binary)
 }
 
 func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 	log.Debugf("Received koinos.block.forks broadcast: %v", string(data))
-	forkHeads := types.NewForkHeads()
-	err := json.Unmarshal(data, forkHeads)
+	forkHeads := &broadcast.ForkHeads{}
+	err := proto.Unmarshal(data, forkHeads)
 	if err != nil {
 		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", string(data))
 		return
 	}
-	n.SyncManager.HandleForkHeads(context.Background(), forkHeads)
 	n.Gossip.HandleForkHeads(forkHeads)
+	n.ConnectionManager.HandleForkHeads(forkHeads)
 }
 
 // PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string
@@ -228,16 +261,23 @@ func (n *KoinosP2PNode) Close() error {
 // Start starts background goroutines
 func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.Host.Network().Notify(n.ConnectionManager)
-	n.SyncManager.Start(ctx)
-
-	// Start gossip if forced
-	if n.Options.ForceGossip {
-		n.Gossip.StartGossip(ctx)
-	}
 
 	// Start peer gossip
 	n.Gossip.StartPeerGossip(ctx)
+	n.PeerErrorHandler.Start(ctx)
+	n.GossipToggle.Start(ctx)
 	n.ConnectionManager.Start(ctx)
+
+	go func() {
+		for {
+			select {
+			case id := <-n.DisconnectPeerChan:
+				n.Host.Network().ClosePeer(id)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 // ----------------------------------------------------------------------------
@@ -277,7 +317,7 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 func generateMessageID(msg *pb.Message) string {
 	// Use the default unique ID function for peer exchange
 	switch *msg.Topic {
-	case protocol.BlockTopicName, protocol.TransactionTopicName, protocol.PeerTopicName:
+	case p2p.BlockTopicName, p2p.TransactionTopicName, p2p.PeerTopicName:
 		// Hash the data
 		h := sha256.New()
 		h.Write(msg.Data)

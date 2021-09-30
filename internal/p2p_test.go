@@ -1,8 +1,7 @@
-package protocol
+package p2p
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -10,9 +9,12 @@ import (
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	types "github.com/koinos/koinos-types-golang"
-	util "github.com/koinos/koinos-util-golang"
+	"github.com/koinos/koinos-proto-golang/koinos"
+	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
+	"github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multihash"
 )
 
 // TestRPC implements dummy blockchain RPC.
@@ -20,90 +22,96 @@ import (
 // Note:  This struct and all tests that use it will need to be massively redesigned to test forking.
 //
 type TestRPC struct {
-	ChainID          types.UInt64
-	Height           types.BlockHeightType
-	HeadBlockIDDelta types.UInt64 // To ensure unique IDs within a "test chain", the multihash ID of each block is its height + this delta
-	ApplyBlocks      int          // Number of blocks to apply before failure. < 0 = always apply
-	BlocksApplied    []*types.Block
-	BlocksByID       map[util.MultihashCmp]*types.Block
+	ChainID          uint64
+	Height           uint64
+	LastIrreversible uint64
+	HeadBlockIDDelta uint64 // To ensure unique IDs within a "test chain", the multihash ID of each block is its height + this delta
+	ApplyBlocks      int    // Number of blocks to apply before failure. < 0 = always apply
+	BlocksApplied    []*protocol.Block
+	BlocksByID       map[string]*protocol.Block
 	Mutex            sync.Mutex
 }
 
 // getDummyBlockIDAtHeight() gets the ID of the dummy block at the given height
-func (k *TestRPC) getDummyBlockIDAtHeight(height types.BlockHeightType) *types.Multihash {
-	result := types.NewMultihash()
-	result.ID = types.UInt64(height) + k.HeadBlockIDDelta
+func (k *TestRPC) getDummyBlockIDAtHeight(height uint64) multihash.Multihash {
+	result, _ := multihash.Encode(make([]byte, 0), height+k.HeadBlockIDDelta)
 	return result
 }
 
 // getBlockTopologyAtHeight() gets the topology of the dummy block at the given height
-func (k *TestRPC) getDummyTopologyAtHeight(height types.BlockHeightType) *types.BlockTopology {
-	topo := types.NewBlockTopology()
-	topo.ID = *k.getDummyBlockIDAtHeight(height)
+func (k *TestRPC) getDummyTopologyAtHeight(height uint64) *koinos.BlockTopology {
+	topo := &koinos.BlockTopology{}
+	topo.Id = k.getDummyBlockIDAtHeight(height)
 	topo.Height = height
 	if height > 1 {
-		topo.Previous = *k.getDummyBlockIDAtHeight(height - 1)
+		topo.Previous = k.getDummyBlockIDAtHeight(height - 1)
 	}
 	return topo
 }
 
 // createDummyBlock() creates a dummy block at the given height
-func (k *TestRPC) createDummyBlock(height types.BlockHeightType) *types.Block {
+func (k *TestRPC) createDummyBlock(height uint64) *protocol.Block {
 	topo := k.getDummyTopologyAtHeight(height)
 
-	block := types.NewBlock()
-	block.ID = topo.ID
-	block.Header.Previous = topo.Previous
-	block.Header.Height = height
-	block.ActiveData = *types.NewOpaqueActiveBlockData()
-	block.PassiveData = *types.NewOpaquePassiveBlockData()
+	block := &protocol.Block{
+		Id: topo.Id,
+		Header: &protocol.BlockHeader{
+			Height:   height,
+			Previous: topo.Previous,
+		},
+	}
+
 	return block
 }
 
 // GetHeadBlock rpc call
-func (k *TestRPC) GetHeadBlock(ctx context.Context) (*types.GetHeadInfoResponse, error) {
-	hi := types.NewGetHeadInfoResponse()
+func (k *TestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
+	hi := &chain.GetHeadInfoResponse{}
+	hi.HeadTopology = &koinos.BlockTopology{}
 	hi.HeadTopology.Height = k.Height
-	hi.HeadTopology.ID = *k.getDummyBlockIDAtHeight(hi.HeadTopology.Height)
+	hi.HeadTopology.Id = k.getDummyBlockIDAtHeight(hi.HeadTopology.Height)
 	if k.Height > 0 {
-		hi.HeadTopology.Previous = *k.getDummyBlockIDAtHeight(hi.HeadTopology.Height)
+		hi.HeadTopology.Previous = k.getDummyBlockIDAtHeight(hi.HeadTopology.Height)
 	}
 	return hi, nil
 }
 
 // ApplyBlock rpc call
-func (k *TestRPC) ApplyBlock(ctx context.Context, block *types.Block) (*types.SubmitBlockResponse, error) {
+func (k *TestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain.SubmitBlockResponse, error) {
 	if k.ApplyBlocks >= 0 && len(k.BlocksApplied) >= k.ApplyBlocks {
-		return types.NewSubmitBlockResponse(), nil
+		return &chain.SubmitBlockResponse{}, nil
 	}
 
 	k.Mutex.Lock()
 	defer k.Mutex.Unlock()
 
-	k.BlocksApplied = append(k.BlocksApplied, block)
-	k.BlocksByID[util.MultihashToCmp(block.ID)] = block
-	if block.Header.Height > k.Height {
-		k.Height = block.Header.Height
+	if _, ok := k.BlocksByID[string(block.Id)]; !ok {
+		k.BlocksApplied = append(k.BlocksApplied, block)
+
+		k.BlocksByID[string(block.Id)] = block
+		if block.Header.Height > k.Height {
+			k.Height = block.Header.Height
+			k.LastIrreversible = k.Height - 5
+		}
 	}
 
-	return types.NewSubmitBlockResponse(), nil
+	return &chain.SubmitBlockResponse{}, nil
 }
 
-func (k *TestRPC) ApplyTransaction(ctx context.Context, txn *types.Transaction) (*types.SubmitTransactionResponse, error) {
-	return types.NewSubmitTransactionResponse(), nil
+func (k *TestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
+	return &chain.SubmitTransactionResponse{}, nil
 }
 
-func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultihash) (*types.GetBlocksByIDResponse, error) {
-	resp := types.NewGetBlocksByIDResponse()
-	for i := 0; i < len(*blockID); i++ {
-		blockID := (*blockID)[i]
-		block, hasBlock := k.BlocksByID[util.MultihashToCmp(blockID)]
+func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error) {
+	resp := &block_store.GetBlocksByIdResponse{}
+	for _, blockID := range blockIDs {
+		block, hasBlock := k.BlocksByID[string(blockID)]
 		if hasBlock {
-			item := types.NewBlockItem()
-			item.BlockID = blockID
+			item := &block_store.BlockItem{}
+			item.BlockId = blockID
 			item.BlockHeight = block.Header.Height
-			item.Block = types.OptionalBlock{Value: block}
-			resp.BlockItems = append(resp.BlockItems, *item)
+			item.Block = block
+			resp.BlockItems = append(resp.BlockItems, item)
 		}
 	}
 
@@ -111,38 +119,37 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockID *types.VectorMultih
 }
 
 // GetBlocksByHeight rpc call
-func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID *types.Multihash, height types.BlockHeightType, numBlocks types.UInt32) (*types.GetBlocksByHeightResponse, error) {
-	blocks := types.NewGetBlocksByHeightResponse()
-	for i := types.UInt64(0); i < types.UInt64(numBlocks); i++ {
-		if height+types.BlockHeightType(i) > k.Height {
+func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
+	blocks := &block_store.GetBlocksByHeightResponse{}
+	for i := uint64(0); i < uint64(numBlocks); i++ {
+		if height+i > k.Height {
 			break
 		}
 
-		block := k.createDummyBlock(height + types.BlockHeightType(i))
+		blockItem := &block_store.BlockItem{}
+		blockItem.Block = k.createDummyBlock(height + i)
+		blockItem.BlockHeight = blockItem.Block.Header.Height
+		blockItem.BlockId = blockItem.Block.Id
 
-		blockItem := types.NewBlockItem()
-		blockItem.BlockHeight = block.Header.Height
-		blockItem.BlockID = block.ID
-
-		blockItem.Block = types.OptionalBlock{Value: block}
-		blocks.BlockItems = append(blocks.BlockItems, *blockItem)
+		blocks.BlockItems = append(blocks.BlockItems, blockItem)
 	}
 
 	return blocks, nil
 }
 
 // GetChainID rpc call
-func (k *TestRPC) GetChainID(ctx context.Context) (*types.GetChainIDResponse, error) {
-	mh := types.NewGetChainIDResponse()
-	mh.ChainID.ID = k.ChainID
+func (k *TestRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, error) {
+	mh := &chain.GetChainIdResponse{}
+	mh.ChainId, _ = multihash.Encode(make([]byte, 0), k.ChainID)
 	return mh, nil
 }
 
-func (k *TestRPC) GetForkHeads(ctx context.Context) (*types.GetForkHeadsResponse, error) {
-	resp := types.NewGetForkHeadsResponse()
+func (k *TestRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error) {
+	resp := &chain.GetForkHeadsResponse{}
 	if k.Height > 0 {
-		resp.ForkHeads = types.VectorBlockTopology{*k.getDummyTopologyAtHeight(k.Height)}
-		resp.LastIrreversibleBlock = *k.getDummyTopologyAtHeight(1)
+		resp.ForkHeads = make([]*koinos.BlockTopology, 1)
+		resp.ForkHeads[0] = k.getDummyTopologyAtHeight(k.Height)
+		resp.LastIrreversibleBlock = k.getDummyTopologyAtHeight(k.LastIrreversible)
 	}
 	return resp, nil
 }
@@ -155,48 +162,43 @@ func (k *TestRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func NewTestRPC(height types.BlockHeightType) *TestRPC {
-	rpc := TestRPC{ChainID: 1, Height: height, HeadBlockIDDelta: 0, ApplyBlocks: -1}
-	rpc.BlocksApplied = make([]*types.Block, 0)
-	rpc.BlocksByID = make(map[util.MultihashCmp]*types.Block)
+func NewTestRPC(height uint64) *TestRPC {
+	var lastIrr uint64
+	if height > 5 {
+		lastIrr = height - 5
+	} else {
+		lastIrr = 1
+	}
+	rpc := TestRPC{
+		ChainID:          1,
+		Height:           height,
+		LastIrreversible: lastIrr,
+		HeadBlockIDDelta: 0,
+		ApplyBlocks:      -1,
+		BlocksApplied:    make([]*protocol.Block, 0),
+		BlocksByID:       make(map[string]*protocol.Block),
+	}
 
-	for h := types.BlockHeightType(1); h <= height; h++ {
+	for h := uint64(1); h <= height; h++ {
 		block := rpc.createDummyBlock(h)
 		blockID := rpc.getDummyBlockIDAtHeight(h)
-		rpc.BlocksByID[util.MultihashToCmp(*blockID)] = block
+		rpc.BlocksByID[string(blockID)] = block
 	}
 
 	return &rpc
 }
 
 func SetUnitTestOptions(config *options.Config) {
-	config.SyncManagerOptions.RPCTimeoutMs = 30000
-	config.SyncManagerOptions.BlacklistMs = 60000
-	config.BdmiProviderOptions.PollMyTopologyMs = 20
-	config.BdmiProviderOptions.HeightRangeTimeoutMs = 10000
-	config.BdmiProviderOptions.HeightInterestReach = 5
-	config.BdmiProviderOptions.RescanIntervalMs = 15
-	config.DownloadManagerOptions.MaxDownloadDepth = 3
-	config.DownloadManagerOptions.MaxDownloadsInFlight = 8
-	config.PeerHandlerOptions.HeightRangePollTimeMs = 700
-	config.PeerHandlerOptions.DownloadTimeoutMs = 50000
-	config.PeerHandlerOptions.RPCTimeoutMs = 10000
 }
 
-func createTestClients(listenRPC rpc.RPC, sendRPC rpc.RPC) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
-	config := options.NewConfig()
-	SetUnitTestOptions(config)
-	config.PeerHandlerOptions.HeightRangePollTimeMs = 100
-	config.BdmiProviderOptions.HeightInterestReach = 50
-	config.DownloadManagerOptions.MaxDownloadDepth = 15
-	config.DownloadManagerOptions.MaxDownloadsInFlight = 25
-	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, nil, "test1", config)
+func createTestClients(listenRPC rpc.LocalRPC, listenConfig *options.Config, sendRPC rpc.LocalRPC, sendConfig *options.Config) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
+	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, nil, "test1", listenConfig)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 	listenNode.Start(context.Background())
 
-	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, nil, "test2", config)
+	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, nil, "test2", sendConfig)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
@@ -209,7 +211,9 @@ func TestSyncNoError(t *testing.T) {
 	// Test no error sync
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
+	sendConfig := options.NewConfig()
+	sendConfig.PeerConnectionOptions.Checkpoints = []options.Checkpoint{{BlockHeight: 10, BlockID: listenRPC.getDummyBlockIDAtHeight(10)}}
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, sendConfig)
 	if err != nil {
 		t.Error(err)
 	}
@@ -223,11 +227,12 @@ func TestSyncNoError(t *testing.T) {
 
 	time.Sleep(time.Duration(3000) * time.Duration(time.Millisecond))
 
-	// SendRPC should have applied 49 blocks
-	// A real node would have synced 123, but is event driven from chain broadcasts
-	// This is far as the node will sync without handling broadcasts
-	if len(sendRPC.BlocksApplied) != 49 {
-		t.Errorf("Incorrect number of blocks applied. Exepcted 49, was %v", len(sendRPC.BlocksApplied))
+	if len(sendRPC.BlocksApplied) != 123 {
+		t.Errorf("Incorrect number of blocks applied. Exepcted 123, was %v", len(sendRPC.BlocksApplied))
+	}
+
+	if len(sendRPC.BlocksByID) != len(listenRPC.BlocksByID) {
+		t.Errorf("Incorrect number of blocks by id. Expected %v, was %v", len(listenRPC.BlocksByID), len(sendRPC.BlocksByID))
 	}
 }
 
@@ -236,7 +241,7 @@ func TestSyncChainID(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
 	sendRPC.ChainID = 2
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -248,21 +253,15 @@ func TestSyncChainID(t *testing.T) {
 		t.Error("ConnectToPeer() returned unexpected error")
 	}
 
-	ok := false
 	for i := 0; i < 20; i++ {
 		time.Sleep(time.Duration(100) * time.Duration(time.Millisecond))
-		listenError, hasListenError := listenNode.ConnectionManager.Blacklist.GetBlacklistEntry(sendNode.Host.ID())
-		sendError, hasSendError := sendNode.ConnectionManager.Blacklist.GetBlacklistEntry(listenNode.Host.ID())
-		if hasListenError && strings.HasSuffix(listenError.Error.Error(), "peer's chain id does not match") {
-			ok = true
-			break
-		} else if hasSendError && strings.HasSuffix(sendError.Error.Error(), "peer's chain id does not match") {
-			ok = true
-			break
+		if len(sendRPC.BlocksApplied) != 0 {
+			t.Errorf("Incorrect number of blocks applied. Exepcted 0, was %v", len(sendRPC.BlocksApplied))
 		}
-	}
-	if !ok {
-		t.Error("Never got expected error")
+
+		if len(sendRPC.BlocksByID) != 5 {
+			t.Errorf("Incorrect number of blocks by id. Expected 5, was %v", len(sendRPC.BlocksByID))
+		}
 	}
 }
 
@@ -271,7 +270,7 @@ func TestApplyBlockFailure(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
 	sendRPC.ApplyBlocks = 18
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, sendRPC)
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
@@ -285,6 +284,33 @@ func TestApplyBlockFailure(t *testing.T) {
 	expectedBlocksApplied := 18
 
 	// SendRPC should have applied 18 blocks
+	if len(sendRPC.BlocksApplied) != expectedBlocksApplied {
+		t.Errorf("Incorrect number of blocks applied, expected %d, got %d", expectedBlocksApplied, len(sendRPC.BlocksApplied))
+	}
+}
+
+func TestCheckpointFailure(t *testing.T) {
+	listenRPC := NewTestRPC(128)
+	sendRPC := NewTestRPC(5)
+	sendConfig := options.NewConfig()
+	sendConfig.PeerConnectionOptions.Checkpoints = []options.Checkpoint{{BlockHeight: 10, BlockID: listenRPC.getDummyBlockIDAtHeight(11)}}
+	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, sendConfig)
+	if err != nil {
+		t.Error(err)
+	}
+	defer listenNode.Close()
+	defer sendNode.Close()
+
+	_, err = sendNode.ConnectToPeerString(peer.String())
+	if err != nil {
+		t.Error(err)
+	}
+
+	time.Sleep(time.Duration(1000) * time.Duration(time.Millisecond))
+
+	expectedBlocksApplied := 0
+
+	// SendRPC should have applied 0 blocks
 	if len(sendRPC.BlocksApplied) != expectedBlocksApplied {
 		t.Errorf("Incorrect number of blocks applied, expected %d, got %d", expectedBlocksApplied, len(sendRPC.BlocksApplied))
 	}

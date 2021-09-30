@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
+
+	libp2plog "github.com/ipfs/go-log"
 
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
@@ -26,6 +31,7 @@ const (
 	seedOption         = "seed"
 	peerOption         = "peer"
 	directOption       = "direct"
+	checkpointOption   = "checkpoint"
 	peerExchangeOption = "pex"
 	bootstrapOption    = "bootstrap"
 	gossipOption       = "gossip"
@@ -61,12 +67,16 @@ func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
 
+	// Set libp2p log level
+	libp2plog.SetAllLoggers(libp2plog.LevelFatal)
+
 	baseDir := flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
 	amqp := flag.StringP(amqpOption, "a", "", "AMQP server URL")
 	addr := flag.StringP(listenOption, "l", "", "The multiaddress on which the node will listen")
 	seed := flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
 	peerAddresses := flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
 	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
+	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Block checkpoint in the form height:blockid (may specify multiple times)")
 	peerExchange := flag.BoolP(peerExchangeOption, "x", true, "Exchange peers with other nodes")
 	bootstrap := flag.BoolP(bootstrapOption, "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
 	gossip := flag.BoolP(gossipOption, "g", true, "Enable gossip mode")
@@ -85,6 +95,7 @@ func main() {
 	*seed = util.GetStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P)
 	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P)
 	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P)
+	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints, yamlConfig.P2P, yamlConfig.BlockStore)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 
@@ -109,11 +120,26 @@ func main() {
 	config.NodeOptions.DirectPeers = *directAddresses
 
 	if !(*gossip) {
-		config.DownloadManagerOptions.GossipAlwaysDisable = true
+		config.GossipToggleOptions.AlwaysDisable = true
 	}
 	if *forceGossip {
-		config.DownloadManagerOptions.GossipAlwaysEnable = true
-		config.NodeOptions.ForceGossip = true
+		config.GossipToggleOptions.AlwaysEnable = true
+	}
+
+	for _, checkpoint := range *checkpoints {
+		parts := strings.SplitN(checkpoint, ":", 2)
+		if len(parts) != 2 {
+			log.Errorf("Checkpoint option must be in form blockHeight:blockID, was '%s'", checkpoint)
+		}
+		blockHeight, err := strconv.ParseUint(parts[0], 10, 64)
+		if err != nil {
+			log.Errorf("Could not parse checkpoint block height '%s': %s", parts[0], err.Error())
+		}
+
+		// Replace with base64 later
+		//blockID, err := base64.URLEncoding.DecodeString(parts[1])
+		blockID, err := hex.DecodeString(parts[1])
+		config.PeerConnectionOptions.Checkpoints = append(config.PeerConnectionOptions.Checkpoints, options.Checkpoint{BlockHeight: blockHeight, BlockID: blockID})
 	}
 
 	client.Start()
