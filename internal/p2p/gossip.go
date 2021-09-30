@@ -334,7 +334,7 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 
 func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
 	log.Debug("Received transaction via gossip")
-	var transaction *protocol.Transaction
+	transaction := &protocol.Transaction{}
 	err := proto.Unmarshal(msg.Data, transaction)
 	if err != nil {
 		return fmt.Errorf("%w, %v", p2perrors.ErrDeserialization, err.Error())
