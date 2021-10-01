@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/koinos/koinos-p2p/internal/options"
@@ -22,10 +23,14 @@ type TestRPC struct {
 	ApplyBlocks      int    // Number of blocks to apply before failure. < 0 = always apply
 	BlocksByID       map[string]*protocol.Block
 	BlocksByHeight   map[uint64]*protocol.Block
+	Mutex            sync.Mutex
 }
 
 // GetHeadBlock rpc call
 func (k *TestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+
 	hi := chain.GetHeadInfoResponse{}
 	hi.HeadTopology.Height = k.Height
 	hi.HeadTopology.Id, _ = multihash.Encode(make([]byte, 0), k.Height+k.HeadBlockIDDelta)
@@ -35,6 +40,9 @@ func (k *TestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse,
 
 // ApplyBlock rpc call
 func (k *TestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain.SubmitBlockResponse, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+
 	if k.ApplyBlocks >= 0 && len(k.BlocksByHeight) >= k.ApplyBlocks {
 		return &chain.SubmitBlockResponse{}, nil
 	}
@@ -50,6 +58,9 @@ func (k *TestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transact
 }
 
 func (k *TestRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+
 	fh := &chain.GetForkHeadsResponse{}
 	fh.LastIrreversibleBlock = &koinos.BlockTopology{}
 	fh.LastIrreversibleBlock.Height = k.LastIrreversible
@@ -63,6 +74,9 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multih
 
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+
 	blocks := &block_store.GetBlocksByHeightResponse{}
 	for i := uint64(0); i < uint64(numBlocks); i++ {
 		blockItem := &block_store.BlockItem{}

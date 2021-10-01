@@ -66,6 +66,9 @@ func (k *TestRPC) createDummyBlock(height uint64) *protocol.Block {
 
 // GetHeadBlock rpc call
 func (k *TestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+
 	hi := &chain.GetHeadInfoResponse{}
 	hi.HeadTopology = &koinos.BlockTopology{}
 	hi.HeadTopology.Height = k.Height
@@ -103,6 +106,9 @@ func (k *TestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transact
 }
 
 func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+
 	resp := &block_store.GetBlocksByIdResponse{}
 	for _, blockID := range blockIDs {
 		block, hasBlock := k.BlocksByID[string(blockID)]
@@ -120,6 +126,9 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multih
 
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+
 	blocks := &block_store.GetBlocksByHeightResponse{}
 	for i := uint64(0); i < uint64(numBlocks); i++ {
 		if height+i > k.Height {
@@ -145,6 +154,9 @@ func (k *TestRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, er
 }
 
 func (k *TestRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+
 	resp := &chain.GetForkHeadsResponse{}
 	if k.Height > 0 {
 		resp.ForkHeads = make([]*koinos.BlockTopology, 1)
