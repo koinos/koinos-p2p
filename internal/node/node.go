@@ -86,19 +86,10 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.PeerDisconnectedChan = make(chan peer.ID)
 
 	// Create the pubsub gossip
-	if node.Options.EnableBootstrap {
-		// TODO:  When https://github.com/libp2p/go-libp2p-pubsub/issues/364 is fixed, don't monkey-patch global variables like this
-		log.Info("Bootstrap node enabled")
-		pubsub.GossipSubD = 0
-		pubsub.GossipSubDlo = 0
-		pubsub.GossipSubDhi = 0
-		pubsub.GossipSubDscore = 0
-	} else {
-		pubsub.GossipSubD = 6
-		pubsub.GossipSubDlo = 5
-		pubsub.GossipSubDhi = 12
-		pubsub.GossipSubDscore = 4
-	}
+	pubsub.GossipSubD = 6
+	pubsub.GossipSubDlo = 5
+	pubsub.GossipSubDhi = 12
+	pubsub.GossipSubDscore = 4
 
 	if !node.Options.EnablePeerExchange {
 		pubsub.GossipSubPrunePeers = 0

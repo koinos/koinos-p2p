@@ -33,7 +33,6 @@ const (
 	directOption       = "direct"
 	checkpointOption   = "checkpoint"
 	peerExchangeOption = "pex"
-	bootstrapOption    = "bootstrap"
 	gossipOption       = "gossip"
 	forceGossipOption  = "forceGossip"
 	logLevelOption     = "log-level"
@@ -46,7 +45,6 @@ const (
 	listenDefault       = "/ip4/127.0.0.1/tcp/8888"
 	seedDefault         = ""
 	peerExchangeDefault = true
-	bootstrapDefault    = false
 	gossipDefault       = true
 	forceGossipDefault  = false
 	verboseDefault      = false
@@ -78,7 +76,6 @@ func main() {
 	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
 	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Block checkpoint in the form height:blockid (may specify multiple times)")
 	peerExchange := flag.BoolP(peerExchangeOption, "x", true, "Exchange peers with other nodes")
-	bootstrap := flag.BoolP(bootstrapOption, "b", false, "Function as bootstrap node (always PRUNE, see libp2p gossip pex docs)")
 	gossip := flag.BoolP(gossipOption, "g", true, "Enable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", false, "Force gossip mode")
 	logLevel := flag.StringP(logLevelOption, "v", logLevelDefault, "The log filtering level (debug, info, warn, error)")
@@ -114,7 +111,6 @@ func main() {
 	config := options.NewConfig()
 
 	config.NodeOptions.EnablePeerExchange = *peerExchange
-	config.NodeOptions.EnableBootstrap = *bootstrap
 
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
