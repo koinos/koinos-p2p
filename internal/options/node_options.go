@@ -5,9 +5,6 @@ type NodeOptions struct {
 	// Set to true to enable peer exchange, where peers are given to / accepted from other nodes
 	EnablePeerExchange bool
 
-	// Set to true to enable bootstrap mode, where incoming connections are referred to other nodes
-	EnableBootstrap bool
-
 	// Peers to initially connect
 	InitialPeers []string
 
@@ -22,7 +19,6 @@ type NodeOptions struct {
 func NewNodeOptions() *NodeOptions {
 	return &NodeOptions{
 		EnablePeerExchange: true,
-		EnableBootstrap:    false,
 		InitialPeers:       make([]string, 0),
 		DirectPeers:        make([]string, 0),
 		ForceGossip:        false,
