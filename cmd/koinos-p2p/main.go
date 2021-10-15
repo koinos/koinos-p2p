@@ -34,7 +34,7 @@ const (
 	checkpointOption   = "checkpoint"
 	peerExchangeOption = "pex"
 	gossipOption       = "gossip"
-	forceGossipOption  = "forceGossip"
+	forceGossipOption  = "force-gossip"
 	logLevelOption     = "log-level"
 	instanceIDOption   = "instance-id"
 )
