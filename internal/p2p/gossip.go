@@ -281,6 +281,18 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 		return nil
 	}
 
+	if block.Id == nil {
+		return fmt.Errorf("%w, gossiped block missing id", p2perrors.ErrDeserialization)
+	}
+
+	if block.Header == nil {
+		return fmt.Errorf("%w, gossiped block missing header", p2perrors.ErrDeserialization)
+	}
+
+	if block.Header.Previous == nil {
+		return fmt.Errorf("%w, gossiped block missing header.previous", p2perrors.ErrDeserialization)
+	}
+
 	if block.Header.Height < kg.lastIrreversibleBlock {
 		return p2perrors.ErrBlockIrreversibility
 	}
@@ -343,6 +355,10 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	// If the gossip message is from this node, consider it valid but do not apply it (since it has already been applied)
 	if msg.GetFrom() == kg.myPeerID {
 		return nil
+	}
+
+	if transaction.Id == nil {
+		return fmt.Errorf("%w, gossiped transaction missing id", p2perrors.ErrDeserialization)
 	}
 
 	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {
