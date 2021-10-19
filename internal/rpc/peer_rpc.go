@@ -85,6 +85,10 @@ func (p *PeerRPC) GetBlocks(ctx context.Context, headBlockID multihash.Multihash
 		return nil, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC, err)
 	}
 
+	if uint32(len(rpcResp.Blocks)) != numBlocks {
+		return nil, fmt.Errorf("%w, peer returned unexpected number of blocks", p2perrors.ErrPeerRPC)
+	}
+
 	blocks = make([]protocol.Block, len(rpcResp.Blocks))
 
 	for i, blockBytes := range rpcResp.Blocks {
