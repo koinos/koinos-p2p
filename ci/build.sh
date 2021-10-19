@@ -13,5 +13,6 @@ else
       TAG="latest"
    fi
 
+   echo "$DOCKER_PASSWORD" | docker login -u $DOCKER_USERNAME --password-stdin
    docker build . -t koinos/koinos-p2p:$TAG
 fi
