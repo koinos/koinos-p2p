@@ -207,7 +207,7 @@ func (n *KoinosP2PNode) GetConnections() []network.Conn {
 	return n.Host.Network().Conns()
 }
 
-// GetPeerAddress returns the peer address info
+// GetPeerAddressInfo returns the peer address info
 func (n *KoinosP2PNode) GetPeerAddressInfo() *peer.AddrInfo {
 	return &peer.AddrInfo{
 		ID:    n.Host.ID(),
@@ -215,7 +215,7 @@ func (n *KoinosP2PNode) GetPeerAddressInfo() *peer.AddrInfo {
 	}
 }
 
-// GetPeerAddressString returns the peer multiaddress
+// GetPeerAddress returns the peer multiaddress
 func (n *KoinosP2PNode) GetPeerAddress() multiaddr.Multiaddr {
 	addrs, _ := peer.AddrInfoToP2pAddrs(n.GetPeerAddressInfo())
 	return addrs[0]

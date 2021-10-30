@@ -349,6 +349,11 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleConnectionStatus(ctx, status)
 
 		case <-ctx.Done():
+			for _, conn := range c.connectedPeers {
+				conn.cancel()
+			}
+
+			c.connectedPeers = make(map[peer.ID]*peerConnectionContext)
 			return
 		}
 	}
