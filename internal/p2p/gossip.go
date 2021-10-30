@@ -289,9 +289,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 		return fmt.Errorf("%w, gossiped block missing header.previous", p2perrors.ErrDeserialization)
 	}
 
-	lib, _ := kg.libProvider.GetLastIrreversibleBlock()
-
-	if block.Header.Height < lib {
+	if block.Header.Height < kg.libProvider.GetLastIrreversibleBlock().Height {
 		return p2perrors.ErrBlockIrreversibility
 	}
 

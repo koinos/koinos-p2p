@@ -228,9 +228,8 @@ func (n *KoinosP2PNode) GetAddress() multiaddr.Multiaddr {
 }
 
 // GetLastIrreversibleBlock returns last irreversible block height and block id of connected node
-func (n *KoinosP2PNode) GetLastIrreversibleBlock() (uint64, []byte) {
-	lib := n.libValue.Load().(koinos.BlockTopology)
-	return lib.Height, lib.Id
+func (n *KoinosP2PNode) GetLastIrreversibleBlock() koinos.BlockTopology {
+	return n.libValue.Load().(koinos.BlockTopology)
 }
 
 // Close closes the node
