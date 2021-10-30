@@ -178,7 +178,7 @@ func main() {
 
 	node.Start(context.Background())
 
-	log.Infof("Starting node at address: %s", node.GetPeerAddressString())
+	log.Infof("Starting node at address: %s", node.GetPeerAddress())
 
 	// Wait for a SIGINT or SIGTERM signal
 	ch := make(chan os.Signal, 1)
