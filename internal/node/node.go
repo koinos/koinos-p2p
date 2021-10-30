@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math/rand"
 
@@ -199,7 +198,7 @@ func (n *KoinosP2PNode) PeerStringToAddress(peerAddr string) (*peer.AddrInfo, er
 }
 
 // ConnectToPeerAddress connects to the given peer address
-func (n *KoinosP2PNode) ConnectToPeerAddress(ctx context.Context, peer peer.AddrInfo) error {
+func (n *KoinosP2PNode) ConnectToPeerAddress(ctx context.Context, peer *peer.AddrInfo) error {
 	return n.ConnectionManager.ConnectToPeer(ctx, peer)
 }
 
@@ -208,18 +207,18 @@ func (n *KoinosP2PNode) GetConnections() []network.Conn {
 	return n.Host.Network().Conns()
 }
 
-// GetPeerAddress returns the peer address info for the node
-func (n *KoinosP2PNode) GetPeerAddress() peer.AddrInfo {
-	return peer.AddrInfo{
+// GetPeerAddress returns the peer address info
+func (n *KoinosP2PNode) GetPeerAddressInfo() *peer.AddrInfo {
+	return &peer.AddrInfo{
 		ID:    n.Host.ID(),
 		Addrs: n.Host.Addrs(),
 	}
 }
 
-// GetPeerAddressString returns a string representation of the peer address info
-func (n *KoinosP2PNode) GetPeerAddressString() string {
-	pAddr := n.GetPeerAddress()
-	return pAddr.Addrs[0].String() + fmt.Sprintf("/p2p/%s", pAddr.ID.Pretty())
+// GetPeerAddressString returns the peer multiaddress
+func (n *KoinosP2PNode) GetPeerAddress() multiaddr.Multiaddr {
+	addrs, _ := peer.AddrInfoToP2pAddrs(n.GetPeerAddressInfo())
+	return addrs[0]
 }
 
 // Close closes the node

@@ -48,7 +48,13 @@ type libRequest struct {
 }
 
 type connectionRequest struct {
-	addr       peer.AddrInfo
+	addr       *peer.AddrInfo
+	returnChan chan<- error
+}
+
+type connectionStatus struct {
+	addr       *peer.AddrInfo
+	err        error
 	returnChan chan<- error
 }
 
@@ -63,9 +69,10 @@ type ConnectionManager struct {
 	localRPC     rpc.LocalRPC
 	peerOpts     *options.PeerConnectionOptions
 
-	initialPeers   map[peer.ID]peer.AddrInfo
-	connectedPeers map[peer.ID]*peerConnectionContext
-	lib            libMessage
+	initialPeers       map[peer.ID]peer.AddrInfo
+	connectedPeers     map[peer.ID]*peerConnectionContext
+	pendingConnections map[peer.ID]util.Void
+	lib                libMessage
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
@@ -75,6 +82,7 @@ type ConnectionManager struct {
 	setForkHeadsChan         chan *broadcast.ForkHeads
 	getLIBChan               chan libRequest
 	connectToPeerChan        chan connectionRequest
+	connectionStatusChan     chan connectionStatus
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
@@ -89,6 +97,7 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		peerOpts:                 peerOpts,
 		initialPeers:             make(map[peer.ID]peer.AddrInfo),
 		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
+		pendingConnections:       make(map[peer.ID]util.Void),
 		peerConnectedChan:        make(chan connectionMessage),
 		peerDisconnectedChan:     make(chan connectionMessage),
 		peerErrorChan:            peerErrorChan,
@@ -97,6 +106,7 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		setForkHeadsChan:         make(chan *broadcast.ForkHeads),
 		getLIBChan:               make(chan libRequest),
 		connectToPeerChan:        make(chan connectionRequest),
+		connectionStatusChan:     make(chan connectionStatus),
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -218,7 +228,7 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 			sleepTimeSeconds := 1
 			for {
 				log.Infof("Attempting to connect to peer %v", addr.ID)
-				if err := c.ConnectToPeer(ctx, addr); err == nil {
+				if err := c.ConnectToPeer(ctx, &addr); err == nil {
 					return
 				}
 
@@ -255,7 +265,7 @@ func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
 	for len(peersToConnect) > 0 {
 		for peer, addr := range c.initialPeers {
 			log.Infof("Attempting to connect to peer %v", peer)
-			err := c.ConnectToPeer(ctx, addr)
+			err := c.ConnectToPeer(ctx, &addr)
 			if err != nil {
 				log.Infof("Error connecting to peer %v: %s", peer, err)
 			} else {
@@ -275,8 +285,8 @@ func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
 }
 
 // ConnectToPeer attempts to connect to the peer at the given address
-func (c *ConnectionManager) ConnectToPeer(ctx context.Context, addr peer.AddrInfo) error {
-	returnChan := make(chan error, 1)
+func (c *ConnectionManager) ConnectToPeer(ctx context.Context, addr *peer.AddrInfo) error {
+	returnChan := make(chan error)
 	c.connectToPeerChan <- connectionRequest{
 		addr:       addr,
 		returnChan: returnChan,
@@ -290,18 +300,36 @@ func (c *ConnectionManager) ConnectToPeer(ctx context.Context, addr peer.AddrInf
 	}
 }
 
-func (c *ConnectionManager) handleConnectToPeer(ctx context.Context, addr peer.AddrInfo) error {
-	if !c.errorHandler.CanConnect(ctx, addr.ID) {
-		return fmt.Errorf("cannot connect to peer %s, error score too high", addr)
+func (c *ConnectionManager) handleConnectToPeer(ctx context.Context, req connectionRequest) {
+	if !c.errorHandler.CanConnect(ctx, req.addr.ID) {
+		req.returnChan <- fmt.Errorf("cannot connect to peer %s, error score too high", req.addr.ID)
 	}
 
-	if _, ok := c.connectedPeers[addr.ID]; ok {
-		return nil
+	if _, ok := c.connectedPeers[req.addr.ID]; ok {
+		req.returnChan <- nil
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	return c.host.Connect(ctx, addr)
+	if _, ok := c.pendingConnections[req.addr.ID]; ok {
+		req.returnChan <- fmt.Errorf("already attempting connection to peer %s", req.addr.ID)
+	}
+
+	c.pendingConnections[req.addr.ID] = util.Void{}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		err := c.host.Connect(ctx, *req.addr)
+		c.connectionStatusChan <- connectionStatus{
+			addr:       req.addr,
+			err:        err,
+			returnChan: req.returnChan,
+		}
+	}()
+}
+
+func (c *ConnectionManager) handleConnectionStatus(ctx context.Context, status connectionStatus) {
+	delete(c.pendingConnections, status.addr.ID)
+	status.returnChan <- status.err
 }
 
 func (c *ConnectionManager) managerLoop(ctx context.Context) {
@@ -316,7 +344,9 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 		case req := <-c.getLIBChan:
 			req.returnChan <- c.handleGetLastIrreversible(ctx)
 		case req := <-c.connectToPeerChan:
-			req.returnChan <- c.handleConnectToPeer(ctx, req.addr)
+			c.handleConnectToPeer(ctx, req)
+		case status := <-c.connectionStatusChan:
+			c.handleConnectionStatus(ctx, status)
 
 		case <-ctx.Done():
 			return
