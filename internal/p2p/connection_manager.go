@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
@@ -65,11 +64,11 @@ type ConnectionManager struct {
 	errorHandler *PeerErrorHandler
 	localRPC     rpc.LocalRPC
 	peerOpts     *options.PeerConnectionOptions
+	libProvider  LastIrreversibleBlockProvider
 
 	initialPeers       map[peer.ID]peer.AddrInfo
 	connectedPeers     map[peer.ID]*peerConnectionContext
 	pendingConnections map[peer.ID]util.Void
-	lib                atomic.Value
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
@@ -82,7 +81,18 @@ type ConnectionManager struct {
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
-func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *PeerErrorHandler, localRPC rpc.LocalRPC, peerOpts *options.PeerConnectionOptions, initialPeers []string, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, signalPeerDisconnectChan chan<- peer.ID) *ConnectionManager {
+func NewConnectionManager(
+	host host.Host,
+	gossip *KoinosGossip,
+	errorHandler *PeerErrorHandler,
+	localRPC rpc.LocalRPC,
+	peerOpts *options.PeerConnectionOptions,
+	libProvider LastIrreversibleBlockProvider,
+	initialPeers []string,
+	peerErrorChan chan<- PeerError,
+	gossipVoteChan chan<- GossipVote,
+	signalPeerDisconnectChan chan<- peer.ID) *ConnectionManager {
+
 	connectionManager := ConnectionManager{
 		host:                     host,
 		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
@@ -91,6 +101,7 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		errorHandler:             errorHandler,
 		localRPC:                 localRPC,
 		peerOpts:                 peerOpts,
+		libProvider:              libProvider,
 		initialPeers:             make(map[peer.ID]peer.AddrInfo),
 		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
 		pendingConnections:       make(map[peer.ID]util.Void),
@@ -155,20 +166,6 @@ func (c *ConnectionManager) Listen(n network.Network, _ multiaddr.Multiaddr) {
 func (c *ConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr) {
 }
 
-// GetLastIrreversibleBlock returns last irreversible block
-func (c *ConnectionManager) GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte) {
-	lib := c.lib.Load().(libValue)
-	return lib.num, lib.id
-}
-
-// HandleForkHeads handles a fork heads broadcast
-func (c *ConnectionManager) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
-	c.lib.Store(libValue{
-		num: forkHeads.LastIrreversibleBlock.Height,
-		id:  forkHeads.LastIrreversibleBlock.Id,
-	})
-}
-
 func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
 	pid := msg.conn.RemotePeer()
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), pid)
@@ -180,7 +177,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 		peerConn := &peerConnectionContext{
 			peer: NewPeerConnection(
 				pid,
-				c,
+				c.libProvider,
 				c.localRPC,
 				rpc.NewPeerRPC(c.client, pid),
 				c.peerErrorChan,
@@ -261,7 +258,7 @@ func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
 
 // ConnectToPeer attempts to connect to the peer at the given address
 func (c *ConnectionManager) ConnectToPeer(ctx context.Context, addr *peer.AddrInfo) error {
-	returnChan := make(chan error)
+	returnChan := make(chan error, 1)
 	c.connectToPeerChan <- connectionRequest{
 		addr:       addr,
 		returnChan: returnChan,
@@ -332,17 +329,6 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 
 // Start the connection manager
 func (c *ConnectionManager) Start(ctx context.Context) {
-	forkHeads, err := c.localRPC.GetForkHeads(ctx)
-
-	for err != nil {
-		forkHeads, err = c.localRPC.GetForkHeads(ctx)
-	}
-
-	c.lib.Store(libValue{
-		num: forkHeads.LastIrreversibleBlock.Height,
-		id:  forkHeads.LastIrreversibleBlock.Id,
-	})
-
 	go func() {
 		for _, peer := range c.host.Network().Peers() {
 			conns := c.host.Network().ConnsToPeer(peer)

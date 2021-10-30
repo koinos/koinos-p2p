@@ -7,12 +7,14 @@ import (
 	"encoding/binary"
 	"io"
 	"math/rand"
+	"sync/atomic"
 
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2p"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
 
@@ -30,12 +32,14 @@ import (
 
 // KoinosP2PNode is the core object representing
 type KoinosP2PNode struct {
-	Host                 host.Host
-	localRPC             rpc.LocalRPC
-	Gossip               *p2p.KoinosGossip
-	ConnectionManager    *p2p.ConnectionManager
-	PeerErrorHandler     *p2p.PeerErrorHandler
-	GossipToggle         *p2p.GossipToggle
+	Host              host.Host
+	localRPC          rpc.LocalRPC
+	Gossip            *p2p.KoinosGossip
+	ConnectionManager *p2p.ConnectionManager
+	PeerErrorHandler  *p2p.PeerErrorHandler
+	GossipToggle      *p2p.GossipToggle
+	libValue          atomic.Value
+
 	PeerErrorChan        chan p2p.PeerError
 	DisconnectPeerChan   chan peer.ID
 	GossipVoteChan       chan p2p.GossipVote
@@ -110,7 +114,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		ps,
 		node.PeerErrorChan,
 		node,
-		node.Host.ID())
+		node.Host.ID(),
+		node)
 
 	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
 		node.DisconnectPeerChan,
@@ -129,6 +134,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.PeerErrorHandler,
 		node.localRPC,
 		&config.PeerConnectionOptions,
+		node,
 		node.Options.InitialPeers,
 		node.PeerErrorChan,
 		node.GossipVoteChan,
@@ -179,8 +185,8 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", string(data))
 		return
 	}
-	n.Gossip.HandleForkHeads(forkHeads)
-	n.ConnectionManager.HandleForkHeads(forkHeads)
+
+	n.libValue.Store(*forkHeads.LastIrreversibleBlock)
 }
 
 // PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string
@@ -221,6 +227,12 @@ func (n *KoinosP2PNode) GetPeerAddress() multiaddr.Multiaddr {
 	return addrs[0]
 }
 
+// GetLastIrreversibleBlock returns last irreversible block height and block id of connected node
+func (n *KoinosP2PNode) GetLastIrreversibleBlock() (uint64, []byte) {
+	lib := n.libValue.Load().(koinos.BlockTopology)
+	return lib.Height, lib.Id
+}
+
 // Close closes the node
 func (n *KoinosP2PNode) Close() error {
 	if err := n.Host.Close(); err != nil {
@@ -233,6 +245,14 @@ func (n *KoinosP2PNode) Close() error {
 // Start starts background goroutines
 func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.Host.Network().Notify(n.ConnectionManager)
+
+	forkHeads, err := n.localRPC.GetForkHeads(ctx)
+
+	for err != nil {
+		forkHeads, err = n.localRPC.GetForkHeads(ctx)
+	}
+
+	n.libValue.Store(*forkHeads.LastIrreversibleBlock)
 
 	// Start peer gossip
 	n.Gossip.StartPeerGossip(ctx)

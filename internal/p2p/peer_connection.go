@@ -12,11 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-// LastIrreversibleBlockProvider is an interface for providing the last irreversible block to PeerConnection
-type LastIrreversibleBlockProvider interface {
-	GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte)
-}
-
 type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
@@ -86,9 +81,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 
 func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Get my last irreversible block
-	getLIBContext, cancelGetLIB := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
-	defer cancelGetLIB()
-	libNum, libID := p.libProvider.GetLastIrreversibleBlock(getLIBContext)
+	libNum, libID := p.libProvider.GetLastIrreversibleBlock()
 
 	// Get peer's head block
 	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)

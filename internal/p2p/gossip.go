@@ -10,7 +10,6 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	util "github.com/koinos/koinos-util-golang"
 	"github.com/libp2p/go-libp2p-core/network"
@@ -161,15 +160,15 @@ type PeerConnectionHandler interface {
 
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
-	rpc                   rpc.LocalRPC
-	Block                 *GossipManager
-	Transaction           *GossipManager
-	Peer                  *GossipManager
-	PubSub                *pubsub.PubSub
-	PeerErrorChan         chan<- PeerError
-	Connector             PeerConnectionHandler
-	myPeerID              peer.ID
-	lastIrreversibleBlock uint64
+	rpc           rpc.LocalRPC
+	Block         *GossipManager
+	Transaction   *GossipManager
+	Peer          *GossipManager
+	PubSub        *pubsub.PubSub
+	PeerErrorChan chan<- PeerError
+	Connector     PeerConnectionHandler
+	myPeerID      peer.ID
+	libProvider   LastIrreversibleBlockProvider
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
@@ -179,7 +178,8 @@ func NewKoinosGossip(
 	ps *pubsub.PubSub,
 	peerErrorChan chan<- PeerError,
 	connector PeerConnectionHandler,
-	id peer.ID) *KoinosGossip {
+	id peer.ID,
+	libProvider LastIrreversibleBlockProvider) *KoinosGossip {
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
@@ -193,6 +193,7 @@ func NewKoinosGossip(
 		PeerErrorChan: peerErrorChan,
 		Connector:     connector,
 		myPeerID:      id,
+		libProvider:   libProvider,
 	}
 
 	return &kg
@@ -219,11 +220,6 @@ func (kg *KoinosGossip) StopGossip() {
 	log.Info("Stopping gossip mode")
 	kg.Block.Stop()
 	kg.Transaction.Stop()
-}
-
-// HandleForkHeads updates gossip with fork head information
-func (kg *KoinosGossip) HandleForkHeads(fh *broadcast.ForkHeads) {
-	kg.lastIrreversibleBlock = fh.LastIrreversibleBlock.Height
 }
 
 func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
@@ -293,7 +289,9 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 		return fmt.Errorf("%w, gossiped block missing header.previous", p2perrors.ErrDeserialization)
 	}
 
-	if block.Header.Height < kg.lastIrreversibleBlock {
+	lib, _ := kg.libProvider.GetLastIrreversibleBlock()
+
+	if block.Header.Height < lib {
 		return p2perrors.ErrBlockIrreversibility
 	}
 
