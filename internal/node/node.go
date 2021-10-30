@@ -213,17 +213,17 @@ func (n *KoinosP2PNode) GetConnections() []network.Conn {
 	return n.Host.Network().Conns()
 }
 
-// GetPeerAddressInfo returns the peer address info
-func (n *KoinosP2PNode) GetPeerAddressInfo() *peer.AddrInfo {
+// GetAddressInfo returns the node's address info
+func (n *KoinosP2PNode) GetAddressInfo() *peer.AddrInfo {
 	return &peer.AddrInfo{
 		ID:    n.Host.ID(),
 		Addrs: n.Host.Addrs(),
 	}
 }
 
-// GetPeerAddress returns the peer multiaddress
-func (n *KoinosP2PNode) GetPeerAddress() multiaddr.Multiaddr {
-	addrs, _ := peer.AddrInfoToP2pAddrs(n.GetPeerAddressInfo())
+// GetAddress returns the peer multiaddress
+func (n *KoinosP2PNode) GetAddress() multiaddr.Multiaddr {
+	addrs, _ := peer.AddrInfoToP2pAddrs(n.GetAddressInfo())
 	return addrs[0]
 }
 

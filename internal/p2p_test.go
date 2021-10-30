@@ -217,7 +217,7 @@ func createTestClients(listenRPC rpc.LocalRPC, listenConfig *options.Config, sen
 	}
 	sendNode.Start(context.Background())
 
-	return listenNode, sendNode, listenNode.GetPeerAddress(), listenNode.GetPeerAddress(), nil
+	return listenNode, sendNode, listenNode.GetAddress(), listenNode.GetAddress(), nil
 }
 
 func TestSyncNoError(t *testing.T) {
