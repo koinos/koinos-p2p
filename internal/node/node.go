@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
-	"time"
 
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
@@ -199,29 +198,9 @@ func (n *KoinosP2PNode) PeerStringToAddress(peerAddr string) (*peer.AddrInfo, er
 	return peer, nil
 }
 
-// ConnectToPeerString connects the node to the given peer
-func (n *KoinosP2PNode) ConnectToPeerString(peerAddr string) (*peer.AddrInfo, error) {
-	peer, err := n.PeerStringToAddress(peerAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = n.ConnectToPeerAddress(peer); err != nil {
-		return peer, err
-	}
-
-	return peer, nil
-}
-
 // ConnectToPeerAddress connects to the given peer address
-func (n *KoinosP2PNode) ConnectToPeerAddress(peer *peer.AddrInfo) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := n.Host.Connect(ctx, *peer); err != nil {
-		return err
-	}
-
-	return nil
+func (n *KoinosP2PNode) ConnectToPeerAddress(ctx context.Context, peer peer.AddrInfo) error {
+	return n.ConnectionManager.ConnectToPeer(ctx, peer)
 }
 
 // GetConnections returns the host's current peer connections
@@ -229,15 +208,16 @@ func (n *KoinosP2PNode) GetConnections() []network.Conn {
 	return n.Host.Network().Conns()
 }
 
-// GetListenAddress returns the multiaddress on which the node is listening
-func (n *KoinosP2PNode) GetListenAddress() multiaddr.Multiaddr {
-	return n.Host.Addrs()[0]
+func (n *KoinosP2PNode) GetPeerAddress() peer.AddrInfo {
+	return peer.AddrInfo{
+		ID:    n.Host.ID(),
+		Addrs: n.Host.Addrs(),
+	}
 }
 
-// GetPeerAddress returns the ipfs multiaddress to which other peers should connect
-func (n *KoinosP2PNode) GetPeerAddress() multiaddr.Multiaddr {
-	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ipfs/%s", n.Host.ID().Pretty()))
-	return n.GetListenAddress().Encapsulate(hostAddr)
+func (n *KoinosP2PNode) GetPeerAddressString() string {
+	pAddr := n.GetPeerAddress()
+	return pAddr.Addrs[0].String() + fmt.Sprintf("/p2p/%s", pAddr.ID.Pretty())
 }
 
 // Close closes the node

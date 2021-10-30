@@ -47,6 +47,11 @@ type libRequest struct {
 	returnChan chan<- libMessage
 }
 
+type connectionRequest struct {
+	addr       peer.AddrInfo
+	returnChan chan<- error
+}
+
 // ConnectionManager attempts to reconnect to peers using the network.Notifiee interface.
 type ConnectionManager struct {
 	host   host.Host
@@ -69,6 +74,7 @@ type ConnectionManager struct {
 	signalPeerDisconnectChan chan<- peer.ID
 	setForkHeadsChan         chan *broadcast.ForkHeads
 	getLIBChan               chan libRequest
+	connectToPeerChan        chan connectionRequest
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
@@ -78,6 +84,7 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
 		server:                   gorpc.NewServer(host, rpc.PeerRPCID),
 		gossip:                   gossip,
+		errorHandler:             errorHandler,
 		localRPC:                 localRPC,
 		peerOpts:                 peerOpts,
 		initialPeers:             make(map[peer.ID]peer.AddrInfo),
@@ -89,6 +96,7 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		signalPeerDisconnectChan: signalPeerDisconnectChan,
 		setForkHeadsChan:         make(chan *broadcast.ForkHeads),
 		getLIBChan:               make(chan libRequest),
+		connectToPeerChan:        make(chan connectionRequest),
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -210,7 +218,7 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 			sleepTimeSeconds := 1
 			for {
 				log.Infof("Attempting to connect to peer %v", addr.ID)
-				if err := c.connectToPeer(addr); err == nil {
+				if err := c.ConnectToPeer(ctx, addr); err == nil {
 					return
 				}
 
@@ -231,14 +239,11 @@ func (c *ConnectionManager) handleForkHeads(ctx context.Context, forkHeads *broa
 	c.lib.id = forkHeads.LastIrreversibleBlock.Id
 }
 
-func (c *ConnectionManager) handleGetLastIrreversible(ctx context.Context, request libRequest) {
-	select {
-	case request.returnChan <- c.lib:
-	default:
-	}
+func (c *ConnectionManager) handleGetLastIrreversible(ctx context.Context) libMessage {
+	return c.lib
 }
 
-func (c *ConnectionManager) connectInitialPeers() {
+func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
 	newlyConnectedPeers := make(map[peer.ID]util.Void)
 	peersToConnect := make(map[peer.ID]peer.AddrInfo)
 	sleepTimeSeconds := 1
@@ -250,7 +255,7 @@ func (c *ConnectionManager) connectInitialPeers() {
 	for len(peersToConnect) > 0 {
 		for peer, addr := range c.initialPeers {
 			log.Infof("Attempting to connect to peer %v", peer)
-			err := c.connectToPeer(addr)
+			err := c.ConnectToPeer(ctx, addr)
 			if err != nil {
 				log.Infof("Error connecting to peer %v: %s", peer, err)
 			} else {
@@ -269,8 +274,32 @@ func (c *ConnectionManager) connectInitialPeers() {
 	}
 }
 
-func (c *ConnectionManager) connectToPeer(addr peer.AddrInfo) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// ConnectToPeer attempts to connect to the peer at the given address
+func (c *ConnectionManager) ConnectToPeer(ctx context.Context, addr peer.AddrInfo) error {
+	returnChan := make(chan error, 1)
+	c.connectToPeerChan <- connectionRequest{
+		addr:       addr,
+		returnChan: returnChan,
+	}
+
+	select {
+	case err := <-returnChan:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *ConnectionManager) handleConnectToPeer(ctx context.Context, addr peer.AddrInfo) error {
+	if !c.errorHandler.CanConnect(ctx, addr.ID) {
+		return fmt.Errorf("cannot connect to peer %s, error score too high", addr)
+	}
+
+	if _, ok := c.connectedPeers[addr.ID]; ok {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	return c.host.Connect(ctx, addr)
 }
@@ -285,7 +314,9 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 		case forkHeads := <-c.setForkHeadsChan:
 			c.handleForkHeads(ctx, forkHeads)
 		case req := <-c.getLIBChan:
-			c.handleGetLastIrreversible(ctx, req)
+			req.returnChan <- c.handleGetLastIrreversible(ctx)
+		case req := <-c.connectToPeerChan:
+			req.returnChan <- c.handleConnectToPeer(ctx, req.addr)
 
 		case <-ctx.Done():
 			return
@@ -312,7 +343,7 @@ func (c *ConnectionManager) Start(ctx context.Context) {
 			}
 		}
 
-		go c.connectInitialPeers()
+		go c.connectInitialPeers(ctx)
 		go c.managerLoop(ctx)
 	}()
 }

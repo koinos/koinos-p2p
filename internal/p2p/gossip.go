@@ -155,7 +155,7 @@ type GossipEnableHandler interface {
 // PeerConnectionHandler handles the function necessary for gossip to connect to peers
 type PeerConnectionHandler interface {
 	PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error)
-	ConnectToPeerAddress(*peer.AddrInfo) error
+	ConnectToPeerAddress(context.Context, peer.AddrInfo) error
 	GetConnections() []network.Conn
 }
 
@@ -393,7 +393,7 @@ func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubs
 	}
 
 	// Attempt to connect
-	err = kg.Connector.ConnectToPeerAddress(addr)
+	err = kg.Connector.ConnectToPeerAddress(ctx, *addr)
 	if err != nil {
 		log.Infof("Failed to connect to gossiped peer: %s, %s", sAddr, err)
 		return false
