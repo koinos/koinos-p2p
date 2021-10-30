@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
@@ -38,13 +39,9 @@ type peerConnectionContext struct {
 	cancel context.CancelFunc
 }
 
-type libMessage struct {
+type libValue struct {
 	num uint64
 	id  []byte
-}
-
-type libRequest struct {
-	returnChan chan<- libMessage
 }
 
 type connectionRequest struct {
@@ -72,7 +69,7 @@ type ConnectionManager struct {
 	initialPeers       map[peer.ID]peer.AddrInfo
 	connectedPeers     map[peer.ID]*peerConnectionContext
 	pendingConnections map[peer.ID]util.Void
-	lib                libMessage
+	lib                atomic.Value
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
@@ -80,7 +77,6 @@ type ConnectionManager struct {
 	gossipVoteChan           chan<- GossipVote
 	signalPeerDisconnectChan chan<- peer.ID
 	setForkHeadsChan         chan *broadcast.ForkHeads
-	getLIBChan               chan libRequest
 	connectToPeerChan        chan connectionRequest
 	connectionStatusChan     chan connectionStatus
 }
@@ -104,7 +100,6 @@ func NewConnectionManager(host host.Host, gossip *KoinosGossip, errorHandler *Pe
 		gossipVoteChan:           gossipVoteChan,
 		signalPeerDisconnectChan: signalPeerDisconnectChan,
 		setForkHeadsChan:         make(chan *broadcast.ForkHeads),
-		getLIBChan:               make(chan libRequest),
 		connectToPeerChan:        make(chan connectionRequest),
 		connectionStatusChan:     make(chan connectionStatus),
 	}
@@ -161,28 +156,17 @@ func (c *ConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr
 }
 
 // GetLastIrreversibleBlock returns last irreversible block
-func (c *ConnectionManager) GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte, error) {
-	returnChan := make(chan libMessage)
-	defer close(returnChan)
-	request := libRequest{returnChan: returnChan}
-
-	select {
-	case c.getLIBChan <- request:
-	case <-ctx.Done():
-	}
-
-	select {
-	case msg := <-returnChan:
-		return msg.num, msg.id, nil
-	case <-ctx.Done():
-	}
-
-	return 0, nil, ctx.Err()
+func (c *ConnectionManager) GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte) {
+	lib := c.lib.Load().(libValue)
+	return lib.num, lib.id
 }
 
 // HandleForkHeads handles a fork heads broadcast
 func (c *ConnectionManager) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
-	c.setForkHeadsChan <- forkHeads
+	c.lib.Store(libValue{
+		num: forkHeads.LastIrreversibleBlock.Height,
+		id:  forkHeads.LastIrreversibleBlock.Id,
+	})
 }
 
 func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
@@ -242,15 +226,6 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 	case c.signalPeerDisconnectChan <- pid:
 	case <-ctx.Done():
 	}
-}
-
-func (c *ConnectionManager) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
-	c.lib.num = forkHeads.LastIrreversibleBlock.Height
-	c.lib.id = forkHeads.LastIrreversibleBlock.Id
-}
-
-func (c *ConnectionManager) handleGetLastIrreversible(ctx context.Context) libMessage {
-	return c.lib
 }
 
 func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
@@ -339,10 +314,6 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleConnected(ctx, connMsg)
 		case connMsg := <-c.peerDisconnectedChan:
 			c.handleDisconnected(ctx, connMsg)
-		case forkHeads := <-c.setForkHeadsChan:
-			c.handleForkHeads(ctx, forkHeads)
-		case req := <-c.getLIBChan:
-			req.returnChan <- c.handleGetLastIrreversible(ctx)
 		case req := <-c.connectToPeerChan:
 			c.handleConnectToPeer(ctx, req)
 		case status := <-c.connectionStatusChan:
@@ -367,8 +338,10 @@ func (c *ConnectionManager) Start(ctx context.Context) {
 		forkHeads, err = c.localRPC.GetForkHeads(ctx)
 	}
 
-	c.lib.num = forkHeads.LastIrreversibleBlock.Height
-	c.lib.id = forkHeads.LastIrreversibleBlock.Id
+	c.lib.Store(libValue{
+		num: forkHeads.LastIrreversibleBlock.Height,
+		id:  forkHeads.LastIrreversibleBlock.Id,
+	})
 
 	go func() {
 		for _, peer := range c.host.Network().Peers() {

@@ -14,7 +14,7 @@ import (
 
 // LastIrreversibleBlockProvider is an interface for providing the last irreversible block to PeerConnection
 type LastIrreversibleBlockProvider interface {
-	GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte, error)
+	GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte)
 }
 
 type signalRequestBlocks struct{}
@@ -88,10 +88,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Get my last irreversible block
 	getLIBContext, cancelGetLIB := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
 	defer cancelGetLIB()
-	libNum, libID, err := p.libProvider.GetLastIrreversibleBlock(getLIBContext)
-	if err != nil {
-		return fmt.Errorf("%w GetLastIrreversibleBlock, %s", p2perrors.ErrProcessRequestTimeout, err)
-	}
+	libNum, libID := p.libProvider.GetLastIrreversibleBlock(getLIBContext)
 
 	// Get peer's head block
 	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
@@ -167,7 +164,7 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 		case <-p.requestBlockChan:
 			err := p.handleRequestBlocks(ctx)
 			if err != nil {
-				time.AfterFunc(time.Second, p.requestBlocks)
+				go time.AfterFunc(time.Second, p.requestBlocks)
 				select {
 				case p.peerErrorChan <- PeerError{id: p.id, err: err}:
 				case <-ctx.Done():
@@ -177,7 +174,7 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 					p.reportGossipVote(ctx)
 				}
 				if p.isSynced {
-					time.AfterFunc(p.opts.SyncedPingTime, p.requestBlocks)
+					go time.AfterFunc(p.opts.SyncedPingTime, p.requestBlocks)
 				} else {
 					go p.requestBlocks()
 				}
