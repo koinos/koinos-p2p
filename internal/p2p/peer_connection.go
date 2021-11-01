@@ -154,6 +154,8 @@ func (p *PeerConnection) reportGossipVote(ctx context.Context) {
 func (p *PeerConnection) connectionLoop(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-p.requestBlockChan:
 			err := p.handleRequestBlocks(ctx)
 			if err != nil {
@@ -174,9 +176,6 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 					go p.requestBlocks()
 				}
 			}
-
-		case <-ctx.Done():
-			return
 		}
 	}
 }
