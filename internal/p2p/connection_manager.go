@@ -8,7 +8,6 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -75,7 +74,6 @@ type ConnectionManager struct {
 	peerErrorChan            chan<- PeerError
 	gossipVoteChan           chan<- GossipVote
 	signalPeerDisconnectChan chan<- peer.ID
-	setForkHeadsChan         chan *broadcast.ForkHeads
 	connectToPeerChan        chan connectionRequest
 	connectionStatusChan     chan connectionStatus
 }
@@ -110,7 +108,6 @@ func NewConnectionManager(
 		peerErrorChan:            peerErrorChan,
 		gossipVoteChan:           gossipVoteChan,
 		signalPeerDisconnectChan: signalPeerDisconnectChan,
-		setForkHeadsChan:         make(chan *broadcast.ForkHeads),
 		connectToPeerChan:        make(chan connectionRequest),
 		connectionStatusChan:     make(chan connectionStatus),
 	}
@@ -195,14 +192,17 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 }
 
 func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connectionMessage) {
-	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
-	log.Infof("Disconnected from peer: %s", s)
 	pid := msg.conn.RemotePeer()
 
 	if peerConn, ok := c.connectedPeers[pid]; ok {
 		peerConn.cancel()
 		delete(c.connectedPeers, pid)
+	} else {
+		return
 	}
+
+	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
+	log.Infof("Disconnected from peer: %s", s)
 
 	if addr, ok := c.initialPeers[pid]; ok {
 		go func() {
@@ -219,10 +219,12 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 		}()
 	}
 
-	select {
-	case c.signalPeerDisconnectChan <- pid:
-	case <-ctx.Done():
-	}
+	go func() {
+		select {
+		case c.signalPeerDisconnectChan <- pid:
+		case <-ctx.Done():
+		}
+	}()
 }
 
 func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
@@ -278,11 +280,17 @@ func (c *ConnectionManager) handleConnectToPeer(ctx context.Context, req connect
 	}
 
 	if _, ok := c.connectedPeers[req.addr.ID]; ok {
-		req.returnChan <- nil
+		go func() {
+			req.returnChan <- nil
+		}()
+		return
 	}
 
 	if _, ok := c.pendingConnections[req.addr.ID]; ok {
-		req.returnChan <- fmt.Errorf("already attempting connection to peer %s", req.addr.ID)
+		go func() {
+			req.returnChan <- fmt.Errorf("already attempting connection to peer %s", req.addr.ID)
+		}()
+		return
 	}
 
 	c.pendingConnections[req.addr.ID] = util.Void{}

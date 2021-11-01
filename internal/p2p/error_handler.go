@@ -65,8 +65,6 @@ func (p *PeerErrorHandler) handleCanConnect(id peer.ID) bool {
 }
 
 func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
-	log.Infof("Encountered peer error: %s, %s", peerErr.id, peerErr.err.Error())
-
 	if record, ok := p.errorScores[peerErr.id]; ok {
 		p.decayErrorScore(record)
 		record.score += p.getScoreForError(peerErr.err)
@@ -76,6 +74,8 @@ func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
 			score:      p.getScoreForError(peerErr.err),
 		}
 	}
+
+	log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[peerErr.id].score)
 
 	if p.errorScores[peerErr.id].score >= p.opts.ErrorScoreThreshold {
 		go func() {

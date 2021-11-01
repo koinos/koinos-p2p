@@ -253,10 +253,12 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 			log.Debug(err.Error())
 		} else {
 			log.Warnf("Gossiped block not applied from peer %v: %s", msg.ReceivedFrom, err)
-			select {
-			case kg.PeerErrorChan <- PeerError{id: msg.ReceivedFrom, err: err}:
-			case <-ctx.Done():
-			}
+			go func() {
+				select {
+				case kg.PeerErrorChan <- PeerError{id: msg.ReceivedFrom, err: err}:
+				case <-ctx.Done():
+				}
+			}()
 		}
 
 		return false
@@ -331,10 +333,12 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	err := kg.applyTransaction(ctx, pid, msg)
 	if err != nil {
 		log.Warnf("Gossiped transaction not applied from peer %v: %s", msg.ReceivedFrom, err)
-		select {
-		case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
-		case <-ctx.Done():
-		}
+		go func() {
+			select {
+			case kg.PeerErrorChan <- PeerError{msg.ReceivedFrom, err}:
+			case <-ctx.Done():
+			}
+		}()
 		return false
 	}
 	return true
