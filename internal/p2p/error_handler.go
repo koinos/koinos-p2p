@@ -25,7 +25,7 @@ type errorScoreRecord struct {
 
 type canConnectRequest struct {
 	id         peer.ID
-	resultChan chan bool
+	resultChan chan<- bool
 }
 
 // PeerErrorHandler handles PeerErrors and tracks errors over time

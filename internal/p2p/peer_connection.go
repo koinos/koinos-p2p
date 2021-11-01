@@ -12,11 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-// LastIrreversibleBlockProvider is an interface for providing the last irreversible block to PeerConnection
-type LastIrreversibleBlockProvider interface {
-	GetLastIrreversibleBlock(ctx context.Context) (uint64, []byte, error)
-}
-
 type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
@@ -86,12 +81,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 
 func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Get my last irreversible block
-	getLIBContext, cancelGetLIB := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
-	defer cancelGetLIB()
-	libNum, libID, err := p.libProvider.GetLastIrreversibleBlock(getLIBContext)
-	if err != nil {
-		return fmt.Errorf("%w GetLastIrreversibleBlock, %s", p2perrors.ErrProcessRequestTimeout, err)
-	}
+	lib := p.libProvider.GetLastIrreversibleBlock()
 
 	// Get peer's head block
 	rpcContext, cancelGetPeerHead := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
@@ -102,27 +92,27 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// If the peer is in the past, it is not an error, but we don't need anything from them
-	if peerHeadHeight <= libNum {
+	if peerHeadHeight <= lib.Height {
 		p.isSynced = true
 		return nil
 	}
 
 	// If LIB is 0, we are still at genesis and could connec to any chain
-	if libNum > 0 {
+	if lib.Height > 0 {
 		// Check if my LIB connect's to peer's head block
 		rpcContext, cancelGetAncestorBlock := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
 		defer cancelGetAncestorBlock()
-		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, libNum)
+		ancestorBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, lib.Height)
 		if err != nil {
 			return err
 		}
 
-		if bytes.Compare([]byte(ancestorBlock), libID) != 0 {
+		if bytes.Compare([]byte(ancestorBlock), lib.Id) != 0 {
 			return p2perrors.ErrChainNotConnected
 		}
 	}
 
-	blocksToRequest := peerHeadHeight - libNum
+	blocksToRequest := peerHeadHeight - lib.Height
 	if blocksToRequest > p.opts.BlockRequestBatchSize {
 		blocksToRequest = p.opts.BlockRequestBatchSize
 	}
@@ -130,7 +120,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	// Request blocks
 	rpcContext, cancelGetBlocks := context.WithTimeout(ctx, p.opts.BlockRequestTimeout)
 	defer cancelGetBlocks()
-	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, libNum+1, uint32(blocksToRequest))
+	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, lib.Height+1, uint32(blocksToRequest))
 	if err != nil {
 		return err
 	}
@@ -167,7 +157,7 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 		case <-p.requestBlockChan:
 			err := p.handleRequestBlocks(ctx)
 			if err != nil {
-				time.AfterFunc(time.Second, p.requestBlocks)
+				go time.AfterFunc(time.Second, p.requestBlocks)
 				select {
 				case p.peerErrorChan <- PeerError{id: p.id, err: err}:
 				case <-ctx.Done():
@@ -177,7 +167,7 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 					p.reportGossipVote(ctx)
 				}
 				if p.isSynced {
-					time.AfterFunc(p.opts.SyncedPingTime, p.requestBlocks)
+					go time.AfterFunc(p.opts.SyncedPingTime, p.requestBlocks)
 				} else {
 					go p.requestBlocks()
 				}

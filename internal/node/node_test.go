@@ -132,7 +132,7 @@ func TestBasicNode(t *testing.T) {
 		t.Error(err)
 	}
 
-	addr := bn.GetPeerAddress()
+	addr := bn.GetAddress()
 	// Check peer address
 	if !strings.HasPrefix(addr.String(), "/ip4/127.0.0.1/tcp/8765/p2p/Qm") {
 		t.Errorf("Peer address returned by node is not correct")

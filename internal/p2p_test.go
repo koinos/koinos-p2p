@@ -13,6 +13,7 @@ import (
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multihash"
 )
@@ -216,7 +217,7 @@ func createTestClients(listenRPC rpc.LocalRPC, listenConfig *options.Config, sen
 	}
 	sendNode.Start(context.Background())
 
-	return listenNode, sendNode, listenNode.GetPeerAddress(), listenNode.GetPeerAddress(), nil
+	return listenNode, sendNode, listenNode.GetAddress(), listenNode.GetAddress(), nil
 }
 
 func TestSyncNoError(t *testing.T) {
@@ -225,14 +226,15 @@ func TestSyncNoError(t *testing.T) {
 	sendRPC := NewTestRPC(5)
 	sendConfig := options.NewConfig()
 	sendConfig.PeerConnectionOptions.Checkpoints = []options.Checkpoint{{BlockHeight: 10, BlockID: listenRPC.getDummyBlockIDAtHeight(10)}}
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, sendConfig)
+	listenNode, sendNode, addr, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, sendConfig)
 	if err != nil {
 		t.Error(err)
 	}
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	_, err = sendNode.ConnectToPeerString(peer.String())
+	p, _ := peer.AddrInfoFromP2pAddr(addr)
+	err = sendNode.ConnectToPeerAddress(context.Background(), p)
 	if err != nil {
 		t.Error(err)
 	}
@@ -253,14 +255,15 @@ func TestSyncChainID(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
 	sendRPC.ChainID = 2
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, options.NewConfig())
+	listenNode, sendNode, addr, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	_, err = sendNode.ConnectToPeerString(peer.String())
+	p, _ := peer.AddrInfoFromP2pAddr(addr)
+	err = sendNode.ConnectToPeerAddress(context.Background(), p)
 	if err != nil {
 		t.Error("ConnectToPeer() returned unexpected error")
 	}
@@ -282,14 +285,15 @@ func TestApplyBlockFailure(t *testing.T) {
 	listenRPC := NewTestRPC(128)
 	sendRPC := NewTestRPC(5)
 	sendRPC.ApplyBlocks = 18
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, options.NewConfig())
+	listenNode, sendNode, addr, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, options.NewConfig())
 	if err != nil {
 		t.Error(err)
 	}
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	_, err = sendNode.ConnectToPeerString(peer.String())
+	p, _ := peer.AddrInfoFromP2pAddr(addr)
+	err = sendNode.ConnectToPeerAddress(context.Background(), p)
 
 	time.Sleep(time.Duration(800) * time.Duration(time.Millisecond))
 
@@ -306,14 +310,15 @@ func TestCheckpointFailure(t *testing.T) {
 	sendRPC := NewTestRPC(5)
 	sendConfig := options.NewConfig()
 	sendConfig.PeerConnectionOptions.Checkpoints = []options.Checkpoint{{BlockHeight: 10, BlockID: listenRPC.getDummyBlockIDAtHeight(11)}}
-	listenNode, sendNode, peer, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, sendConfig)
+	listenNode, sendNode, addr, _, err := createTestClients(listenRPC, options.NewConfig(), sendRPC, sendConfig)
 	if err != nil {
 		t.Error(err)
 	}
 	defer listenNode.Close()
 	defer sendNode.Close()
 
-	_, err = sendNode.ConnectToPeerString(peer.String())
+	p, _ := peer.AddrInfoFromP2pAddr(addr)
+	err = sendNode.ConnectToPeerAddress(context.Background(), p)
 	if err != nil {
 		t.Error(err)
 	}
