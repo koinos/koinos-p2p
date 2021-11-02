@@ -190,6 +190,8 @@ func NewKoinosGossip(
 		libProvider:   libProvider,
 	}
 
+	go kg.addressPublisher(context.Background())
+
 	return &kg
 }
 
@@ -200,8 +202,6 @@ func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
 	} else {
 		kg.StopGossip()
 	}
-
-	go kg.addressPublisher(context.Background())
 }
 
 // StartGossip enables gossip of blocks and transactions
