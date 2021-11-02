@@ -120,6 +120,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		pubsub.GossipSubPrunePeers = 16
 	}
 
+	pubsub.TimeCacheDuration = 60 * time.Second
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
 		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
