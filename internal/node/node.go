@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/rand"
 	"sync/atomic"
+	"time"
 
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
