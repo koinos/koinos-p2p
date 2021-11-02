@@ -190,7 +190,7 @@ func NewKoinosGossip(
 		libProvider:   libProvider,
 	}
 
-	go kg.addressPublisher(context.Background())
+	go kg.addressDisplay(context.Background())
 
 	return &kg
 }
@@ -340,7 +340,7 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 	return true
 }
 
-func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
+func (kg *KoinosGossip) addressDisplay(ctx context.Context) {
 	for {
 		select {
 		case <-time.After(peerAdvertiseTime):
