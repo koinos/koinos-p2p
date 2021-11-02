@@ -12,7 +12,6 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	util "github.com/koinos/koinos-util-golang"
-	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"google.golang.org/protobuf/proto"
@@ -148,13 +147,6 @@ type GossipEnableHandler interface {
 	EnableGossip(context.Context, bool)
 }
 
-// PeerConnectionHandler handles the function necessary for gossip to connect to peers
-type PeerConnectionHandler interface {
-	PeerStringToAddress(peerAddr string) (*peer.AddrInfo, error)
-	ConnectToPeerAddress(context.Context, *peer.AddrInfo) error
-	GetConnections() []network.Conn
-}
-
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
 	rpc           rpc.LocalRPC
@@ -162,7 +154,6 @@ type KoinosGossip struct {
 	Transaction   *GossipManager
 	PubSub        *pubsub.PubSub
 	PeerErrorChan chan<- PeerError
-	Connector     PeerConnectionHandler
 	myPeerID      peer.ID
 	libProvider   LastIrreversibleBlockProvider
 }
@@ -173,7 +164,6 @@ func NewKoinosGossip(
 	rpc rpc.LocalRPC,
 	ps *pubsub.PubSub,
 	peerErrorChan chan<- PeerError,
-	connector PeerConnectionHandler,
 	id peer.ID,
 	libProvider LastIrreversibleBlockProvider) *KoinosGossip {
 
@@ -185,12 +175,9 @@ func NewKoinosGossip(
 		Transaction:   transaction,
 		PubSub:        ps,
 		PeerErrorChan: peerErrorChan,
-		Connector:     connector,
 		myPeerID:      id,
 		libProvider:   libProvider,
 	}
-
-	go kg.addressDisplay(context.Background())
 
 	return &kg
 }
@@ -338,23 +325,6 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 		return false
 	}
 	return true
-}
-
-func (kg *KoinosGossip) addressDisplay(ctx context.Context) {
-	for {
-		select {
-		case <-time.After(peerAdvertiseTime):
-			break
-		case <-ctx.Done():
-			return
-		}
-
-		log.Info("Publishing connected peers...")
-		for _, conn := range kg.Connector.GetConnections() {
-			s := fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
-			log.Infof("Published peer: %s", s)
-		}
-	}
 }
 
 func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {

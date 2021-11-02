@@ -61,6 +61,19 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		return nil, err
 	}
 
+	node := new(KoinosP2PNode)
+
+	node.Options = config.NodeOptions
+	node.PeerErrorChan = make(chan p2p.PeerError)
+	node.DisconnectPeerChan = make(chan peer.ID)
+	node.GossipVoteChan = make(chan p2p.GossipVote)
+	node.PeerDisconnectedChan = make(chan peer.ID)
+
+	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
+		node.DisconnectPeerChan,
+		node.PeerErrorChan,
+		config.PeerErrorHandlerOptions)
+
 	var idht *dht.IpfsDHT
 
 	options := []libp2p.Option{
@@ -84,6 +97,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		// This service is highly rate-limited and should not cause any
 		// performance issues.
 		libp2p.EnableNATService(),
+		libp2p.ConnectionGater(node.PeerErrorHandler),
 	}
 
 	host, err := libp2p.New(ctx, options...)
@@ -91,7 +105,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		return nil, err
 	}
 
-	node := new(KoinosP2PNode)
 	node.Host = host
 	node.localRPC = localRPC
 
@@ -102,12 +115,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	} else {
 		log.Info("Starting P2P node without broadcast listeners")
 	}
-
-	node.Options = config.NodeOptions
-	node.PeerErrorChan = make(chan p2p.PeerError)
-	node.DisconnectPeerChan = make(chan peer.ID)
-	node.GossipVoteChan = make(chan p2p.GossipVote)
-	node.PeerDisconnectedChan = make(chan peer.ID)
 
 	pubsub.TimeCacheDuration = 60 * time.Second
 	ps, err := pubsub.NewGossipSub(
@@ -124,14 +131,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.localRPC,
 		ps,
 		node.PeerErrorChan,
-		node,
 		node.Host.ID(),
 		node)
-
-	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
-		node.DisconnectPeerChan,
-		node.PeerErrorChan,
-		config.PeerErrorHandlerOptions)
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
@@ -216,7 +217,7 @@ func (n *KoinosP2PNode) PeerStringToAddress(peerAddr string) (*peer.AddrInfo, er
 
 // ConnectToPeerAddress connects to the given peer address
 func (n *KoinosP2PNode) ConnectToPeerAddress(ctx context.Context, peer *peer.AddrInfo) error {
-	return n.ConnectionManager.ConnectToPeer(ctx, peer)
+	return n.Host.Connect(ctx, *peer)
 }
 
 // GetConnections returns the host's current peer connections
@@ -252,6 +253,26 @@ func (n *KoinosP2PNode) Close() error {
 	return nil
 }
 
+func (n *KoinosP2PNode) logConnectionsLoop(ctx context.Context) {
+	for {
+		select {
+		case <-time.After(time.Minute * 1):
+			log.Info("My address:")
+			log.Infof(" - %s", n.GetAddress())
+			log.Info("Connected peers:")
+			for i, conn := range n.GetConnections() {
+				log.Infof(" - %s/p2p%s", conn.RemoteMultiaddr(), conn.RemotePeer())
+				if i > 10 {
+					log.Infof("   and %v more...", len(n.GetConnections())-i)
+					break
+				}
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 // Start starts background goroutines
 func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.Host.Network().Notify(n.ConnectionManager)
@@ -265,6 +286,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.libValue.Store(*forkHeads.LastIrreversibleBlock)
 
 	// Start peer gossip
+	go n.logConnectionsLoop(ctx)
 	n.PeerErrorHandler.Start(ctx)
 	n.GossipToggle.Start(ctx)
 	n.ConnectionManager.Start(ctx)
