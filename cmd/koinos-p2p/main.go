@@ -78,7 +78,7 @@ func main() {
 	peerExchange := flag.BoolP(peerExchangeOption, "x", peerExchangeDefault, "Exchange peers with other nodes")
 	gossip := flag.BoolP(gossipOption, "g", gossipDefault, "Enable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode")
-	logLevel := flag.StringP(logLevelOption, "v", logLevelDefault, "The log filtering level (debug, info, warn, error)")
+	logLevel := flag.StringP(logLevelOption, "v", "", "The log filtering level (debug, info, warn, error)")
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
 
 	flag.Parse()
