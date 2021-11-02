@@ -200,6 +200,8 @@ func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
 	} else {
 		kg.StopGossip()
 	}
+
+	go kg.addressPublisher(context.Background())
 }
 
 // StartGossip enables gossip of blocks and transactions
@@ -336,6 +338,23 @@ func (kg *KoinosGossip) validateTransaction(ctx context.Context, pid peer.ID, ms
 		return false
 	}
 	return true
+}
+
+func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
+	for {
+		select {
+		case <-time.After(peerAdvertiseTime):
+			break
+		case <-ctx.Done():
+			return
+		}
+
+		log.Debug("Publishing connected peers...")
+		for _, conn := range kg.Connector.GetConnections() {
+			s := fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
+			log.Debugf("Published peer: %s", s)
+		}
+	}
 }
 
 func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
