@@ -109,22 +109,9 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.GossipVoteChan = make(chan p2p.GossipVote)
 	node.PeerDisconnectedChan = make(chan peer.ID)
 
-	// Create the pubsub gossip
-	pubsub.GossipSubD = 6
-	pubsub.GossipSubDlo = 5
-	pubsub.GossipSubDhi = 12
-	pubsub.GossipSubDscore = 4
-
-	if !node.Options.EnablePeerExchange {
-		pubsub.GossipSubPrunePeers = 0
-	} else {
-		pubsub.GossipSubPrunePeers = 16
-	}
-
 	pubsub.TimeCacheDuration = 60 * time.Second
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
-		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
 		pubsub.WithMessageIdFn(generateMessageID),
 		pubsub.WithPeerExchange(true),
 	)
