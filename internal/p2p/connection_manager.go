@@ -65,7 +65,6 @@ type ConnectionManager struct {
 
 	initialPeers       map[peer.ID]peer.AddrInfo
 	connectedPeers     map[peer.ID]*peerConnectionContext
-	pendingConnections map[peer.ID]util.Void
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
@@ -94,7 +93,6 @@ func NewConnectionManager(
 		libProvider:              libProvider,
 		initialPeers:             make(map[peer.ID]peer.AddrInfo),
 		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
-		pendingConnections:       make(map[peer.ID]util.Void),
 		peerConnectedChan:        make(chan connectionMessage),
 		peerDisconnectedChan:     make(chan connectionMessage),
 		peerErrorChan:            peerErrorChan,
