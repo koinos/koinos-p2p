@@ -154,14 +154,18 @@ func (p *PeerConnection) reportGossipVote(ctx context.Context) {
 func (p *PeerConnection) connectionLoop(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-p.requestBlockChan:
 			err := p.handleRequestBlocks(ctx)
 			if err != nil {
 				go time.AfterFunc(time.Second, p.requestBlocks)
-				select {
-				case p.peerErrorChan <- PeerError{id: p.id, err: err}:
-				case <-ctx.Done():
-				}
+				go func() {
+					select {
+					case p.peerErrorChan <- PeerError{id: p.id, err: err}:
+					case <-ctx.Done():
+					}
+				}()
 			} else {
 				if p.gossipVote != p.isSynced {
 					p.reportGossipVote(ctx)
@@ -172,9 +176,6 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 					go p.requestBlocks()
 				}
 			}
-
-		case <-ctx.Done():
-			return
 		}
 	}
 }
@@ -188,7 +189,10 @@ func (p *PeerConnection) Start(ctx context.Context) {
 			err := p.handshake(ctx)
 			if err != nil {
 				go func() {
-					p.peerErrorChan <- PeerError{id: p.id, err: err}
+					select {
+					case p.peerErrorChan <- PeerError{id: p.id, err: err}:
+					case <-ctx.Done():
+					}
 				}()
 			} else {
 				p.reportGossipVote(ctx)

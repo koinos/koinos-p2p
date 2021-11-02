@@ -9,7 +9,10 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
+	"github.com/libp2p/go-libp2p-core/control"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
 // PeerError represents an error originating from a peer
@@ -65,8 +68,6 @@ func (p *PeerErrorHandler) handleCanConnect(id peer.ID) bool {
 }
 
 func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
-	log.Infof("Encountered peer error: %s, %s", peerErr.id, peerErr.err.Error())
-
 	if record, ok := p.errorScores[peerErr.id]; ok {
 		p.decayErrorScore(record)
 		record.score += p.getScoreForError(peerErr.err)
@@ -76,6 +77,8 @@ func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
 			score:      p.getScoreForError(peerErr.err),
 		}
 	}
+
+	log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[peerErr.id].score)
 
 	if p.errorScores[peerErr.id].score >= p.opts.ErrorScoreThreshold {
 		go func() {
@@ -133,6 +136,31 @@ func (p *PeerErrorHandler) decayErrorScore(record *errorScoreRecord) {
 	now := time.Now()
 	record.score = uint64(float64(record.score) * math.Exp(-1*decayConstant*float64(now.Sub(record.lastUpdate))))
 	record.lastUpdate = now
+}
+
+// InterceptPeerDial implements the libp2p ConnectionGater interface
+func (p *PeerErrorHandler) InterceptPeerDial(pid peer.ID) bool {
+	return p.CanConnect(context.Background(), pid)
+}
+
+// InterceptAddrDial implements the libp2p ConnectionGater interface
+func (p *PeerErrorHandler) InterceptAddrDial(peer.ID, multiaddr.Multiaddr) bool {
+	return true
+}
+
+// InterceptAccept implements the libp2p ConnectionGater interface
+func (p *PeerErrorHandler) InterceptAccept(network.ConnMultiaddrs) bool {
+	return true
+}
+
+// InterceptSecured implements the libp2p ConnectionGater interface
+func (p *PeerErrorHandler) InterceptSecured(_ network.Direction, pid peer.ID, _ network.ConnMultiaddrs) bool {
+	return p.CanConnect(context.Background(), pid)
+}
+
+// InterceptUpgraded implements the libp2p ConnectionGater interface
+func (p *PeerErrorHandler) InterceptUpgraded(network.Conn) (bool, control.DisconnectReason) {
+	return true, 0
 }
 
 // Start processing peer errors

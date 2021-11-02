@@ -8,7 +8,6 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	util "github.com/koinos/koinos-util-golang"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -60,31 +59,23 @@ type ConnectionManager struct {
 	server *gorpc.Server
 	client *gorpc.Client
 
-	gossip       *KoinosGossip
-	errorHandler *PeerErrorHandler
-	localRPC     rpc.LocalRPC
-	peerOpts     *options.PeerConnectionOptions
-	libProvider  LastIrreversibleBlockProvider
+	localRPC    rpc.LocalRPC
+	peerOpts    *options.PeerConnectionOptions
+	libProvider LastIrreversibleBlockProvider
 
 	initialPeers       map[peer.ID]peer.AddrInfo
 	connectedPeers     map[peer.ID]*peerConnectionContext
-	pendingConnections map[peer.ID]util.Void
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
 	peerErrorChan            chan<- PeerError
 	gossipVoteChan           chan<- GossipVote
 	signalPeerDisconnectChan chan<- peer.ID
-	setForkHeadsChan         chan *broadcast.ForkHeads
-	connectToPeerChan        chan connectionRequest
-	connectionStatusChan     chan connectionStatus
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
 func NewConnectionManager(
 	host host.Host,
-	gossip *KoinosGossip,
-	errorHandler *PeerErrorHandler,
 	localRPC rpc.LocalRPC,
 	peerOpts *options.PeerConnectionOptions,
 	libProvider LastIrreversibleBlockProvider,
@@ -97,22 +88,16 @@ func NewConnectionManager(
 		host:                     host,
 		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
 		server:                   gorpc.NewServer(host, rpc.PeerRPCID),
-		gossip:                   gossip,
-		errorHandler:             errorHandler,
 		localRPC:                 localRPC,
 		peerOpts:                 peerOpts,
 		libProvider:              libProvider,
 		initialPeers:             make(map[peer.ID]peer.AddrInfo),
 		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
-		pendingConnections:       make(map[peer.ID]util.Void),
 		peerConnectedChan:        make(chan connectionMessage),
 		peerDisconnectedChan:     make(chan connectionMessage),
 		peerErrorChan:            peerErrorChan,
 		gossipVoteChan:           gossipVoteChan,
 		signalPeerDisconnectChan: signalPeerDisconnectChan,
-		setForkHeadsChan:         make(chan *broadcast.ForkHeads),
-		connectToPeerChan:        make(chan connectionRequest),
-		connectionStatusChan:     make(chan connectionStatus),
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -190,26 +175,30 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 		peerConn.peer.Start(childCtx)
 		c.connectedPeers[pid] = peerConn
 	}
-
-	c.gossip.Peer.PublishMessage(ctx, []byte(s))
 }
 
 func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connectionMessage) {
-	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
-	log.Infof("Disconnected from peer: %s", s)
 	pid := msg.conn.RemotePeer()
 
 	if peerConn, ok := c.connectedPeers[pid]; ok {
 		peerConn.cancel()
 		delete(c.connectedPeers, pid)
+	} else {
+		return
 	}
+
+	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
+	log.Infof("Disconnected from peer: %s", s)
 
 	if addr, ok := c.initialPeers[pid]; ok {
 		go func() {
 			sleepTimeSeconds := 1
 			for {
 				log.Infof("Attempting to connect to peer %v", addr.ID)
-				if err := c.ConnectToPeer(ctx, &addr); err == nil {
+				err := c.host.Connect(ctx, addr)
+				if err != nil {
+					log.Infof("Error connecting to peer %v: %s", addr.ID, err)
+				} else {
 					return
 				}
 
@@ -219,10 +208,12 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 		}()
 	}
 
-	select {
-	case c.signalPeerDisconnectChan <- pid:
-	case <-ctx.Done():
-	}
+	go func() {
+		select {
+		case c.signalPeerDisconnectChan <- pid:
+		case <-ctx.Done():
+		}
+	}()
 }
 
 func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
@@ -237,7 +228,7 @@ func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
 	for len(peersToConnect) > 0 {
 		for peer, addr := range c.initialPeers {
 			log.Infof("Attempting to connect to peer %v", peer)
-			err := c.ConnectToPeer(ctx, &addr)
+			err := c.host.Connect(ctx, addr)
 			if err != nil {
 				log.Infof("Error connecting to peer %v: %s", peer, err)
 			} else {
@@ -256,54 +247,6 @@ func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
 	}
 }
 
-// ConnectToPeer attempts to connect to the peer at the given address
-func (c *ConnectionManager) ConnectToPeer(ctx context.Context, addr *peer.AddrInfo) error {
-	returnChan := make(chan error, 1)
-	c.connectToPeerChan <- connectionRequest{
-		addr:       addr,
-		returnChan: returnChan,
-	}
-
-	select {
-	case err := <-returnChan:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (c *ConnectionManager) handleConnectToPeer(ctx context.Context, req connectionRequest) {
-	if !c.errorHandler.CanConnect(ctx, req.addr.ID) {
-		req.returnChan <- fmt.Errorf("cannot connect to peer %s, error score too high", req.addr.ID)
-	}
-
-	if _, ok := c.connectedPeers[req.addr.ID]; ok {
-		req.returnChan <- nil
-	}
-
-	if _, ok := c.pendingConnections[req.addr.ID]; ok {
-		req.returnChan <- fmt.Errorf("already attempting connection to peer %s", req.addr.ID)
-	}
-
-	c.pendingConnections[req.addr.ID] = util.Void{}
-
-	go func() {
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		err := c.host.Connect(ctx, *req.addr)
-		c.connectionStatusChan <- connectionStatus{
-			addr:       req.addr,
-			err:        err,
-			returnChan: req.returnChan,
-		}
-	}()
-}
-
-func (c *ConnectionManager) handleConnectionStatus(ctx context.Context, status connectionStatus) {
-	delete(c.pendingConnections, status.addr.ID)
-	status.returnChan <- status.err
-}
-
 func (c *ConnectionManager) managerLoop(ctx context.Context) {
 	for {
 		select {
@@ -311,10 +254,6 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleConnected(ctx, connMsg)
 		case connMsg := <-c.peerDisconnectedChan:
 			c.handleDisconnected(ctx, connMsg)
-		case req := <-c.connectToPeerChan:
-			c.handleConnectToPeer(ctx, req)
-		case status := <-c.connectionStatusChan:
-			c.handleConnectionStatus(ctx, status)
 
 		case <-ctx.Done():
 			for _, conn := range c.connectedPeers {
