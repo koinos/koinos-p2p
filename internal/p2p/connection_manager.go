@@ -143,9 +143,6 @@ func (c *ConnectionManager) ClosedStream(n network.Network, s network.Stream) {
 
 // Connected is part of the libp2p network.Notifiee interface
 func (c *ConnectionManager) Connected(net network.Network, conn network.Conn) {
-	//if !c.errorHandler.CanConnect(ctx, req.addr.ID) {
-	//	req.returnChan <- fmt.Errorf("cannot connect to peer %s, error score too high", req.addr.ID)
-	//}
 	c.peerConnectedChan <- connectionMessage{net: net, conn: conn}
 }
 
