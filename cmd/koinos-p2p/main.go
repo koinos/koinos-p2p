@@ -25,18 +25,17 @@ import (
 )
 
 const (
-	baseDirOption      = "basedir"
-	amqpOption         = "amqp"
-	listenOption       = "listen"
-	seedOption         = "seed"
-	peerOption         = "peer"
-	directOption       = "direct"
-	checkpointOption   = "checkpoint"
-	peerExchangeOption = "pex"
-	gossipOption       = "gossip"
-	forceGossipOption  = "force-gossip"
-	logLevelOption     = "log-level"
-	instanceIDOption   = "instance-id"
+	baseDirOption     = "basedir"
+	amqpOption        = "amqp"
+	listenOption      = "listen"
+	seedOption        = "seed"
+	peerOption        = "peer"
+	directOption      = "direct"
+	checkpointOption  = "checkpoint"
+	gossipOption      = "gossip"
+	forceGossipOption = "force-gossip"
+	logLevelOption    = "log-level"
+	instanceIDOption  = "instance-id"
 )
 
 const (
@@ -75,7 +74,6 @@ func main() {
 	peerAddresses := flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
 	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
 	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Block checkpoint in the form height:blockid (may specify multiple times)")
-	peerExchange := flag.BoolP(peerExchangeOption, "x", peerExchangeDefault, "Exchange peers with other nodes")
 	gossip := flag.BoolP(gossipOption, "g", gossipDefault, "Enable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode")
 	logLevel := flag.StringP(logLevelOption, "v", "", "The log filtering level (debug, info, warn, error)")
@@ -93,7 +91,6 @@ func main() {
 	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P, yamlConfig.Global)
 	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P, yamlConfig.Global)
 	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints, yamlConfig.P2P, yamlConfig.Global)
-	*peerExchange = util.GetBoolOption(peerExchangeOption, peerExchangeDefault, *peerExchange, yamlConfig.P2P, yamlConfig.Global)
 	*gossip = util.GetBoolOption(gossipOption, *gossip, gossipDefault, yamlConfig.P2P, yamlConfig.Global, yamlConfig.Global)
 	*forceGossip = util.GetBoolOption(forceGossipOption, *forceGossip, forceGossipDefault, yamlConfig.P2P, yamlConfig.Global)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
@@ -112,8 +109,6 @@ func main() {
 	requestHandler := koinosmq.NewRequestHandler(*amqp)
 
 	config := options.NewConfig()
-
-	config.NodeOptions.EnablePeerExchange = *peerExchange
 
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
