@@ -59,11 +59,9 @@ type ConnectionManager struct {
 	server *gorpc.Server
 	client *gorpc.Client
 
-	gossip       *KoinosGossip
-	errorHandler *PeerErrorHandler
-	localRPC     rpc.LocalRPC
-	peerOpts     *options.PeerConnectionOptions
-	libProvider  LastIrreversibleBlockProvider
+	localRPC    rpc.LocalRPC
+	peerOpts    *options.PeerConnectionOptions
+	libProvider LastIrreversibleBlockProvider
 
 	initialPeers       map[peer.ID]peer.AddrInfo
 	connectedPeers     map[peer.ID]*peerConnectionContext
@@ -79,8 +77,6 @@ type ConnectionManager struct {
 // NewConnectionManager creates a new PeerReconnectManager object
 func NewConnectionManager(
 	host host.Host,
-	gossip *KoinosGossip,
-	errorHandler *PeerErrorHandler,
 	localRPC rpc.LocalRPC,
 	peerOpts *options.PeerConnectionOptions,
 	libProvider LastIrreversibleBlockProvider,
@@ -93,8 +89,6 @@ func NewConnectionManager(
 		host:                     host,
 		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
 		server:                   gorpc.NewServer(host, rpc.PeerRPCID),
-		gossip:                   gossip,
-		errorHandler:             errorHandler,
 		localRPC:                 localRPC,
 		peerOpts:                 peerOpts,
 		libProvider:              libProvider,

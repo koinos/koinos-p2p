@@ -142,8 +142,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.ConnectionManager = p2p.NewConnectionManager(
 		node.Host,
-		node.Gossip,
-		node.PeerErrorHandler,
 		node.localRPC,
 		&config.PeerConnectionOptions,
 		node,
