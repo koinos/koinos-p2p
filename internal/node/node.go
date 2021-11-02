@@ -259,7 +259,7 @@ func (n *KoinosP2PNode) logConnectionsLoop(ctx context.Context) {
 			log.Infof(" - %s", n.GetAddress())
 			log.Info("Connected peers:")
 			for i, conn := range n.GetConnections() {
-				log.Infof(" - %s/p2p%s", conn.RemoteMultiaddr(), conn.RemotePeer())
+				log.Infof(" - %s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
 				if i > 10 {
 					log.Infof("   and %v more...", len(n.GetConnections())-i)
 					break
