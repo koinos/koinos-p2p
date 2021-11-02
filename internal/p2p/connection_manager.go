@@ -187,8 +187,6 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 		peerConn.peer.Start(childCtx)
 		c.connectedPeers[pid] = peerConn
 	}
-
-	c.gossip.Peer.PublishMessage(ctx, []byte(s))
 }
 
 func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connectionMessage) {

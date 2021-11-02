@@ -126,6 +126,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		ctx, node.Host,
 		pubsub.WithPeerExchange(node.Options.EnablePeerExchange),
 		pubsub.WithMessageIdFn(generateMessageID),
+		pubsub.WithPeerExchange(true),
 	)
 	if err != nil {
 		return nil, err
@@ -277,7 +278,6 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.libValue.Store(*forkHeads.LastIrreversibleBlock)
 
 	// Start peer gossip
-	n.Gossip.StartPeerGossip(ctx)
 	n.PeerErrorHandler.Start(ctx)
 	n.GossipToggle.Start(ctx)
 	n.ConnectionManager.Start(ctx)
@@ -331,7 +331,7 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 func generateMessageID(msg *pb.Message) string {
 	// Use the default unique ID function for peer exchange
 	switch *msg.Topic {
-	case p2p.BlockTopicName, p2p.TransactionTopicName, p2p.PeerTopicName:
+	case p2p.BlockTopicName, p2p.TransactionTopicName:
 		// Hash the data
 		h := sha256.New()
 		h.Write(msg.Data)

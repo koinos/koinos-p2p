@@ -28,9 +28,6 @@ const (
 	// TransactionTopicName is the transaction topic string
 	TransactionTopicName string = "koinos.transactions"
 
-	//PeerTopicName is the peer topic string
-	PeerTopicName string = "koinos.peers"
-
 	peerAdvertiseTime time.Duration = time.Minute * 1
 )
 
@@ -163,7 +160,6 @@ type KoinosGossip struct {
 	rpc           rpc.LocalRPC
 	Block         *GossipManager
 	Transaction   *GossipManager
-	Peer          *GossipManager
 	PubSub        *pubsub.PubSub
 	PeerErrorChan chan<- PeerError
 	Connector     PeerConnectionHandler
@@ -183,12 +179,10 @@ func NewKoinosGossip(
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
-	peers := NewGossipManager(ps, peerErrorChan, PeerTopicName)
 	kg := KoinosGossip{
 		rpc:           rpc,
 		Block:         block,
 		Transaction:   transaction,
-		Peer:          peers,
 		PubSub:        ps,
 		PeerErrorChan: peerErrorChan,
 		Connector:     connector,
@@ -367,81 +361,4 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 
 	log.Infof("Gossiped transaction applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 	return nil
-}
-
-// ----------------------------------------------------------------------------
-// Peer Gossip
-// ----------------------------------------------------------------------------
-
-func (kg *KoinosGossip) validatePeer(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
-	sAddr := string(msg.Data)
-	addr, err := kg.Connector.PeerStringToAddress(sAddr)
-
-	// If data cannot be interpreted as an address, invalidate it
-	if err != nil {
-		return false
-	}
-
-	// If the peer is from this node, consider it valid but do not add it
-	if msg.GetFrom() == kg.myPeerID {
-		return true
-	}
-
-	// Do not try to connect to myself
-	if addr.ID == kg.myPeerID {
-		return true
-	}
-
-	// Attempt to connect
-	err = kg.Connector.ConnectToPeerAddress(ctx, addr)
-	if err != nil {
-		log.Infof("Failed to connect to gossiped peer: %s, %s", sAddr, err)
-		return false
-	}
-
-	log.Infof("Received peer address via gossip - %s", sAddr)
-
-	return true
-}
-
-func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
-	for {
-		select {
-		case <-time.After(peerAdvertiseTime):
-			break
-		case <-ctx.Done():
-			return
-		}
-
-		log.Info("Publishing connected peers...")
-		for _, conn := range kg.Connector.GetConnections() {
-			s := fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
-			log.Infof("Published peer: %s", s)
-			log.Infof("Local Multiaddr: %s/p2p/%s", conn.LocalMultiaddr(), conn.LocalPeer())
-			kg.Peer.PublishMessage(ctx, []byte(s))
-		}
-	}
-}
-
-// StartPeerGossip begins exchanging peers over gossip
-func (kg *KoinosGossip) StartPeerGossip(ctx context.Context) {
-	go func() {
-		ch := make(chan []byte, transactionBuffer)
-		kg.Peer.RegisterValidator(kg.validatePeer)
-		kg.Peer.Start(ctx, ch)
-		log.Info("Started peer gossip")
-
-		// Start address publisher
-		cctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-		go kg.addressPublisher(cctx)
-
-		for {
-			_, ok := <-ch
-			if !ok {
-				close(ch)
-				return
-			}
-		}
-	}()
 }
