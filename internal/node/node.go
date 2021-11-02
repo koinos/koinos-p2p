@@ -23,6 +23,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/routing"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	multiaddr "github.com/multiformats/go-multiaddr"
@@ -58,10 +60,29 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		return nil, err
 	}
 
+	var idht *dht.IpfsDHT
+
 	options := []libp2p.Option{
 		libp2p.ListenAddrStrings(listenAddr),
 		libp2p.Identity(privateKey),
+		// Attempt to open ports using uPNP for NATed hosts.
 		libp2p.NATPortMap(),
+		// Let this host use the DHT to find other hosts
+		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
+			idht, err = dht.New(ctx, h)
+			return idht, err
+		}),
+		// Let this host use relays and advertise itself on relays if
+		// it finds it is behind NAT. Use libp2p.Relay(options...) to
+		// enable active relays and more.
+		libp2p.EnableAutoRelay(),
+		// If you want to help other peers to figure out if they are behind
+		// NATs, you can launch the server-side of AutoNAT too (AutoRelay
+		// already runs the client)
+		//
+		// This service is highly rate-limited and should not cause any
+		// performance issues.
+		libp2p.EnableNATService(),
 	}
 
 	host, err := libp2p.New(ctx, options...)

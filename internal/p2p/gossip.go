@@ -413,10 +413,11 @@ func (kg *KoinosGossip) addressPublisher(ctx context.Context) {
 			return
 		}
 
-		log.Debug("Publishing connected peers...")
+		log.Info("Publishing connected peers...")
 		for _, conn := range kg.Connector.GetConnections() {
 			s := fmt.Sprintf("%s/p2p/%s", conn.RemoteMultiaddr(), conn.RemotePeer())
-			log.Debugf("Published peer: %s", s)
+			log.Infof("Published peer: %s", s)
+			log.Infof("Local Multiaddr: %s/p2p/%s", conn.LocalMultiaddr(), conn.LocalPeer())
 			kg.Peer.PublishMessage(ctx, []byte(s))
 		}
 	}
