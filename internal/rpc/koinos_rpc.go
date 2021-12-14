@@ -81,10 +81,7 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 	args := &chain.ChainRequest{
 		Request: &chain.ChainRequest_SubmitBlock{
 			SubmitBlock: &chain.SubmitBlockRequest{
-				Block:                      block,
-				VerifyPassiveData:          true,
-				VerifyBlockSignature:       true,
-				VerifyTransactionSignature: true,
+				Block: block,
 			},
 		},
 	}
@@ -177,7 +174,7 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Mult
 	args := &block_store.BlockStoreRequest{
 		Request: &block_store.BlockStoreRequest_GetBlocksById{
 			GetBlocksById: &block_store.GetBlocksByIdRequest{
-				BlockId:       idBytes,
+				BlockIds:      idBytes,
 				ReturnBlock:   true,
 				ReturnReceipt: false,
 			},
