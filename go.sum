@@ -401,6 +401,7 @@ github.com/huin/goupnp v1.0.0/go.mod h1:n9v9KO1tAxYH82qOn+UTIFQDmx5n1Zxd/ClZDMX7
 github.com/huin/goupnp v1.0.2 h1:RfGLP+h3mvisuWEyybxNq5Eft3NWhHLPeUN72kpKZoI=
 github.com/huin/goupnp v1.0.2/go.mod h1:0dxJBVBHqTMjIUMkESDTNgOOx/Mw5wYIfyFmdzSamkM=
 github.com/huin/goutil v0.0.0-20170803182201-1ca381bf3150/go.mod h1:PpLOETDnJ0o3iZrZfqZzyLl6l7F3c6L1oWn7OICBi6o=
+github.com/iancoleman/orderedmap v0.2.0/go.mod h1:N0Wam8K1arqPXNWjMo21EXnBPOPp36vB07FNRdD2geA=
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/influxdata/flux v0.65.1/go.mod h1:J754/zds0vvpfwuq7Gc2wRdVwEodfpCFM7mYlOw2LqY=
@@ -528,8 +529,8 @@ github.com/koinos/koinos-log-golang v0.0.0-20210621202301-3310a8e5866b/go.mod h1
 github.com/koinos/koinos-mq-golang v0.0.0-20210424202816-d2bd4d1894d1 h1:Zg6jmGes+odGMAdAQaelsHllKNZCJSzjQwHSGlVQNPc=
 github.com/koinos/koinos-mq-golang v0.0.0-20210424202816-d2bd4d1894d1/go.mod h1:EFk+fuUL5ezbaWsGJ2U0KlzbgkflwRv96az8dEVe16I=
 github.com/koinos/koinos-proto-golang v0.0.0-20210817202730-232f9d89dd0b/go.mod h1:X0JDk9LJhh3zXCTtKc0OLL9zUGbVk1HIGPKi/WLpFuE=
-github.com/koinos/koinos-proto-golang v0.0.0-20210914170258-3625b3f80c90 h1:eLZtN7XOY27QonuWC7hHy4Kg3OVy+GPl51ILSXxcCh8=
-github.com/koinos/koinos-proto-golang v0.0.0-20210914170258-3625b3f80c90/go.mod h1:X0JDk9LJhh3zXCTtKc0OLL9zUGbVk1HIGPKi/WLpFuE=
+github.com/koinos/koinos-proto-golang v0.2.1-0.20211214180511-db4ef89f72f5 h1:z+D2NeZ9Y5syN6aMJcL9dK2yQaqQLRGT41Fl0wP1RJ0=
+github.com/koinos/koinos-proto-golang v0.2.1-0.20211214180511-db4ef89f72f5/go.mod h1:ZonOOdmZcuEbRdOqqdfYRA2I4szYHy5aKzUveMWXBog=
 github.com/koinos/koinos-util-golang v0.0.0-20211019222021-3b7f67a3119d h1:fyqSn5gSG74YtQwOX0rB71dagpmDZX4bFeBBmYmkJHg=
 github.com/koinos/koinos-util-golang v0.0.0-20211019222021-3b7f67a3119d/go.mod h1:3NWXUf07ZUBOBYzU7r+aG34kA2bI0Y/kLXaZyF1Y7q4=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
