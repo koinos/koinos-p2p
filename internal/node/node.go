@@ -158,7 +158,7 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	blockBroadcast := &broadcast.BlockAccepted{}
 	err := proto.Unmarshal(data, blockBroadcast)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.block.accept broadcast: %v", string(data))
+		log.Warnf("Unable to parse koinos.block.accept broadcast: %v", err.Error())
 		return
 	}
 	binary, err := proto.Marshal(blockBroadcast.Block)
