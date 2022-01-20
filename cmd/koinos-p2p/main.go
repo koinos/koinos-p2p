@@ -142,14 +142,15 @@ func main() {
 
 	log.Info("Attempting to connect to block_store...")
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
+		//ctx, cancel := context.WithTimeout(context.Background(), amqpConnectAttemptSeconds*time.Second)
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		val, _ := koinosRPC.IsConnectedToBlockStore(ctx)
 		if val {
 			log.Info("Connected")
 			break
 		}
-		time.Sleep(amqpConnectAttemptSeconds * time.Second)
+		//time.Sleep(amqpConnectAttemptSeconds * time.Second)
 	}
 
 	log.Info("Attempting to connect to chain...")
