@@ -28,6 +28,11 @@ type GossipToggle struct {
 	opts options.GossipToggleOptions
 }
 
+// IsEnabled returns whether gossip is enabled
+func (g *GossipToggle) IsEnabled() bool {
+	return g.enabled
+}
+
 func (g *GossipToggle) checkThresholds(ctx context.Context) {
 	if len(g.peerVotes) == 0 {
 		if g.enabled && !g.opts.AlwaysEnable {

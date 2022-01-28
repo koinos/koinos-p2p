@@ -232,8 +232,8 @@ func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PRespons
 	if req.Request != nil {
 		switch req.Request.(type) {
 		case *rpcp2p.P2PRequest_GetGossipStatus:
-			var result *rpcp2p.GetGossipStatusResponse
-			respVal := rpcp2p.P2PResponse_GetGossipStatus{GetGossipStatus: result}
+			result := rpcp2p.GetGossipStatusResponse{Enabled: n.GossipToggle.IsEnabled()}
+			respVal := rpcp2p.P2PResponse_GetGossipStatus{GetGossipStatus: &result}
 			response.Response = &respVal
 			break
 		default:
