@@ -28,7 +28,7 @@ func TestNormalGossipToggle(t *testing.T) {
 	opts.AlwaysDisable = false
 	opts.AlwaysEnable = false
 
-	gossipToggle := NewGossipToggle(&testHandler, voteChan, peerDisconnectedChan, *opts)
+	gossipToggle := NewGossipToggle(&testHandler, nil, voteChan, peerDisconnectedChan, *opts)
 	gossipToggle.Start(ctx)
 	time.Sleep(time.Millisecond * 5)
 
@@ -160,7 +160,7 @@ func TestAlwaysEnabledGossipToggle(t *testing.T) {
 	opts.AlwaysDisable = false
 	opts.AlwaysEnable = true
 
-	gossipToggle := NewGossipToggle(&testHandler, voteChan, peerDisconnectedChan, *opts)
+	gossipToggle := NewGossipToggle(&testHandler, nil, voteChan, peerDisconnectedChan, *opts)
 	gossipToggle.Start(ctx)
 	time.Sleep(time.Millisecond * 5)
 
@@ -197,7 +197,7 @@ func TestAlwaysDisabledGossipToggle(t *testing.T) {
 	opts.AlwaysDisable = true
 	opts.AlwaysEnable = false
 
-	gossipToggle := NewGossipToggle(&testHandler, voteChan, peerDisconnectedChan, *opts)
+	gossipToggle := NewGossipToggle(&testHandler, nil, voteChan, peerDisconnectedChan, *opts)
 	gossipToggle.Start(ctx)
 	time.Sleep(time.Millisecond * 5)
 

@@ -72,6 +72,10 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multih
 	return nil, nil
 }
 
+func (k *TestRPC) BroadcastGossipStatus(enabled bool) error {
+	return nil
+}
+
 // GetBlocksByHeight rpc call
 func (k *TestRPC) GetBlocksByHeight(ctx context.Context, blockID multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
 	k.Mutex.Lock()
