@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
+	"errors"
 	"io"
 	"math/rand"
 	"sync/atomic"
@@ -17,6 +19,8 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
+	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
+	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
 	util "github.com/koinos/koinos-util-golang"
 
 	libp2p "github.com/libp2p/go-libp2p"
@@ -112,6 +116,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		requestHandler.SetBroadcastHandler("koinos.block.accept", node.handleBlockBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.handleTransactionBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.block.forks", node.handleForkUpdate)
+		requestHandler.SetRPCHandler("p2p", node.handleRPC)
 	} else {
 		log.Info("Starting P2P node without broadcast listeners")
 	}
@@ -136,6 +141,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
+		node.localRPC,
 		node.GossipVoteChan,
 		node.PeerDisconnectedChan,
 		config.GossipToggleOptions)
@@ -197,6 +203,54 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 	}
 
 	n.libValue.Store(*forkHeads.LastIrreversibleBlock)
+}
+
+func (n *KoinosP2PNode) handleRPC(rpcType string, data []byte) ([]byte, error) {
+	req := &rpcp2p.P2PRequest{}
+	resp := &rpcp2p.P2PResponse{}
+
+	err := proto.Unmarshal(data, req)
+	if err != nil {
+		log.Warnf("Received malformed request: 0x%v", hex.EncodeToString(data))
+		eResp := prpc.ErrorResponse{Message: err.Error()}
+		rErr := rpcp2p.P2PResponse_Error{Error: &eResp}
+		resp.Response = &rErr
+	} else {
+		log.Debugf("Received RPC request: 0x%v", hex.EncodeToString(data))
+		resp = n.handleRequest(req)
+	}
+
+	var outputBytes []byte
+	outputBytes, err = proto.Marshal(resp)
+
+	return outputBytes, err
+}
+
+func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PResponse {
+	response := rpcp2p.P2PResponse{}
+	var err error
+
+	if req.Request != nil {
+		switch req.Request.(type) {
+		case *rpcp2p.P2PRequest_GetGossipStatus:
+			result := rpcp2p.GetGossipStatusResponse{Enabled: n.GossipToggle.IsEnabled()}
+			respVal := rpcp2p.P2PResponse_GetGossipStatus{GetGossipStatus: &result}
+			response.Response = &respVal
+			break
+		default:
+			err = errors.New("Unknown request")
+		}
+	} else {
+		err = errors.New("expected request was nil")
+	}
+
+	if err != nil {
+		result := prpc.ErrorResponse{Message: err.Error()}
+		respVal := rpcp2p.P2PResponse_Error{Error: &result}
+		response.Response = &respVal
+	}
+
+	return &response
 }
 
 // PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string

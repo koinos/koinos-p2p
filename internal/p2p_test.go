@@ -106,6 +106,10 @@ func (k *TestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transact
 	return &chain.SubmitTransactionResponse{}, nil
 }
 
+func (k *TestRPC) BroadcastGossipStatus(enabled bool) error {
+	return nil
+}
+
 func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error) {
 	k.Mutex.Lock()
 	defer k.Mutex.Unlock()

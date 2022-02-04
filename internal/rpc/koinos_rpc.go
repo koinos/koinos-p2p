@@ -9,6 +9,8 @@ import (
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
+	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
+	"github.com/koinos/koinos-proto-golang/koinos/canonical"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
@@ -345,6 +347,17 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsRespon
 	}
 
 	return response, err
+}
+
+// BroadcastGossipStatus broadcasts the gossip status to the
+func (k *KoinosRPC) BroadcastGossipStatus(enabled bool) error {
+	status := &broadcast.GossipStatus{Enabled: enabled}
+	data, err := canonical.Marshal(status)
+	if err != nil {
+		return fmt.Errorf("%w BroadcastGossipStatus, %s", p2perrors.ErrSerialization, err)
+	}
+
+	return k.mq.Broadcast("application/octet-stream", "koinos.gossip.status", data)
 }
 
 // IsConnectedToBlockStore returns if the AMQP connection can currently communicate
