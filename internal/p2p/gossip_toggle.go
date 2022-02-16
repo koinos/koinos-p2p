@@ -123,6 +123,7 @@ func (g *GossipToggle) Start(ctx context.Context) {
 // NewGossipToggle creates a GossipToggle
 func NewGossipToggle(gossipEnabler GossipEnableHandler, rpc rpc.LocalRPC, voteChan <-chan GossipVote, peerDisconnectedChan <-chan peer.ID, opts options.GossipToggleOptions) *GossipToggle {
 	return &GossipToggle{
+		rpc:                  rpc,
 		gossipEnabler:        gossipEnabler,
 		enabled:              false,
 		peerVotes:            make(map[peer.ID]bool),
