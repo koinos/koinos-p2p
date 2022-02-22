@@ -3,6 +3,7 @@ package p2p
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -131,6 +132,11 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		defer cancelApplyBlock()
 		_, err = p.localRPC.ApplyBlock(rpcContext, &block)
 		if err != nil {
+			// If it was a local RPC timeout, do not wrap it
+			if errors.Is(err, p2perrors.ErrLocalRPCTimeout) {
+				return err
+			}
+
 			return fmt.Errorf("%w: %s", p2perrors.ErrBlockApplication, err.Error())
 		}
 	}
