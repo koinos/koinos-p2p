@@ -3,6 +3,12 @@ FROM golang:1.16.2-alpine as builder
 ADD . /koinos-p2p
 WORKDIR /koinos-p2p
 
+RUN apk update && \
+    apk add \
+        gcc \
+        musl-dev \
+        linux-headers
+
 RUN go get ./... && \
     go build -o koinos_p2p cmd/koinos-p2p/main.go
 
