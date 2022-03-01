@@ -39,7 +39,7 @@ type GossipManager struct {
 	peerErrorChan chan<- PeerError
 	topicName     string
 	enableMutex   sync.Mutex
-	enabled       bool
+	Enabled       bool
 }
 
 // NewGossipManager creates and returns a new instance of gossipManager
@@ -48,7 +48,7 @@ func NewGossipManager(ps *pubsub.PubSub, errChan chan<- PeerError, topicName str
 		ps:            ps,
 		peerErrorChan: errChan,
 		topicName:     topicName,
-		enabled:       false,
+		Enabled:       false,
 	}
 
 	topic, err := gm.ps.Join(gm.topicName)
@@ -70,7 +70,7 @@ func (gm *GossipManager) RegisterValidator(val interface{}) {
 func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 	gm.enableMutex.Lock()
 	defer gm.enableMutex.Unlock()
-	if gm.enabled {
+	if gm.Enabled {
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 
 	go gm.readMessages(subCtx, ch)
 
-	gm.enabled = true
+	gm.Enabled = true
 
 	return nil
 }
@@ -97,19 +97,19 @@ func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 func (gm *GossipManager) Stop() {
 	gm.enableMutex.Lock()
 	defer gm.enableMutex.Unlock()
-	if !gm.enabled {
+	if !gm.Enabled {
 		return
 	}
 
 	gm.cancel()
 	gm.sub.Cancel()
 	gm.sub = nil
-	gm.enabled = false
+	gm.Enabled = false
 }
 
 // PublishMessage publishes the given object to this manager's topic
 func (gm *GossipManager) PublishMessage(ctx context.Context, bytes []byte) bool {
-	if !gm.enabled {
+	if !gm.Enabled {
 		return false
 	}
 
