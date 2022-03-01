@@ -167,13 +167,17 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 		log.Warnf("Unable to parse koinos.block.accept broadcast: %v", err.Error())
 		return
 	}
+
 	binary, err := proto.Marshal(blockBroadcast.Block)
 	if err != nil {
 		log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
 		return
 	}
-	n.Gossip.Block.PublishMessage(context.Background(), binary)
-	log.Infof("Publishing block - %s", util.BlockString(blockBroadcast.Block))
+
+	if n.Gossip.Block.Enabled {
+		log.Infof("Publishing block - %s", util.BlockString(blockBroadcast.Block))
+		n.Gossip.Block.PublishMessage(context.Background(), binary)
+	}
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
@@ -184,13 +188,17 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", string(data))
 		return
 	}
+
 	binary, err := proto.Marshal(trxBroadcast.Transaction)
 	if err != nil {
 		log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
 		return
 	}
-	log.Infof("Publishing transaction - %s", util.TransactionString(trxBroadcast.Transaction))
-	n.Gossip.Transaction.PublishMessage(context.Background(), binary)
+
+	if n.Gossip.Transaction.Enabled {
+		log.Infof("Publishing transaction - %s", util.TransactionString(trxBroadcast.Transaction))
+		n.Gossip.Transaction.PublishMessage(context.Background(), binary)
+	}
 }
 
 func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {

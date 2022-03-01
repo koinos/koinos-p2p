@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -119,6 +120,10 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// Request blocks
+	if blocksToRequest == p.opts.BlockRequestBatchSize {
+		log.Infof("Requesting blocks %v-%v from peer %s", lib.Height+1, lib.Height+1+blocksToRequest, p.id)
+	}
+
 	rpcContext, cancelGetBlocks := context.WithTimeout(ctx, p.opts.BlockRequestTimeout)
 	defer cancelGetBlocks()
 	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, lib.Height+1, uint32(blocksToRequest))
@@ -128,7 +133,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// Apply blocks to local node
 	for _, block := range blocks {
-		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, time.Second)
+		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, 2*time.Second)
 		defer cancelApplyBlock()
 		_, err = p.localRPC.ApplyBlock(rpcContext, &block)
 		if err != nil {
