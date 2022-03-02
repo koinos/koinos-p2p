@@ -104,7 +104,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		libp2p.ConnectionGater(node.PeerErrorHandler),
 	}
 
-	host, err := libp2p.New(ctx, options...)
+	host, err := libp2p.New(options...)
 	if err != nil {
 		return nil, err
 	}
