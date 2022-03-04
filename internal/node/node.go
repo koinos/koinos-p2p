@@ -19,7 +19,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/koinos/canonical"
 	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
 	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
 	util "github.com/koinos/koinos-util-golang"
@@ -169,7 +169,7 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 		return
 	}
 
-	binary, err := proto.Marshal(blockBroadcast.Block)
+	binary, err := canonical.Marshal(blockBroadcast.Block)
 	if err != nil {
 		log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
 		return
@@ -182,11 +182,9 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 
 	if n.Gossip.Transaction.Enabled {
 		for _, trx := range blockBroadcast.Block.Transactions {
-			go func(trx *protocol.Transaction) {
-				if binary, err := proto.Marshal(trx); err != nil {
-					n.Gossip.Transaction.PublishMessage(context.Background(), binary)
-				}
-			}(trx)
+			if binary, err := canonical.Marshal(trx); err != nil {
+				n.Gossip.Transaction.PublishMessage(context.Background(), binary)
+			}
 		}
 	}
 }
@@ -200,7 +198,7 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 		return
 	}
 
-	binary, err := proto.Marshal(trxBroadcast.Transaction)
+	binary, err := canonical.Marshal(trxBroadcast.Transaction)
 	if err != nil {
 		log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
 		return
