@@ -294,7 +294,7 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 		defer close(transactionChan)
 		kg.Transaction.RegisterValidator(kg.validateTransaction)
 		kg.Transaction.Start(ctx, transactionChan)
-		log.Debug("Started transaction gossip listener")
+		log.Info("Started transaction gossip listener")
 
 		// A transaction that reaches here has already been applied
 		// Any postprocessing that might be needed would happen here
