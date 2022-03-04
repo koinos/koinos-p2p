@@ -19,6 +19,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
+	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
 	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
 	util "github.com/koinos/koinos-util-golang"
@@ -177,6 +178,16 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	if n.Gossip.Block.Enabled {
 		log.Infof("Publishing block - %s", util.BlockString(blockBroadcast.Block))
 		n.Gossip.Block.PublishMessage(context.Background(), binary)
+	}
+
+	if n.Gossip.Transaction.Enabled {
+		for _, trx := range blockBroadcast.Block.Transactions {
+			go func(trx *protocol.Transaction) {
+				if binary, err := proto.Marshal(trx); err != nil {
+					n.Gossip.Transaction.PublishMessage(context.Background(), binary)
+				}
+			}(trx)
+		}
 	}
 }
 
