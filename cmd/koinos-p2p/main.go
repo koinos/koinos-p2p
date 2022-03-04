@@ -25,30 +25,30 @@ import (
 )
 
 const (
-	baseDirOption     = "basedir"
-	amqpOption        = "amqp"
-	listenOption      = "listen"
-	seedOption        = "seed"
-	peerOption        = "peer"
-	directOption      = "direct"
-	checkpointOption  = "checkpoint"
-	gossipOption      = "gossip"
-	forceGossipOption = "force-gossip"
-	logLevelOption    = "log-level"
-	instanceIDOption  = "instance-id"
+	baseDirOption       = "basedir"
+	amqpOption          = "amqp"
+	listenOption        = "listen"
+	seedOption          = "seed"
+	peerOption          = "peer"
+	directOption        = "direct"
+	checkpointOption    = "checkpoint"
+	disableGossipOption = "disable-gossip"
+	forceGossipOption   = "force-gossip"
+	logLevelOption      = "log-level"
+	instanceIDOption    = "instance-id"
 )
 
 const (
-	baseDirDefault      = ".koinos"
-	amqpDefault         = "amqp://guest:guest@localhost:5672/"
-	listenDefault       = "/ip4/127.0.0.1/tcp/8888"
-	seedDefault         = ""
-	peerExchangeDefault = true
-	gossipDefault       = true
-	forceGossipDefault  = false
-	verboseDefault      = false
-	logLevelDefault     = "info"
-	instanceIDDefault   = ""
+	baseDirDefault       = ".koinos"
+	amqpDefault          = "amqp://guest:guest@localhost:5672/"
+	listenDefault        = "/ip4/127.0.0.1/tcp/8888"
+	seedDefault          = ""
+	peerExchangeDefault  = true
+	disableGossipDefault = true
+	forceGossipDefault   = false
+	verboseDefault       = false
+	logLevelDefault      = "info"
+	instanceIDDefault    = ""
 )
 
 const (
@@ -70,7 +70,7 @@ func main() {
 	peerAddresses := flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
 	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
 	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Block checkpoint in the form height:blockid (may specify multiple times)")
-	gossip := flag.BoolP(gossipOption, "g", gossipDefault, "Enable gossip mode")
+	disableGossip := flag.BoolP(disableGossipOption, "g", disableGossipDefault, "Enable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode")
 	logLevel := flag.StringP(logLevelOption, "v", "", "The log filtering level (debug, info, warn, error)")
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
@@ -87,7 +87,7 @@ func main() {
 	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P, yamlConfig.Global)
 	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P, yamlConfig.Global)
 	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints, yamlConfig.P2P, yamlConfig.Global)
-	*gossip = util.GetBoolOption(gossipOption, *gossip, gossipDefault, yamlConfig.P2P, yamlConfig.Global, yamlConfig.Global)
+	*disableGossip = util.GetBoolOption(disableGossipOption, *disableGossip, disableGossipDefault, yamlConfig.P2P, yamlConfig.Global)
 	*forceGossip = util.GetBoolOption(forceGossipOption, *forceGossip, forceGossipDefault, yamlConfig.P2P, yamlConfig.Global)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
@@ -109,7 +109,7 @@ func main() {
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
 
-	if !(*gossip) {
+	if *disableGossip {
 		config.GossipToggleOptions.AlwaysDisable = true
 	}
 	if *forceGossip {
