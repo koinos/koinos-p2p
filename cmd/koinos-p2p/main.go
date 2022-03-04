@@ -44,7 +44,7 @@ const (
 	listenDefault        = "/ip4/127.0.0.1/tcp/8888"
 	seedDefault          = ""
 	peerExchangeDefault  = true
-	disableGossipDefault = true
+	disableGossipDefault = false
 	forceGossipDefault   = false
 	verboseDefault       = false
 	logLevelDefault      = "info"
