@@ -115,7 +115,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	if requestHandler != nil {
 		requestHandler.SetBroadcastHandler("koinos.block.accept", node.handleBlockBroadcast)
-		requestHandler.SetBroadcastHandler("koinos.transaction.accept", node.handleTransactionBroadcast)
+		requestHandler.SetBroadcastHandler("koinos.mempool.accept", node.handleTransactionBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.block.forks", node.handleForkUpdate)
 		requestHandler.SetRPCHandler("p2p", node.handleRPC)
 	} else {
@@ -192,8 +192,8 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.transction.accept broadcast: %v", string(data))
-	trxBroadcast := &broadcast.TransactionAccepted{}
+	log.Debugf("Received koinos.mempool.accept broadcast: %v", string(data))
+	trxBroadcast := &broadcast.MempoolAccepted{}
 	err := proto.Unmarshal(data, trxBroadcast)
 	if err != nil {
 		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", string(data))
