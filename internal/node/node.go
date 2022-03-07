@@ -179,14 +179,6 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 		log.Infof("Publishing block - %s", util.BlockString(blockBroadcast.Block))
 		n.Gossip.Block.PublishMessage(context.Background(), binary)
 	}
-
-	if n.Gossip.Transaction.Enabled {
-		for _, trx := range blockBroadcast.Block.Transactions {
-			if binary, err := canonical.Marshal(trx); err != nil {
-				n.Gossip.Transaction.PublishMessage(context.Background(), binary)
-			}
-		}
-	}
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
