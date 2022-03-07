@@ -13,8 +13,8 @@ type Checkpoint struct {
 }
 
 const (
-	localRPCTimeoutDefault       = time.Millisecond * 100
-	remoteRPCTimeoutDefault      = time.Second
+	localRPCTimeoutDefault       = time.Second * 3
+	remoteRPCTimeoutDefault      = time.Second * 6
 	blockRequestBatchSizeDefault = 1000
 	blockRequestTimeoutDefault   = time.Second * 5
 	handshakeRetryTimeDefault    = time.Second * 3
