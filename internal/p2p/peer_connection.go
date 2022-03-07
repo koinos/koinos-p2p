@@ -133,7 +133,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// Apply blocks to local node
 	for _, block := range blocks {
-		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, 2*time.Second)
+		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
 		defer cancelApplyBlock()
 		_, err = p.localRPC.ApplyBlock(rpcContext, &block)
 		if err != nil {
