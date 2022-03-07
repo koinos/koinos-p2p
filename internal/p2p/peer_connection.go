@@ -14,6 +14,11 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+var (
+	// SyncApplyBlockTimeout is the timeout for the ApplyBlock RPC during sync
+	SyncApplyBlockTimeout = 5 * time.Second
+)
+
 type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
@@ -133,7 +138,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// Apply blocks to local node
 	for _, block := range blocks {
-		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, 2*time.Second)
+		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, SyncApplyBlockTimeout)
 		defer cancelApplyBlock()
 		_, err = p.localRPC.ApplyBlock(rpcContext, &block)
 		if err != nil {
