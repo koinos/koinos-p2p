@@ -12,6 +12,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/multiformats/go-multihash"
 )
 
 type signalRequestBlocks struct{}
@@ -99,7 +100,23 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		return nil
 	}
 
-	// If LIB is 0, we are still at genesis and could connec to any chain
+	// If we already know about the peer's head block, don't request anything
+	rpcContext, cancelCheckPeerHeadBlock := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
+	defer cancelCheckPeerHeadBlock()
+	localBlocks, err := p.localRPC.GetBlocksByID(rpcContext, []multihash.Multihash{peerHeadID})
+	if err != nil {
+		return err
+	}
+
+	if len(localBlocks.BlockItems) != 1 {
+		return fmt.Errorf("%w: unexpected number of block items returned", p2perrors.ErrLocalRPC)
+	}
+
+	if localBlocks.BlockItems[0].BlockHeight != 0 {
+		return nil
+	}
+
+	// If LIB is 0, we are still at genesis and could connect to any chain
 	if lib.Height > 0 {
 		// Check if my LIB connect's to peer's head block
 		rpcContext, cancelGetAncestorBlock := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
