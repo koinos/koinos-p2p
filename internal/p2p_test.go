@@ -117,13 +117,13 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multih
 	resp := &block_store.GetBlocksByIdResponse{}
 	for _, blockID := range blockIDs {
 		block, hasBlock := k.BlocksByID[string(blockID)]
+		item := &block_store.BlockItem{}
 		if hasBlock {
-			item := &block_store.BlockItem{}
 			item.BlockId = blockID
 			item.BlockHeight = block.Header.Height
 			item.Block = block
-			resp.BlockItems = append(resp.BlockItems, item)
 		}
+		resp.BlockItems = append(resp.BlockItems, item)
 	}
 
 	return resp, nil
