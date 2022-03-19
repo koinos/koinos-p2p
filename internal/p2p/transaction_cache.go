@@ -6,6 +6,7 @@ import (
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	util "github.com/koinos/koinos-util-golang"
 )
 
 // TransactionCacheItem is a an item in the transaction cache
@@ -43,8 +44,8 @@ func (txc *TransactionCache) addTransactionItem(item *TransactionCacheItem) {
 	txc.transactionMap[string(item.transaction.Id)] = item.transaction
 	txc.transactionItems = append(txc.transactionItems, item)
 
-	log.Debugf("TransactionCache.addTransactionItem: added transaction to cache")
-	log.Debugf("Items currently in transaction cache: %d", len(txc.transactionItems))
+	log.Infof("TransactionCache.addTransactionItem: added transaction to cache: %s", util.TransactionString(item.transaction))
+	log.Infof("Items currently in transaction cache: %d", len(txc.transactionItems))
 }
 
 // CheckTransaction returns true if the transaction is in the cache
@@ -81,7 +82,7 @@ func (txc *TransactionCache) pruneTransactions(pruneTime time.Time) {
 	// Prune the transaction items
 	if pruneCount > 0 {
 		txc.transactionItems = txc.transactionItems[pruneCount:]
-		log.Debugf("TransactionCache.pruneTransactions: pruned %d transactions", pruneCount)
-		log.Debugf("Items currently in transaction cache: %d", len(txc.transactionItems))
+		log.Infof("TransactionCache.pruneTransactions: pruned %d transactions", pruneCount)
+		log.Infof("Items currently in transaction cache: %d", len(txc.transactionItems))
 	}
 }
