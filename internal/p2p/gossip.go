@@ -149,13 +149,14 @@ type GossipEnableHandler interface {
 
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
-	rpc           rpc.LocalRPC
-	Block         *GossipManager
-	Transaction   *GossipManager
-	PubSub        *pubsub.PubSub
-	PeerErrorChan chan<- PeerError
-	myPeerID      peer.ID
-	libProvider   LastIrreversibleBlockProvider
+	rpc              rpc.LocalRPC
+	Block            *GossipManager
+	Transaction      *GossipManager
+	PubSub           *pubsub.PubSub
+	PeerErrorChan    chan<- PeerError
+	myPeerID         peer.ID
+	libProvider      LastIrreversibleBlockProvider
+	transactionCache *TransactionCache
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
@@ -165,7 +166,8 @@ func NewKoinosGossip(
 	ps *pubsub.PubSub,
 	peerErrorChan chan<- PeerError,
 	id peer.ID,
-	libProvider LastIrreversibleBlockProvider) *KoinosGossip {
+	libProvider LastIrreversibleBlockProvider,
+	cache *TransactionCache) *KoinosGossip {
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
@@ -342,6 +344,11 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 
 	if transaction.Id == nil {
 		return fmt.Errorf("%w, gossiped transaction missing id", p2perrors.ErrDeserialization)
+	}
+
+	if kg.transactionCache.CheckTransaction(transaction) {
+		log.Debugf("Gossiped transaction already in cache - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+		return nil
 	}
 
 	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {

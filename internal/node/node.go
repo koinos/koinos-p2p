@@ -20,6 +20,7 @@ import (
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/koinos/canonical"
+	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
 	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
 	util "github.com/koinos/koinos-util-golang"
@@ -46,6 +47,7 @@ type KoinosP2PNode struct {
 	ConnectionManager *p2p.ConnectionManager
 	PeerErrorHandler  *p2p.PeerErrorHandler
 	GossipToggle      *p2p.GossipToggle
+	TransactionCache  *p2p.TransactionCache
 	libValue          atomic.Value
 
 	PeerErrorChan        chan p2p.PeerError
@@ -53,8 +55,14 @@ type KoinosP2PNode struct {
 	GossipVoteChan       chan p2p.GossipVote
 	PeerDisconnectedChan chan peer.ID
 
+	TransactionChan chan *protocol.Transaction
+
 	Options options.NodeOptions
 }
+
+const (
+	transactionCacheDuration = time.Minute * 5
+)
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
 // uses secio encryption on the wire
@@ -73,6 +81,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.DisconnectPeerChan = make(chan peer.ID)
 	node.GossipVoteChan = make(chan p2p.GossipVote)
 	node.PeerDisconnectedChan = make(chan peer.ID)
+
+	node.TransactionChan = make(chan *protocol.Transaction)
 
 	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
 		node.DisconnectPeerChan,
@@ -132,13 +142,16 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		return nil, err
 	}
 
+	node.TransactionCache = p2p.NewTransactionCache(transactionCacheDuration)
+
 	node.Gossip = p2p.NewKoinosGossip(
 		ctx,
 		node.localRPC,
 		ps,
 		node.PeerErrorChan,
 		node.Host.ID(),
-		node)
+		node,
+		node.TransactionCache)
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
@@ -260,6 +273,11 @@ func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PRespons
 	}
 
 	return &response
+}
+
+// SubmitTransaction submits a transaction to the local node
+func (n *KoinosP2PNode) SubmitTransaction(transaction *protocol.Transaction) {
+	n.TransactionChan <- transaction
 }
 
 // PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string
