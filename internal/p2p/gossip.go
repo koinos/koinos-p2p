@@ -172,13 +172,14 @@ func NewKoinosGossip(
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
 	kg := KoinosGossip{
-		rpc:           rpc,
-		Block:         block,
-		Transaction:   transaction,
-		PubSub:        ps,
-		PeerErrorChan: peerErrorChan,
-		myPeerID:      id,
-		libProvider:   libProvider,
+		rpc:              rpc,
+		Block:            block,
+		Transaction:      transaction,
+		PubSub:           ps,
+		PeerErrorChan:    peerErrorChan,
+		myPeerID:         id,
+		libProvider:      libProvider,
+		transactionCache: cache,
 	}
 
 	return &kg

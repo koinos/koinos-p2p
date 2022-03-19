@@ -20,7 +20,6 @@ import (
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/koinos/canonical"
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
 	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
 	util "github.com/koinos/koinos-util-golang"
@@ -55,8 +54,6 @@ type KoinosP2PNode struct {
 	GossipVoteChan       chan p2p.GossipVote
 	PeerDisconnectedChan chan peer.ID
 
-	TransactionChan chan *protocol.Transaction
-
 	Options options.NodeOptions
 }
 
@@ -81,8 +78,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.DisconnectPeerChan = make(chan peer.ID)
 	node.GossipVoteChan = make(chan p2p.GossipVote)
 	node.PeerDisconnectedChan = make(chan peer.ID)
-
-	node.TransactionChan = make(chan *protocol.Transaction)
 
 	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
 		node.DisconnectPeerChan,
@@ -273,11 +268,6 @@ func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PRespons
 	}
 
 	return &response
-}
-
-// SubmitTransaction submits a transaction to the local node
-func (n *KoinosP2PNode) SubmitTransaction(transaction *protocol.Transaction) {
-	n.TransactionChan <- transaction
 }
 
 // PeerStringToAddress Creates a peer.AddrInfo object based on the given connection string
