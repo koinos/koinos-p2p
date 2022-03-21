@@ -37,7 +37,9 @@ func NewTransactionCache(cacheDuration time.Duration) *TransactionCache {
 func (txc *TransactionCache) addTransactionItem(item *TransactionCacheItem) {
 	// Maintain the constraint that the transaction cache is sorted by time added
 	// Since this is not user facing code, we issue a panic, as this should never happen
-	if item.timeAdded.Before(txc.transactionItems[len(txc.transactionItems)-1].timeAdded) {
+	numItems := len(txc.transactionItems)
+	older := numItems != 0 && item.timeAdded.Before(txc.transactionItems[numItems-1].timeAdded)
+	if older {
 		panic("TransactionCache.addTransactionItem: transaction is older than the last transaction")
 	}
 
