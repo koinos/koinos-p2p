@@ -46,8 +46,8 @@ func (txc *TransactionCache) addTransactionItem(item *TransactionCacheItem) {
 	txc.transactionMap[string(item.transaction.Id)] = item.transaction
 	txc.transactionItems = append(txc.transactionItems, item)
 
-	log.Infof("TransactionCache.addTransactionItem: added transaction to cache: %s", util.TransactionString(item.transaction))
-	log.Infof("Items currently in transaction cache: %d", len(txc.transactionItems))
+	log.Debugf("TransactionCache.addTransactionItem: added transaction to cache: %s", util.TransactionString(item.transaction))
+	log.Debugf("Items currently in transaction cache: %d", len(txc.transactionItems))
 }
 
 // CheckTransaction returns true if the transaction is in the cache
@@ -84,7 +84,7 @@ func (txc *TransactionCache) pruneTransactions(pruneTime time.Time) {
 	// Prune the transaction items
 	if pruneCount > 0 {
 		txc.transactionItems = txc.transactionItems[pruneCount:]
-		log.Infof("TransactionCache.pruneTransactions: pruned %d transactions", pruneCount)
-		log.Infof("Items currently in transaction cache: %d", len(txc.transactionItems))
+		log.Debugf("TransactionCache.pruneTransactions: pruned %d transactions", pruneCount)
+		log.Debugf("Items currently in transaction cache: %d", len(txc.transactionItems))
 	}
 }
