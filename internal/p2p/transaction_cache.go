@@ -1,23 +1,25 @@
 package p2p
 
 import (
+	"encoding/hex"
 	"sync"
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
-	util "github.com/koinos/koinos-util-golang"
 )
+
+type void struct{}
 
 // TransactionCacheItem is a an item in the transaction cache
 type TransactionCacheItem struct {
-	transaction *protocol.Transaction
-	timeAdded   time.Time
+	transactionID string
+	timeAdded     time.Time
 }
 
 // TransactionCache is a cache of recently received transactions
 type TransactionCache struct {
-	transactionMap   map[string]*protocol.Transaction
+	transactionMap   map[string]void
 	transactionItems []*TransactionCacheItem
 	cacheDuration    time.Duration
 	mu               sync.Mutex
@@ -26,7 +28,7 @@ type TransactionCache struct {
 // NewTransactionCache creates a new transaction cache
 func NewTransactionCache(cacheDuration time.Duration) *TransactionCache {
 	txc := &TransactionCache{
-		transactionMap:   make(map[string]*protocol.Transaction),
+		transactionMap:   make(map[string]void),
 		transactionItems: make([]*TransactionCacheItem, 0),
 		cacheDuration:    cacheDuration,
 	}
@@ -43,10 +45,10 @@ func (txc *TransactionCache) addTransactionItem(item *TransactionCacheItem) {
 		panic("TransactionCache.addTransactionItem: transaction is older than the last transaction")
 	}
 
-	txc.transactionMap[string(item.transaction.Id)] = item.transaction
+	txc.transactionMap[string(item.transactionID)] = void{}
 	txc.transactionItems = append(txc.transactionItems, item)
 
-	log.Debugf("TransactionCache.addTransactionItem: added transaction to cache: %s", util.TransactionString(item.transaction))
+	log.Debugf("TransactionCache.addTransactionItem: added transaction to cache: %s", hex.EncodeToString([]byte(item.transactionID)))
 	log.Debugf("Items currently in transaction cache: %d", len(txc.transactionItems))
 }
 
@@ -67,7 +69,7 @@ func (txc *TransactionCache) CheckTransaction(transaction *protocol.Transaction)
 	}
 
 	// Insert the transaction into the cache
-	txc.addTransactionItem(&TransactionCacheItem{transaction: transaction, timeAdded: now})
+	txc.addTransactionItem(&TransactionCacheItem{transactionID: string(transaction.Id), timeAdded: now})
 
 	return false
 }
@@ -76,7 +78,7 @@ func (txc *TransactionCache) pruneTransactions(pruneTime time.Time) {
 	pruneCount := 0
 	for i := 0; i < len(txc.transactionItems); i++ {
 		if pruneTime.Sub(txc.transactionItems[i].timeAdded) > txc.cacheDuration {
-			delete(txc.transactionMap, string(txc.transactionItems[i].transaction.Id))
+			delete(txc.transactionMap, txc.transactionItems[i].transactionID)
 			pruneCount++
 		}
 	}

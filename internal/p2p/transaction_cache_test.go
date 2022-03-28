@@ -16,25 +16,25 @@ func TestAddTransaction(t *testing.T) {
 	tc := NewTransactionCache(time.Minute)
 
 	// Add some transactions in time order
-	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("1"), time.Unix(1000, 1000)}) })
-	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("2"), time.Unix(2000, 1000)}) })
-	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("3"), time.Unix(3000, 1000)}) })
-	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("4"), time.Unix(4000, 1001)}) })
-	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("5"), time.Unix(5000, 1002)}) })
+	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"1", time.Unix(1000, 1000)}) })
+	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"2", time.Unix(2000, 1000)}) })
+	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"3", time.Unix(3000, 1000)}) })
+	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"4", time.Unix(4000, 1001)}) })
+	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"5", time.Unix(5000, 1002)}) })
 
 	assert.Equal(t, 5, len(tc.transactionItems))
 	assert.Equal(t, 5, len(tc.transactionMap))
 
 	// Add a transaction that is the same age at the latest
-	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("6"), time.Unix(5000, 1002)}) })
-	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("7"), time.Unix(5000, 1002)}) })
-	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("8"), time.Unix(5000, 1002)}) })
+	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"6", time.Unix(5000, 1002)}) })
+	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"7", time.Unix(5000, 1002)}) })
+	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"8", time.Unix(5000, 1002)}) })
 
 	assert.Equal(t, 8, len(tc.transactionItems))
 	assert.Equal(t, 8, len(tc.transactionMap))
 
 	// Add a transaction that is older than the oldest transaction and make sure it panics
-	assert.Panics(t, func() { tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("9"), time.Unix(1000, 1000)}) })
+	assert.Panics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"9", time.Unix(1000, 1000)}) })
 }
 
 func TestCheckTransaction(t *testing.T) {
@@ -72,11 +72,11 @@ func TestCachePrune(t *testing.T) {
 	tc := NewTransactionCache(time.Minute)
 
 	// Add some transactions in time order
-	tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("1"), time.Unix(1000, 1000)})
-	tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("2"), time.Unix(2000, 1000)})
-	tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("3"), time.Unix(3000, 1000)})
-	tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("4"), time.Unix(4000, 1000)})
-	tc.addTransactionItem(&TransactionCacheItem{makeTestTxn("5"), time.Unix(5000, 1000)})
+	tc.addTransactionItem(&TransactionCacheItem{"1", time.Unix(1000, 1000)})
+	tc.addTransactionItem(&TransactionCacheItem{"2", time.Unix(2000, 1000)})
+	tc.addTransactionItem(&TransactionCacheItem{"3", time.Unix(3000, 1000)})
+	tc.addTransactionItem(&TransactionCacheItem{"4", time.Unix(4000, 1000)})
+	tc.addTransactionItem(&TransactionCacheItem{"5", time.Unix(5000, 1000)})
 
 	assert.Equal(t, 5, len(tc.transactionItems))
 
