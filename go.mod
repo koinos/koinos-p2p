@@ -13,6 +13,7 @@ require (
 	github.com/libp2p/go-libp2p-gorpc v0.1.4
 	github.com/libp2p/go-libp2p-kad-dht v0.15.0
 	github.com/libp2p/go-libp2p-pubsub v0.6.1
+	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.4.0
 	github.com/multiformats/go-multihash v0.1.0
 	github.com/spf13/pflag v1.0.5

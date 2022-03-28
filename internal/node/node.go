@@ -23,6 +23,7 @@ import (
 	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
 	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
 	util "github.com/koinos/koinos-util-golang"
+	"github.com/mr-tron/base58/base58"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -169,7 +170,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 }
 
 func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.block.accept broadcast: %v", string(data))
+	log.Debugf("Received koinos.block.accept broadcast: %v", base58.Encode(data))
 	blockBroadcast := &broadcast.BlockAccepted{}
 	err := proto.Unmarshal(data, blockBroadcast)
 	if err != nil {
@@ -190,11 +191,11 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.mempool.accept broadcast: %v", string(data))
+	log.Debugf("Received koinos.mempool.accept broadcast: %v", base58.Encode(data))
 	trxBroadcast := &broadcast.MempoolAccepted{}
 	err := proto.Unmarshal(data, trxBroadcast)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", string(data))
+		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", base58.Encode(data))
 		return
 	}
 
@@ -211,11 +212,11 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 }
 
 func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
-	log.Debugf("Received koinos.block.forks broadcast: %v", string(data))
+	log.Debugf("Received koinos.block.forks broadcast: %v", base58.Encode(data))
 	forkHeads := &broadcast.ForkHeads{}
 	err := proto.Unmarshal(data, forkHeads)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", string(data))
+		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", base58.Encode(data))
 		return
 	}
 
