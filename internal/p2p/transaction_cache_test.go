@@ -41,31 +41,36 @@ func TestCheckTransaction(t *testing.T) {
 	tc := NewTransactionCache(time.Minute)
 
 	// Check some transaction that are not in the cache
-	assert.False(t, tc.CheckTransaction(makeTestTxn("1")))
-	assert.False(t, tc.CheckTransaction(makeTestTxn("2")))
-	assert.False(t, tc.CheckTransaction(makeTestTxn("3")))
-	assert.False(t, tc.CheckTransaction(makeTestTxn("4")))
-	assert.False(t, tc.CheckTransaction(makeTestTxn("5")))
+	assert.Equal(t, 0, tc.CheckTransactions(makeTestTxn("1")))
+	assert.Equal(t, 0, tc.CheckTransactions(makeTestTxn("2")))
+	assert.Equal(t, 0, tc.CheckTransactions(makeTestTxn("3")))
+	assert.Equal(t, 0, tc.CheckTransactions(makeTestTxn("4")))
+	assert.Equal(t, 0, tc.CheckTransactions(makeTestTxn("5")))
 
 	assert.Equal(t, 5, len(tc.transactionItems))
 	assert.Equal(t, 5, len(tc.transactionMap))
 
 	// Add some transactions that are in the cache
-	assert.True(t, tc.CheckTransaction(makeTestTxn("1")))
-	assert.True(t, tc.CheckTransaction(makeTestTxn("2")))
-	assert.True(t, tc.CheckTransaction(makeTestTxn("3")))
-	assert.True(t, tc.CheckTransaction(makeTestTxn("4")))
-	assert.True(t, tc.CheckTransaction(makeTestTxn("5")))
+	assert.Equal(t, 1, tc.CheckTransactions(makeTestTxn("1")))
+	assert.Equal(t, 1, tc.CheckTransactions(makeTestTxn("2")))
+	assert.Equal(t, 1, tc.CheckTransactions(makeTestTxn("3")))
+	assert.Equal(t, 1, tc.CheckTransactions(makeTestTxn("4")))
+	assert.Equal(t, 1, tc.CheckTransactions(makeTestTxn("5")))
 
 	assert.Equal(t, 5, len(tc.transactionItems))
 	assert.Equal(t, 5, len(tc.transactionMap))
 
 	// Add a few more that are not in the cache
-	assert.False(t, tc.CheckTransaction(makeTestTxn("6")))
-	assert.False(t, tc.CheckTransaction(makeTestTxn("7")))
+	assert.Equal(t, 0, tc.CheckTransactions(makeTestTxn("6")))
+	assert.Equal(t, 0, tc.CheckTransactions(makeTestTxn("7")))
 
 	assert.Equal(t, 7, len(tc.transactionItems))
 	assert.Equal(t, 7, len(tc.transactionMap))
+
+	// Test that multiple transactions are checked properly
+	assert.Equal(t, 1, tc.CheckTransactions(makeTestTxn("6"), makeTestTxn("8"), makeTestTxn("9")))
+	assert.Equal(t, 3, tc.CheckTransactions(makeTestTxn("7"), makeTestTxn("8"), makeTestTxn("9")))
+	assert.Equal(t, 0, tc.CheckTransactions(makeTestTxn("10"), makeTestTxn("11"), makeTestTxn("12")))
 }
 
 func TestCachePrune(t *testing.T) {

@@ -55,16 +55,18 @@ type connectionStatus struct {
 
 // ConnectionManager attempts to reconnect to peers using the network.Notifiee interface.
 type ConnectionManager struct {
-	host   host.Host
-	server *gorpc.Server
-	client *gorpc.Client
+	host             host.Host
+	server           *gorpc.Server
+	client           *gorpc.Client
+	gossipToggle     *GossipToggle
+	transactionCache *TransactionCache
 
 	localRPC    rpc.LocalRPC
 	peerOpts    *options.PeerConnectionOptions
 	libProvider LastIrreversibleBlockProvider
 
-	initialPeers       map[peer.ID]peer.AddrInfo
-	connectedPeers     map[peer.ID]*peerConnectionContext
+	initialPeers   map[peer.ID]peer.AddrInfo
+	connectedPeers map[peer.ID]*peerConnectionContext
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
@@ -76,6 +78,8 @@ type ConnectionManager struct {
 // NewConnectionManager creates a new PeerReconnectManager object
 func NewConnectionManager(
 	host host.Host,
+	gossipToggle *GossipToggle,
+	transactionCache *TransactionCache,
 	localRPC rpc.LocalRPC,
 	peerOpts *options.PeerConnectionOptions,
 	libProvider LastIrreversibleBlockProvider,
@@ -88,6 +92,8 @@ func NewConnectionManager(
 		host:                     host,
 		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
 		server:                   gorpc.NewServer(host, rpc.PeerRPCID),
+		gossipToggle:             gossipToggle,
+		transactionCache:         transactionCache,
 		localRPC:                 localRPC,
 		peerOpts:                 peerOpts,
 		libProvider:              libProvider,
@@ -168,6 +174,8 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 				c.peerErrorChan,
 				c.gossipVoteChan,
 				c.peerOpts,
+				c.gossipToggle,
+				c.transactionCache,
 			),
 			cancel: cancel,
 		}

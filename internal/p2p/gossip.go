@@ -281,6 +281,9 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 		return p2perrors.ErrBlockIrreversibility
 	}
 
+	// Add transactions to the cache
+	kg.transactionCache.CheckBlock(block)
+
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if _, err := kg.rpc.ApplyBlock(ctx, block); err != nil {
@@ -347,7 +350,7 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 		return fmt.Errorf("%w, gossiped transaction missing id", p2perrors.ErrDeserialization)
 	}
 
-	if kg.transactionCache.CheckTransaction(transaction) {
+	if kg.transactionCache.CheckTransactions(transaction) > 0 {
 		log.Debugf("Gossiped transaction already in cache - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 		return nil
 	}
