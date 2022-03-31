@@ -19,7 +19,6 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
-	"github.com/koinos/koinos-proto-golang/koinos/canonical"
 	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
 	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
 	util "github.com/koinos/koinos-util-golang"
@@ -59,7 +58,7 @@ type KoinosP2PNode struct {
 }
 
 const (
-	transactionCacheDuration = time.Minute * 5
+	transactionCacheDuration = time.Minute * 10
 )
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
@@ -180,15 +179,10 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 		return
 	}
 
-	binary, err := canonical.Marshal(blockBroadcast.Block)
+	err = n.Gossip.PublishBlock(context.Background(), blockBroadcast.Block)
 	if err != nil {
 		log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
 		return
-	}
-
-	if n.Gossip.Block.Enabled {
-		log.Infof("Publishing block - %s", util.BlockString(blockBroadcast.Block))
-		n.Gossip.Block.PublishMessage(context.Background(), binary)
 	}
 }
 
@@ -201,15 +195,10 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 		return
 	}
 
-	binary, err := canonical.Marshal(trxBroadcast.Transaction)
+	err = n.Gossip.PublishTransaction(context.Background(), trxBroadcast.Transaction)
 	if err != nil {
 		log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
 		return
-	}
-
-	if n.Gossip.Transaction.Enabled {
-		log.Infof("Publishing transaction - %s", util.TransactionString(trxBroadcast.Transaction))
-		n.Gossip.Transaction.PublishMessage(context.Background(), binary)
 	}
 }
 

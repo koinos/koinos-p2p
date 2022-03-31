@@ -14,7 +14,6 @@ func makeTestTxn(id string) *protocol.Transaction {
 
 func TestAddTransaction(t *testing.T) {
 	tc := NewTransactionCache(time.Minute)
-
 	// Add some transactions in time order
 	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"1", time.Unix(1000, 1000)}) })
 	assert.NotPanics(t, func() { tc.addTransactionItem(&TransactionCacheItem{"2", time.Unix(2000, 1000)}) })
