@@ -31,9 +31,6 @@ type PeerConnection struct {
 	peerRPC        rpc.RemoteRPC
 	peerErrorChan  chan<- PeerError
 	gossipVoteChan chan<- GossipVote
-
-	gossipToggle     *GossipToggle
-	transactionCache *TransactionCache
 }
 
 func (p *PeerConnection) requestBlocks() {
@@ -164,11 +161,6 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 			return fmt.Errorf("%w: %s", p2perrors.ErrBlockApplication, err.Error())
 		}
-
-		// If gossip is on, submit the block to the transaction cache
-		if p.gossipToggle.IsEnabled() {
-			p.transactionCache.CheckBlock(&block)
-		}
 	}
 
 	// We will consider ourselves as syncing if we have more than 5 blocks to sync
@@ -246,7 +238,7 @@ func (p *PeerConnection) Start(ctx context.Context) {
 }
 
 // NewPeerConnection creates a PeerConnection
-func NewPeerConnection(id peer.ID, libProvider LastIrreversibleBlockProvider, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, opts *options.PeerConnectionOptions, gossipToggle *GossipToggle, transactionCache *TransactionCache) *PeerConnection {
+func NewPeerConnection(id peer.ID, libProvider LastIrreversibleBlockProvider, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, opts *options.PeerConnectionOptions) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
 		isSynced:         false,
@@ -258,7 +250,5 @@ func NewPeerConnection(id peer.ID, libProvider LastIrreversibleBlockProvider, lo
 		peerRPC:          peerRPC,
 		peerErrorChan:    peerErrorChan,
 		gossipVoteChan:   gossipVoteChan,
-		gossipToggle:     gossipToggle,
-		transactionCache: transactionCache,
 	}
 }
