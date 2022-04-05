@@ -388,7 +388,7 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	}
 
 	if kg.transactionCache.CheckTransactions(transaction) > 0 {
-		log.Warnf("Gossiped transaction already in cache - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+		log.Debugf("Gossiped transaction already in cache - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 		return nil
 	}
 

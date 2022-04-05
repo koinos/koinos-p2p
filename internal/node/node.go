@@ -184,9 +184,6 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 			log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
 			return
 		}
-
-		// Add its transactions to the cache
-		n.TransactionCache.CheckBlock(blockBroadcast.Block)
 	}
 }
 
