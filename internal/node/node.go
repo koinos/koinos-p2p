@@ -19,10 +19,10 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
-	"github.com/koinos/koinos-proto-golang/koinos/canonical"
 	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
 	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
 	util "github.com/koinos/koinos-util-golang"
+	"github.com/mr-tron/base58/base58"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -46,6 +46,7 @@ type KoinosP2PNode struct {
 	ConnectionManager *p2p.ConnectionManager
 	PeerErrorHandler  *p2p.PeerErrorHandler
 	GossipToggle      *p2p.GossipToggle
+	TransactionCache  *p2p.TransactionCache
 	libValue          atomic.Value
 
 	PeerErrorChan        chan p2p.PeerError
@@ -55,6 +56,10 @@ type KoinosP2PNode struct {
 
 	Options options.NodeOptions
 }
+
+const (
+	transactionCacheDuration = time.Minute * 10
+)
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
 // uses secio encryption on the wire
@@ -132,13 +137,16 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		return nil, err
 	}
 
+	node.TransactionCache = p2p.NewTransactionCache(transactionCacheDuration)
+
 	node.Gossip = p2p.NewKoinosGossip(
 		ctx,
 		node.localRPC,
 		ps,
 		node.PeerErrorChan,
 		node.Host.ID(),
-		node)
+		node,
+		node.TransactionCache)
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
@@ -161,7 +169,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 }
 
 func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.block.accept broadcast: %v", string(data))
+	log.Debugf("Received koinos.block.accept broadcast: %v", base58.Encode(data))
 	blockBroadcast := &broadcast.BlockAccepted{}
 	err := proto.Unmarshal(data, blockBroadcast)
 	if err != nil {
@@ -169,45 +177,41 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 		return
 	}
 
-	binary, err := canonical.Marshal(blockBroadcast.Block)
-	if err != nil {
-		log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
-		return
-	}
-
-	if n.Gossip.Block.Enabled {
-		log.Infof("Publishing block - %s", util.BlockString(blockBroadcast.Block))
-		n.Gossip.Block.PublishMessage(context.Background(), binary)
+	// If gossip is enabled publish the block
+	if n.GossipToggle.IsEnabled() {
+		err = n.Gossip.PublishBlock(context.Background(), blockBroadcast.Block)
+		if err != nil {
+			log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
+			return
+		}
 	}
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.mempool.accept broadcast: %v", string(data))
+	log.Debugf("Received koinos.mempool.accept broadcast: %v", base58.Encode(data))
 	trxBroadcast := &broadcast.MempoolAccepted{}
 	err := proto.Unmarshal(data, trxBroadcast)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", string(data))
+		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", base58.Encode(data))
 		return
 	}
 
-	binary, err := canonical.Marshal(trxBroadcast.Transaction)
-	if err != nil {
-		log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
-		return
-	}
-
-	if n.Gossip.Transaction.Enabled {
-		log.Infof("Publishing transaction - %s", util.TransactionString(trxBroadcast.Transaction))
-		n.Gossip.Transaction.PublishMessage(context.Background(), binary)
+	// If gossip is enabled publish the transaction
+	if n.GossipToggle.IsEnabled() {
+		err = n.Gossip.PublishTransaction(context.Background(), trxBroadcast.Transaction)
+		if err != nil {
+			log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
+			return
+		}
 	}
 }
 
 func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
-	log.Debugf("Received koinos.block.forks broadcast: %v", string(data))
+	log.Debugf("Received koinos.block.forks broadcast: %v", base58.Encode(data))
 	forkHeads := &broadcast.ForkHeads{}
 	err := proto.Unmarshal(data, forkHeads)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", string(data))
+		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", base58.Encode(data))
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-proto-golang/koinos/canonical"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	util "github.com/koinos/koinos-util-golang"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -149,13 +150,14 @@ type GossipEnableHandler interface {
 
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
-	rpc           rpc.LocalRPC
-	Block         *GossipManager
-	Transaction   *GossipManager
-	PubSub        *pubsub.PubSub
-	PeerErrorChan chan<- PeerError
-	myPeerID      peer.ID
-	libProvider   LastIrreversibleBlockProvider
+	rpc              rpc.LocalRPC
+	block            *GossipManager
+	transaction      *GossipManager
+	PubSub           *pubsub.PubSub
+	PeerErrorChan    chan<- PeerError
+	myPeerID         peer.ID
+	libProvider      LastIrreversibleBlockProvider
+	transactionCache *TransactionCache
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
@@ -165,18 +167,20 @@ func NewKoinosGossip(
 	ps *pubsub.PubSub,
 	peerErrorChan chan<- PeerError,
 	id peer.ID,
-	libProvider LastIrreversibleBlockProvider) *KoinosGossip {
+	libProvider LastIrreversibleBlockProvider,
+	cache *TransactionCache) *KoinosGossip {
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
 	kg := KoinosGossip{
-		rpc:           rpc,
-		Block:         block,
-		Transaction:   transaction,
-		PubSub:        ps,
-		PeerErrorChan: peerErrorChan,
-		myPeerID:      id,
-		libProvider:   libProvider,
+		rpc:              rpc,
+		block:            block,
+		transaction:      transaction,
+		PubSub:           ps,
+		PeerErrorChan:    peerErrorChan,
+		myPeerID:         id,
+		libProvider:      libProvider,
+		transactionCache: cache,
 	}
 
 	return &kg
@@ -201,16 +205,52 @@ func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 // StopGossip stops gossiping on both block and transaction topics
 func (kg *KoinosGossip) StopGossip() {
 	log.Info("Stopping gossip mode")
-	kg.Block.Stop()
-	kg.Transaction.Stop()
+	kg.block.Stop()
+	kg.transaction.Stop()
+}
+
+// PublishTransaction publishes a transaction to the transaction topic
+func (kg *KoinosGossip) PublishTransaction(ctx context.Context, transaction *protocol.Transaction) error {
+	binary, err := canonical.Marshal(transaction)
+	if err != nil {
+		return err
+	}
+
+	if kg.transaction.Enabled {
+		// Add to the transaction cache
+		kg.transactionCache.CheckTransactions(transaction)
+
+		log.Infof("Publishing transaction - %s", util.TransactionString(transaction))
+		kg.transaction.PublishMessage(context.Background(), binary)
+	}
+
+	return nil
+}
+
+// PublishBlock publishes a block to the block topic
+func (kg *KoinosGossip) PublishBlock(ctx context.Context, block *protocol.Block) error {
+	binary, err := canonical.Marshal(block)
+	if err != nil {
+		return err
+	}
+
+	if kg.block.Enabled {
+		// Add to the transaction cache
+		kg.transactionCache.CheckBlock(block)
+
+		log.Infof("Publishing transaction - %s", util.BlockString(block))
+		kg.block.PublishMessage(context.Background(), binary)
+	}
+
+	return nil
 }
 
 func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 	go func() {
 		blockChan := make(chan []byte, blockBuffer)
 		defer close(blockChan)
-		kg.Block.RegisterValidator(kg.validateBlock)
-		kg.Block.Start(ctx, blockChan)
+		kg.block.RegisterValidator(kg.validateBlock)
+		kg.block.Start(ctx, blockChan)
 		log.Info("Started block gossip listener")
 
 		// A block that reaches here has already been applied
@@ -278,6 +318,9 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 		return p2perrors.ErrBlockIrreversibility
 	}
 
+	// Add transactions to the cache
+	kg.transactionCache.CheckBlock(block)
+
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if _, err := kg.rpc.ApplyBlock(ctx, block); err != nil {
@@ -292,8 +335,8 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 	go func() {
 		transactionChan := make(chan []byte, transactionBuffer)
 		defer close(transactionChan)
-		kg.Transaction.RegisterValidator(kg.validateTransaction)
-		kg.Transaction.Start(ctx, transactionChan)
+		kg.transaction.RegisterValidator(kg.validateTransaction)
+		kg.transaction.Start(ctx, transactionChan)
 		log.Info("Started transaction gossip listener")
 
 		// A transaction that reaches here has already been applied
@@ -342,6 +385,11 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 
 	if transaction.Id == nil {
 		return fmt.Errorf("%w, gossiped transaction missing id", p2perrors.ErrDeserialization)
+	}
+
+	if kg.transactionCache.CheckTransactions(transaction) > 0 {
+		log.Debugf("Gossiped transaction already in cache - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+		return nil
 	}
 
 	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {

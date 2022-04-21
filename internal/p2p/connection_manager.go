@@ -63,8 +63,8 @@ type ConnectionManager struct {
 	peerOpts    *options.PeerConnectionOptions
 	libProvider LastIrreversibleBlockProvider
 
-	initialPeers       map[peer.ID]peer.AddrInfo
-	connectedPeers     map[peer.ID]*peerConnectionContext
+	initialPeers   map[peer.ID]peer.AddrInfo
+	connectedPeers map[peer.ID]*peerConnectionContext
 
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
