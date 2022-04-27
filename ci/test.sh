@@ -27,6 +27,5 @@ else
 
    cd koinos-integration-tests
    go get ./...
-   cd tests
    ./run.sh
 fi
