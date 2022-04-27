@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
@@ -27,8 +26,6 @@ const (
 
 	// TransactionTopicName is the transaction topic string
 	TransactionTopicName string = "koinos.transactions"
-
-	peerAdvertiseTime time.Duration = time.Minute * 1
 )
 
 // GossipManager manages gossip on a given topic
@@ -63,8 +60,8 @@ func NewGossipManager(ps *pubsub.PubSub, errChan chan<- PeerError, topicName str
 }
 
 // RegisterValidator registers the validate function to be used for messages
-func (gm *GossipManager) RegisterValidator(val interface{}) {
-	gm.ps.RegisterTopicValidator(gm.topicName, val)
+func (gm *GossipManager) RegisterValidator(val interface{}) error {
+	return gm.ps.RegisterTopicValidator(gm.topicName, val)
 }
 
 // Start starts gossiping on this topic
@@ -115,7 +112,7 @@ func (gm *GossipManager) PublishMessage(ctx context.Context, bytes []byte) bool 
 	}
 
 	log.Debugf("Publishing message")
-	gm.topic.Publish(ctx, bytes)
+	_ = gm.topic.Publish(ctx, bytes)
 
 	return true
 }
@@ -249,8 +246,8 @@ func (kg *KoinosGossip) startBlockGossip(ctx context.Context) {
 	go func() {
 		blockChan := make(chan []byte, blockBuffer)
 		defer close(blockChan)
-		kg.block.RegisterValidator(kg.validateBlock)
-		kg.block.Start(ctx, blockChan)
+		_ = kg.block.RegisterValidator(kg.validateBlock)
+		_ = kg.block.Start(ctx, blockChan)
 		log.Info("Started block gossip listener")
 
 		// A block that reaches here has already been applied
@@ -335,8 +332,8 @@ func (kg *KoinosGossip) startTransactionGossip(ctx context.Context) {
 	go func() {
 		transactionChan := make(chan []byte, transactionBuffer)
 		defer close(transactionChan)
-		kg.transaction.RegisterValidator(kg.validateTransaction)
-		kg.transaction.Start(ctx, transactionChan)
+		_ = kg.transaction.RegisterValidator(kg.validateTransaction)
+		_ = kg.transaction.Start(ctx, transactionChan)
 		log.Info("Started transaction gossip listener")
 
 		// A transaction that reaches here has already been applied

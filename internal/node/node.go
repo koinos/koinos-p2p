@@ -215,7 +215,7 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 		return
 	}
 
-	n.libValue.Store(*forkHeads.LastIrreversibleBlock)
+	n.libValue.Store(forkHeads.LastIrreversibleBlock)
 }
 
 func (n *KoinosP2PNode) handleRPC(rpcType string, data []byte) ([]byte, error) {
@@ -249,7 +249,6 @@ func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PRespons
 			result := rpcp2p.GetGossipStatusResponse{Enabled: n.GossipToggle.IsEnabled()}
 			respVal := rpcp2p.P2PResponse_GetGossipStatus{GetGossipStatus: &result}
 			response.Response = &respVal
-			break
 		default:
 			err = errors.New("Unknown request")
 		}
@@ -305,8 +304,8 @@ func (n *KoinosP2PNode) GetAddress() multiaddr.Multiaddr {
 }
 
 // GetLastIrreversibleBlock returns last irreversible block height and block id of connected node
-func (n *KoinosP2PNode) GetLastIrreversibleBlock() koinos.BlockTopology {
-	return n.libValue.Load().(koinos.BlockTopology)
+func (n *KoinosP2PNode) GetLastIrreversibleBlock() *koinos.BlockTopology {
+	return n.libValue.Load().(*koinos.BlockTopology)
 }
 
 // Close closes the node
@@ -348,7 +347,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 		forkHeads, err = n.localRPC.GetForkHeads(ctx)
 	}
 
-	n.libValue.Store(*forkHeads.LastIrreversibleBlock)
+	n.libValue.Store(forkHeads.LastIrreversibleBlock)
 
 	// Start peer gossip
 	go n.logConnectionsLoop(ctx)
@@ -360,7 +359,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 		for {
 			select {
 			case id := <-n.DisconnectPeerChan:
-				n.Host.Network().ClosePeer(id)
+				_ = n.Host.Network().ClosePeer(id)
 			case <-ctx.Done():
 				return
 			}

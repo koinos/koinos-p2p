@@ -54,7 +54,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 		return err
 	}
 
-	if bytes.Compare(myChainID.ChainId, peerChainID) != 0 {
+	if !bytes.Equal(myChainID.ChainId, peerChainID) {
 		return p2perrors.ErrChainIDMismatch
 	}
 
@@ -74,7 +74,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 			return err
 		}
 
-		if bytes.Compare(peerBlock, checkpoint.BlockID) != 0 {
+		if !bytes.Equal(peerBlock, checkpoint.BlockID) {
 			return p2perrors.ErrCheckpointMismatch
 		}
 	}
@@ -126,7 +126,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 			return err
 		}
 
-		if bytes.Compare([]byte(ancestorBlock), lib.Id) != 0 {
+		if !bytes.Equal([]byte(ancestorBlock), lib.Id) {
 			return p2perrors.ErrChainNotConnected
 		}
 	}
@@ -149,10 +149,10 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// Apply blocks to local node
-	for _, block := range blocks {
+	for i := range blocks {
 		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
 		defer cancelApplyBlock()
-		_, err = p.localRPC.ApplyBlock(rpcContext, &block)
+		_, err = p.localRPC.ApplyBlock(rpcContext, &blocks[i])
 		if err != nil {
 			// If it was a local RPC timeout, do not wrap it
 			if errors.Is(err, p2perrors.ErrLocalRPCTimeout) {
