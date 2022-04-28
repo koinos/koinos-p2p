@@ -298,6 +298,9 @@ func TestApplyBlockFailure(t *testing.T) {
 
 	p, _ := peer.AddrInfoFromP2pAddr(addr)
 	err = sendNode.ConnectToPeerAddress(context.Background(), p)
+	if err != nil {
+		t.Error(err)
+	}
 
 	time.Sleep(time.Duration(800) * time.Duration(time.Millisecond))
 

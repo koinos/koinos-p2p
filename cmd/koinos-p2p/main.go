@@ -43,10 +43,8 @@ const (
 	amqpDefault          = "amqp://guest:guest@localhost:5672/"
 	listenDefault        = "/ip4/127.0.0.1/tcp/8888"
 	seedDefault          = ""
-	peerExchangeDefault  = true
 	disableGossipDefault = false
 	forceGossipDefault   = false
-	verboseDefault       = false
 	logLevelDefault      = "info"
 	instanceIDDefault    = ""
 )
@@ -129,6 +127,9 @@ func main() {
 		// Replace with base64 later
 		//blockID, err := base64.URLEncoding.DecodeString(parts[1])
 		blockID, err := hex.DecodeString(parts[1])
+		if err != nil {
+			log.Errorf("Error decoding checkpoint block id: %s", err)
+		}
 		config.PeerConnectionOptions.Checkpoints = append(config.PeerConnectionOptions.Checkpoints, options.Checkpoint{BlockHeight: blockHeight, BlockID: blockID})
 	}
 

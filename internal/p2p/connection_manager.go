@@ -37,22 +37,6 @@ type peerConnectionContext struct {
 	cancel context.CancelFunc
 }
 
-type libValue struct {
-	num uint64
-	id  []byte
-}
-
-type connectionRequest struct {
-	addr       *peer.AddrInfo
-	returnChan chan<- error
-}
-
-type connectionStatus struct {
-	addr       *peer.AddrInfo
-	err        error
-	returnChan chan<- error
-}
-
 // ConnectionManager attempts to reconnect to peers using the network.Notifiee interface.
 type ConnectionManager struct {
 	host   host.Host

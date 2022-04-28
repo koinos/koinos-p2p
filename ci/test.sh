@@ -14,7 +14,7 @@ if [[ -z $BUILD_DOCKER ]]; then
 
    lcov -a ./build/internal.info -a ./build/node.info -a ./build/p2p.info -o ./build/merged.info
 
-   golint -set_exit_status ./...
+   golangci-lint run ./...
 else
    TAG="$TRAVIS_BRANCH"
    if [ "$TAG" = "master" ]; then

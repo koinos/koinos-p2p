@@ -50,13 +50,13 @@ func (g *GossipToggle) checkThresholds(ctx context.Context) {
 		g.enabled = true
 		g.gossipEnabler.EnableGossip(ctx, true)
 		if g.rpc != nil {
-			g.rpc.BroadcastGossipStatus(true)
+			_ = g.rpc.BroadcastGossipStatus(true)
 		}
 	} else if g.opts.DisableThreshold-threshold >= -epsilon && g.enabled {
 		g.enabled = false
 		g.gossipEnabler.EnableGossip(ctx, false)
 		if g.rpc != nil {
-			g.rpc.BroadcastGossipStatus(false)
+			_ = g.rpc.BroadcastGossipStatus(false)
 		}
 	}
 }
