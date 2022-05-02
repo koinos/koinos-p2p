@@ -237,7 +237,7 @@ func (n *KoinosP2PNode) handlePluginBroadcast(topic string, data []byte) {
 		return
 	}
 
-	// If gossip is enabled publish the block
+	// If gossip is enabled publish the data
 	if n.GossipToggle.IsEnabled() {
 		err := n.Gossip.PublishPluginData(context.Background(), topic, pluginBroadcast.Data)
 		if err != nil {

@@ -100,22 +100,3 @@ func (p *PeerRPC) GetBlocks(ctx context.Context, headBlockID multihash.Multihash
 
 	return blocks, nil
 }
-
-// SubmitDataPlugin rpc call
-func (p *PeerRPC) SubmitDataPlugin(ctx context.Context, pluginName string, data []byte) (result []byte, err error) {
-	rpcReq := &SubmitDataPluginRequest{
-		PluginName: pluginName,
-		Data:       data,
-	}
-	rpcResp := &SubmitDataPluginResponse{}
-
-	err = p.client.CallContext(ctx, p.peerID, "PeerRPCService", "SubmitDataPlugin", rpcReq, rpcResp)
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPCTimeout, err)
-		}
-		return nil, fmt.Errorf("%w, %s", p2perrors.ErrPeerRPC, err)
-	}
-
-	return rpcResp.Data, nil
-}
