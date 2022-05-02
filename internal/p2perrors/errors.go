@@ -43,4 +43,10 @@ var (
 
 	// ErrProcessRequestTimeout represents an in process asynchronous request time out
 	ErrProcessRequestTimeout = errors.New("in process request timed out")
+
+	// ErrGossipManagerPluginNotSet represents an error when a gossip manager is not available for a plugin
+	ErrGossipManagerPluginNotSet = errors.New("gossip manager not set for plugin")
+
+	// ErrPluginNotAvailable represents an error when a peer does not have a plugin available
+	ErrPluginNotAvailable = errors.New("plugin not available")
 )

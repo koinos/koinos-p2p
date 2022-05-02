@@ -3,7 +3,9 @@ package rpc
 import (
 	"context"
 	"errors"
+	"fmt"
 
+	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/multiformats/go-multihash"
 	"google.golang.org/protobuf/proto"
 )
@@ -53,15 +55,28 @@ type GetBlocksResponse struct {
 	Blocks [][]byte
 }
 
+// SubmitDataPluginRequest args
+type SubmitDataPluginRequest struct {
+	PluginName string
+	Data       []byte
+}
+
+// SubmitDataPluginResponse return
+type SubmitDataPluginResponse struct {
+	Data []byte
+}
+
 // PeerRPCService implements a libp2p_rpc service
 type PeerRPCService struct {
-	local LocalRPC
+	local   LocalRPC
+	plugins map[string]*PluginRPC
 }
 
 // NewPeerRPCService creates a PeerRPCService
-func NewPeerRPCService(local LocalRPC) *PeerRPCService {
+func NewPeerRPCService(local LocalRPC, plugins map[string]*PluginRPC) *PeerRPCService {
 	return &PeerRPCService{
-		local: local,
+		local:   local,
+		plugins: plugins,
 	}
 }
 
@@ -117,6 +132,23 @@ func (p *PeerRPCService) GetBlocks(ctx context.Context, request *GetBlocksReques
 			return err
 		}
 	}
+
+	return nil
+}
+
+// SubmitDataPlugin peer rpc implementation
+func (p *PeerRPCService) SubmitDataPlugin(ctx context.Context, request *SubmitDataPluginRequest, response *SubmitDataPluginResponse) error {
+	pluginRpc, ok := p.plugins[request.PluginName]
+	if !ok {
+		return fmt.Errorf("%w, %s", p2perrors.ErrPluginNotAvailable, request.PluginName)
+	}
+
+	rpcResult, err := pluginRpc.SubmitData(ctx, request.Data)
+	if err != nil {
+		return err
+	}
+
+	response.Data = rpcResult
 
 	return nil
 }

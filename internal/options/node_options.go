@@ -10,6 +10,9 @@ type NodeOptions struct {
 
 	// Force gossip mode on startup
 	ForceGossip bool
+
+	// Plugins allowed
+	Plugins []string
 }
 
 // NewNodeOptions creates a NodeOptions object which controls how p2p works

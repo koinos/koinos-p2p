@@ -36,6 +36,7 @@ const (
 	forceGossipOption   = "force-gossip"
 	logLevelOption      = "log-level"
 	instanceIDOption    = "instance-id"
+	pluginsOption       = "plugins"
 )
 
 const (
@@ -72,6 +73,7 @@ func main() {
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode to always be enabled")
 	logLevel := flag.StringP(logLevelOption, "v", "", "The log filtering level (debug, info, warn, error)")
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
+	plugins := flag.StringSliceP(pluginsOption, "P", []string{}, "Plugins allowed to use the p2p micro service")
 
 	flag.Parse()
 
@@ -89,6 +91,7 @@ func main() {
 	*forceGossip = util.GetBoolOption(forceGossipOption, *forceGossip, forceGossipDefault, yamlConfig.P2P, yamlConfig.Global)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
+	*plugins = util.GetStringSliceOption(pluginsOption, *plugins, yamlConfig.P2P, yamlConfig.Global)
 
 	appID := fmt.Sprintf("%s.%s", appName, *instanceID)
 
@@ -106,6 +109,7 @@ func main() {
 
 	config.NodeOptions.InitialPeers = *peerAddresses
 	config.NodeOptions.DirectPeers = *directAddresses
+	config.NodeOptions.Plugins = *plugins
 
 	if *disableGossip {
 		config.GossipToggleOptions.AlwaysDisable = true
@@ -159,7 +163,25 @@ func main() {
 		}
 	}
 
-	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(client), requestHandler, *seed, config)
+	pluginsRPCs := make(map[string]*rpc.PluginRPC)
+
+	for _, plugin := range *plugins {
+		log.Info("Attempting to connect to plugin " + plugin)
+		pluginRPC := rpc.NewPluginRPC(client, plugin)
+		for {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			val, _ := pluginRPC.IsConnectedToPlugin(ctx)
+			if val {
+				log.Info("Connected")
+				break
+			}
+		}
+
+		pluginsRPCs[pluginRPC.Name] = pluginRPC
+	}
+
+	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(client), pluginsRPCs, requestHandler, *seed, config)
 	if err != nil {
 		panic(err)
 	}

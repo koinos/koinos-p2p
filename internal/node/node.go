@@ -42,6 +42,7 @@ import (
 type KoinosP2PNode struct {
 	Host              host.Host
 	localRPC          rpc.LocalRPC
+	pluginsRPC        map[string]*rpc.PluginRPC
 	Gossip            *p2p.KoinosGossip
 	ConnectionManager *p2p.ConnectionManager
 	PeerErrorHandler  *p2p.PeerErrorHandler
@@ -65,7 +66,7 @@ const (
 // uses secio encryption on the wire
 // listenAddr is a multiaddress string on which to listen
 // seed is the random seed to use for key generation. Use 0 for a random seed.
-func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.LocalRPC, requestHandler *koinosmq.RequestHandler, seed string, config *options.Config) (*KoinosP2PNode, error) {
+func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.LocalRPC, pluginsRPC map[string]*rpc.PluginRPC, requestHandler *koinosmq.RequestHandler, seed string, config *options.Config) (*KoinosP2PNode, error) {
 	privateKey, err := generatePrivateKey(seed)
 	if err != nil {
 		return nil, err
@@ -117,11 +118,18 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.Host = host
 	node.localRPC = localRPC
+	node.pluginsRPC = pluginsRPC
 
 	if requestHandler != nil {
 		requestHandler.SetBroadcastHandler("koinos.block.accept", node.handleBlockBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.mempool.accept", node.handleTransactionBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.block.forks", node.handleForkUpdate)
+
+		for pluginName := range pluginsRPC {
+			log.Infof("Starting broadcast listener for %s", pluginName)
+			requestHandler.SetBroadcastHandler(pluginName, node.handlePluginBroadcast)
+		}
+
 		requestHandler.SetRPCHandler("p2p", node.handleRPC)
 	} else {
 		log.Info("Starting P2P node without broadcast listeners")
@@ -142,6 +150,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.Gossip = p2p.NewKoinosGossip(
 		ctx,
 		node.localRPC,
+		node.pluginsRPC,
 		ps,
 		node.PeerErrorChan,
 		node.Host.ID(),
@@ -158,6 +167,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.ConnectionManager = p2p.NewConnectionManager(
 		node.Host,
 		node.localRPC,
+		node.pluginsRPC,
 		&config.PeerConnectionOptions,
 		node,
 		node.Options.InitialPeers,
@@ -216,6 +226,25 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 	}
 
 	n.libValue.Store(forkHeads.LastIrreversibleBlock)
+}
+
+func (n *KoinosP2PNode) handlePluginBroadcast(topic string, data []byte) {
+	log.Debugf("Received %s broadcast: %v", topic, base58.Encode(data))
+	pluginBroadcast := &broadcast.PluginBroadcast{}
+	err := proto.Unmarshal(data, pluginBroadcast)
+	if err != nil {
+		log.Warnf("Unable to parse %s broadcast: %v", topic, base58.Encode(data))
+		return
+	}
+
+	// If gossip is enabled publish the block
+	if n.GossipToggle.IsEnabled() {
+		err := n.Gossip.PublishPluginData(context.Background(), topic, pluginBroadcast.Data)
+		if err != nil {
+			log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
+			return
+		}
+	}
 }
 
 func (n *KoinosP2PNode) handleRPC(rpcType string, data []byte) ([]byte, error) {

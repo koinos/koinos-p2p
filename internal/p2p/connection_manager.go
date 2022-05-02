@@ -44,6 +44,7 @@ type ConnectionManager struct {
 	client *gorpc.Client
 
 	localRPC    rpc.LocalRPC
+	pluginsRPC  map[string]*rpc.PluginRPC
 	peerOpts    *options.PeerConnectionOptions
 	libProvider LastIrreversibleBlockProvider
 
@@ -61,6 +62,7 @@ type ConnectionManager struct {
 func NewConnectionManager(
 	host host.Host,
 	localRPC rpc.LocalRPC,
+	pluginsRPC map[string]*rpc.PluginRPC,
 	peerOpts *options.PeerConnectionOptions,
 	libProvider LastIrreversibleBlockProvider,
 	initialPeers []string,
@@ -73,6 +75,7 @@ func NewConnectionManager(
 		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
 		server:                   gorpc.NewServer(host, rpc.PeerRPCID),
 		localRPC:                 localRPC,
+		pluginsRPC:               pluginsRPC,
 		peerOpts:                 peerOpts,
 		libProvider:              libProvider,
 		initialPeers:             make(map[peer.ID]peer.AddrInfo),
@@ -85,7 +88,7 @@ func NewConnectionManager(
 	}
 
 	log.Debug("Registering Peer RPC Service")
-	err := connectionManager.server.Register(rpc.NewPeerRPCService(connectionManager.localRPC))
+	err := connectionManager.server.Register(rpc.NewPeerRPCService(connectionManager.localRPC, connectionManager.pluginsRPC))
 	if err != nil {
 		log.Errorf("Error registering Peer RPC Service: %s", err.Error())
 		panic(err)

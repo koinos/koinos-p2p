@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -20,6 +21,7 @@ import (
 const (
 	transactionBuffer int = 32
 	blockBuffer       int = 8
+	pluginBuffer      int = 8
 
 	// BlockTopicName is the block topic string
 	BlockTopicName string = "koinos.blocks"
@@ -148,8 +150,10 @@ type GossipEnableHandler interface {
 // KoinosGossip handles gossip of blocks and transactions
 type KoinosGossip struct {
 	rpc              rpc.LocalRPC
+	pluginsRPC       map[string]*rpc.PluginRPC
 	block            *GossipManager
 	transaction      *GossipManager
+	plugins          map[string]*GossipManager
 	PubSub           *pubsub.PubSub
 	PeerErrorChan    chan<- PeerError
 	myPeerID         peer.ID
@@ -161,6 +165,7 @@ type KoinosGossip struct {
 func NewKoinosGossip(
 	ctx context.Context,
 	rpc rpc.LocalRPC,
+	pluginsRPC map[string]*rpc.PluginRPC,
 	ps *pubsub.PubSub,
 	peerErrorChan chan<- PeerError,
 	id peer.ID,
@@ -169,10 +174,18 @@ func NewKoinosGossip(
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
+
+	plugins := make(map[string]*GossipManager)
+	for pluginName := range pluginsRPC {
+		plugins[pluginName] = NewGossipManager(ps, peerErrorChan, pluginName)
+	}
+
 	kg := KoinosGossip{
 		rpc:              rpc,
+		pluginsRPC:       pluginsRPC,
 		block:            block,
 		transaction:      transaction,
+		plugins:          plugins,
 		PubSub:           ps,
 		PeerErrorChan:    peerErrorChan,
 		myPeerID:         id,
@@ -197,6 +210,10 @@ func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 	log.Info("Starting gossip mode")
 	kg.startBlockGossip(ctx)
 	kg.startTransactionGossip(ctx)
+
+	for pluginName, pluginGM := range kg.plugins {
+		kg.startPluginGossip(ctx, pluginName, pluginGM)
+	}
 }
 
 // StopGossip stops gossiping on both block and transaction topics
@@ -204,6 +221,10 @@ func (kg *KoinosGossip) StopGossip() {
 	log.Info("Stopping gossip mode")
 	kg.block.Stop()
 	kg.transaction.Stop()
+
+	for _, pluginGM := range kg.plugins {
+		pluginGM.Stop()
+	}
 }
 
 // PublishTransaction publishes a transaction to the transaction topic
@@ -219,6 +240,20 @@ func (kg *KoinosGossip) PublishTransaction(ctx context.Context, transaction *pro
 
 		log.Infof("Publishing transaction - %s", util.TransactionString(transaction))
 		kg.transaction.PublishMessage(context.Background(), binary)
+	}
+
+	return nil
+}
+
+// PublishPluginData publishes data to the plugin topic
+func (kg *KoinosGossip) PublishPluginData(ctx context.Context, pluginName string, data []byte) error {
+	if gm, ok := kg.plugins[pluginName]; ok {
+		if gm.Enabled {
+			log.Infof("Publishing data - %s", hex.EncodeToString(data))
+			kg.plugins[pluginName].PublishMessage(context.Background(), data)
+		}
+	} else {
+		return fmt.Errorf("%w, %s", p2perrors.ErrGossipManagerPluginNotSet, pluginName)
 	}
 
 	return nil
@@ -395,4 +430,29 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 
 	log.Infof("Gossiped transaction applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 	return nil
+}
+
+func (kg *KoinosGossip) startPluginGossip(ctx context.Context, pluginName string, pluginGM *GossipManager) {
+	go func() {
+		pluginChan := make(chan []byte, pluginBuffer)
+		defer close(pluginChan)
+		// _ = pluginGM.RegisterValidator(kg.validatePlugin)
+		_ = pluginGM.Start(ctx, pluginChan)
+		log.Infof("Started gossip listener for plugin %s", pluginName)
+
+		for {
+			select {
+			case data, ok := <-pluginChan:
+				if !ok {
+					// ok == false means pluginChan is closed, so we simply return
+					return
+				}
+
+				// submit the data received to the plugin micro service
+				kg.pluginsRPC[pluginName].SubmitData(ctx, data)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }

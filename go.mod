@@ -20,3 +20,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	google.golang.org/protobuf v1.28.0
 )
+
+replace (
+	github.com/koinos/koinos-proto-golang v0.2.1-0.20220304200226-d96c9cf694de => "/Users/rr/Documents/blockchain/koinos-proto/build/go/github.com/koinos/koinos-proto-golang"
+)
