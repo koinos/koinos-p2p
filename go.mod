@@ -22,5 +22,5 @@ require (
 )
 
 replace (
-	github.com/koinos/koinos-proto-golang v0.2.1-0.20220304200226-d96c9cf694de => "/Users/rr/Documents/blockchain/koinos-proto/build/go/github.com/koinos/koinos-proto-golang"
+	github.com/koinos/koinos-proto-golang v0.2.1-0.20220304200226-d96c9cf694de => github.com/roaminroe/koinos-proto-golang v0.0.0-20220511165109-9d11027e06ed
 )

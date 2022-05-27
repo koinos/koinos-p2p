@@ -249,7 +249,7 @@ func (kg *KoinosGossip) PublishTransaction(ctx context.Context, transaction *pro
 func (kg *KoinosGossip) PublishPluginData(ctx context.Context, pluginName string, data []byte) error {
 	if gm, ok := kg.plugins[pluginName]; ok {
 		if gm.Enabled {
-			log.Infof("Publishing data - %s", hex.EncodeToString(data))
+			log.Infof("Gossiping data from plugin %s - %s", pluginName, hex.EncodeToString(data))
 			kg.plugins[pluginName].PublishMessage(context.Background(), data)
 		}
 	} else {
@@ -432,24 +432,32 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	return nil
 }
 
+func (kg *KoinosGossip) validatePlugin(ctx context.Context, pid peer.ID, msg *pubsub.Message) bool {
+	// If the gossip message is from this node, ignore it
+	if msg.GetFrom() != kg.myPeerID {
+		// submit the data received to the plugin micro service
+		log.Infof("Submitting gossiped data from %v to plugin %s - %s", msg.ReceivedFrom, *msg.Topic, hex.EncodeToString(msg.Data))
+		kg.pluginsRPC[*msg.Topic].SubmitData(ctx, msg.Data)
+	}
+
+	return true
+}
+
 func (kg *KoinosGossip) startPluginGossip(ctx context.Context, pluginName string, pluginGM *GossipManager) {
 	go func() {
 		pluginChan := make(chan []byte, pluginBuffer)
 		defer close(pluginChan)
-		// _ = pluginGM.RegisterValidator(kg.validatePlugin)
+		_ = pluginGM.RegisterValidator(kg.validatePlugin)
 		_ = pluginGM.Start(ctx, pluginChan)
 		log.Infof("Started gossip listener for plugin %s", pluginName)
 
 		for {
 			select {
-			case data, ok := <-pluginChan:
+			case _, ok := <-pluginChan:
 				if !ok {
 					// ok == false means pluginChan is closed, so we simply return
 					return
 				}
-
-				// submit the data received to the plugin micro service
-				kg.pluginsRPC[pluginName].SubmitData(ctx, data)
 			case <-ctx.Done():
 				return
 			}

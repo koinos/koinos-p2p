@@ -64,7 +64,7 @@ func (k *PluginRPC) IsConnectedToPlugin(ctx context.Context) (bool, error) {
 }
 
 // SubmitData submits data to the plugin microservice.
-func (k *PluginRPC) SubmitData(ctx context.Context, data []byte) ([]byte, error) {
+func (k *PluginRPC) SubmitData(ctx context.Context, data []byte) error {
 	args := &plugin.PluginRequest{
 		Request: &plugin.PluginRequest_SubmitData{
 			SubmitData: &plugin.SubmitDataRequest{
@@ -75,23 +75,23 @@ func (k *PluginRPC) SubmitData(ctx context.Context, data []byte) ([]byte, error)
 
 	data, err := proto.Marshal(args)
 	if err != nil {
-		return nil, fmt.Errorf("%w SubmitData, %s", p2perrors.ErrSerialization, err)
+		return fmt.Errorf("%w SubmitData, %s", p2perrors.ErrSerialization, err)
 	}
 
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPCContext(ctx, "application/octet-stream", k.Name, data)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return nil, fmt.Errorf("%w SubmitData, %s", p2perrors.ErrLocalRPCTimeout, err)
+			return fmt.Errorf("%w SubmitData, %s", p2perrors.ErrLocalRPCTimeout, err)
 		}
-		return nil, fmt.Errorf("%w SubmitData, %s", p2perrors.ErrLocalRPC, err)
+		return fmt.Errorf("%w SubmitData, %s", p2perrors.ErrLocalRPC, err)
 	}
 
 	responseVariant := &plugin.PluginResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
-		return nil, fmt.Errorf("%w SubmitData, %s", p2perrors.ErrDeserialization, err)
+		return fmt.Errorf("%w SubmitData, %s", p2perrors.ErrDeserialization, err)
 	}
 
-	return responseVariant.GetSubmitData().Data, nil
+	return nil
 }
