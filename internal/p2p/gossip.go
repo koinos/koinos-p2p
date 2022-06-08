@@ -235,7 +235,7 @@ func (kg *KoinosGossip) PublishBlock(ctx context.Context, block *protocol.Block)
 		// Add to the transaction cache
 		kg.transactionCache.CheckBlock(block)
 
-		log.Infof("Publishing transaction - %s", util.BlockString(block))
+		log.Infof("Publishing block - %s", util.BlockString(block))
 		kg.block.PublishMessage(context.Background(), binary)
 	}
 
