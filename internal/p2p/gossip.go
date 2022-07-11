@@ -321,6 +321,8 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	// Add transactions to the cache
 	kg.transactionCache.CheckBlock(block)
 
+	log.Infof("Pushing gossip block - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
+
 	// TODO: Fix nil argument
 	if err := kg.blockApplicator.ApplyBlock(ctx, block); err != nil {
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrBlockApplication, util.BlockString(block), err.Error())

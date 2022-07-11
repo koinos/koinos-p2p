@@ -141,6 +141,7 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transact
 		Request: &chainrpc.ChainRequest_SubmitTransaction{
 			SubmitTransaction: &chainrpc.SubmitTransactionRequest{
 				Transaction: trx,
+				Broadcast: true,
 			},
 		},
 	}
