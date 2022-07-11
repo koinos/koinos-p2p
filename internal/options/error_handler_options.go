@@ -12,7 +12,8 @@ const (
 	deserializationErrorScoreDefault        = 5000
 	serializationErrorScoreDefault          = 0
 	blockIrreversibilityErrorScoreDefault   = 100
-	blockApplicationErrorScoreDefault       = 5000
+	syncBlockApplicationErrorScoreDefault   = 5000
+	gossipBlockApplicationErrorScoreDefault = 1000
 	transactionApplicationErrorScoreDefault = 1000
 	chainIDMismatchErrorScoreDefault        = uint64(math.MaxUint32)
 	chainNotConnectedErrorScoreDefault      = uint64(math.MaxUint32)
@@ -22,7 +23,7 @@ const (
 	localRPCTimeoutErrorScoreDefault        = 0
 	peerRPCTimeoutErrorScoreDefault         = 1000
 	processRequestTimeoutErrorScoreDefault  = 0
-	unknownErrorScoreDefault                = blockApplicationErrorScoreDefault
+	unknownErrorScoreDefault                = syncBlockApplicationErrorScoreDefault
 )
 
 // PeerErrorHandlerOptions are options for PeerErrorHandler
@@ -33,7 +34,8 @@ type PeerErrorHandlerOptions struct {
 	DeserializationErrorScore        uint64
 	SerializationErrorScore          uint64
 	BlockIrreversibilityErrorScore   uint64
-	BlockApplicationErrorScore       uint64
+	SyncBlockApplicationErrorScore   uint64
+	GossipBlockApplicationErrorScore uint64
 	TransactionApplicationErrorScore uint64
 	ChainIDMismatchErrorScore        uint64
 	ChainNotConnectedErrorScore      uint64
@@ -54,7 +56,8 @@ func NewPeerErrorHandlerOptions() *PeerErrorHandlerOptions {
 		DeserializationErrorScore:        deserializationErrorScoreDefault,
 		SerializationErrorScore:          serializationErrorScoreDefault,
 		BlockIrreversibilityErrorScore:   blockIrreversibilityErrorScoreDefault,
-		BlockApplicationErrorScore:       blockApplicationErrorScoreDefault,
+		SyncBlockApplicationErrorScore:   syncBlockApplicationErrorScoreDefault,
+		GossipBlockApplicationErrorScore: gossipBlockApplicationErrorScoreDefault,
 		TransactionApplicationErrorScore: transactionApplicationErrorScoreDefault,
 		ChainIDMismatchErrorScore:        chainIDMismatchErrorScoreDefault,
 		ChainNotConnectedErrorScore:      chainNotConnectedErrorScoreDefault,

@@ -321,7 +321,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	// TODO: Fix nil argument
 	// TODO: Perhaps this block should sent to the block cache instead?
 	if _, err := kg.rpc.ApplyBlock(ctx, block); err != nil {
-		return fmt.Errorf("%w - %s, %v", p2perrors.ErrBlockApplication, util.BlockString(block), err.Error())
+		return fmt.Errorf("%w - %s, %v", p2perrors.ErrGossipBlockApplication, util.BlockString(block), err.Error())
 	}
 
 	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)

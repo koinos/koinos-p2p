@@ -97,8 +97,10 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 	// Errors that are commonly expected during normal use or potential attack vectors
 	case errors.Is(err, p2perrors.ErrTransactionApplication):
 		return p.opts.TransactionApplicationErrorScore
-	case errors.Is(err, p2perrors.ErrBlockApplication):
-		return p.opts.BlockApplicationErrorScore
+	case errors.Is(err, p2perrors.ErrSyncBlockApplication):
+		return p.opts.SyncBlockApplicationErrorScore
+	case errors.Is(err, p2perrors.ErrGossipBlockApplication):
+		return p.opts.GossipBlockApplicationErrorScore
 	case errors.Is(err, p2perrors.ErrDeserialization):
 		return p.opts.DeserializationErrorScore
 	case errors.Is(err, p2perrors.ErrBlockIrreversibility):

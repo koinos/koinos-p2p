@@ -14,8 +14,11 @@ var (
 	// ErrBlockIrreversibility is when a block is earlier than irreversibility
 	ErrBlockIrreversibility = errors.New("block is earlier than irreversibility block")
 
-	// ErrBlockApplication represents any error applying the block in chain
-	ErrBlockApplication = errors.New("block application failed")
+	// ErrSyncBlockApplication represents any error applying the block to the chain in sync mode
+	ErrSyncBlockApplication = errors.New("sync block application failed")
+
+	// ErrGossipBlockApplication represents any error applying the block to the chain in gossip mode
+	ErrGossipBlockApplication = errors.New("gossip block application failed")
 
 	// ErrTransactionApplication represents any error applying a transaction to the mem pool
 	ErrTransactionApplication = errors.New("transaction application failed")

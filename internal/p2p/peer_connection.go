@@ -159,7 +159,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 				return err
 			}
 
-			return fmt.Errorf("%w: %s", p2perrors.ErrBlockApplication, err.Error())
+			return fmt.Errorf("%w: %s", p2perrors.ErrSyncBlockApplication, err.Error())
 		}
 	}
 

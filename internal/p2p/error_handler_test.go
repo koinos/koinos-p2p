@@ -16,7 +16,7 @@ func TestErrorHandler(t *testing.T) {
 	opts := options.NewPeerErrorHandlerOptions()
 	ctx := context.Background()
 
-	opts.BlockApplicationErrorScore = 10
+	opts.SyncBlockApplicationErrorScore = 10
 	opts.ErrorScoreThreshold = 100
 	opts.ErrorScoreDecayHalflife = time.Second * 2
 
@@ -24,7 +24,7 @@ func TestErrorHandler(t *testing.T) {
 	errorHandler.Start(ctx)
 
 	for i := 0; i < 12; i++ {
-		peerErrorChan <- PeerError{id: "peerA", err: p2perrors.ErrBlockApplication}
+		peerErrorChan <- PeerError{id: "peerA", err: p2perrors.ErrSyncBlockApplication}
 	}
 
 	exp, cancel := context.WithTimeout(context.Background(), time.Millisecond*10)
