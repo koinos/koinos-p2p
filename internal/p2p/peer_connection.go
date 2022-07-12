@@ -112,7 +112,9 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		return fmt.Errorf("%w: unexpected number of block items returned", p2perrors.ErrLocalRPC)
 	}
 
+	// We already know of the peer's head block, don't request anything and consider ourselves sycned
 	if localBlocks.BlockItems[0].BlockHeight != 0 {
+		p.isSynced = true
 		return nil
 	}
 
