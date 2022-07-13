@@ -2,7 +2,6 @@ package p2p
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -37,7 +36,7 @@ func (b *blockApplicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol
 	}
 
 	if _, ok := b.unlinkableBlocks[string(block.Id)]; ok {
-		return nil, p2perrors.ErrBlockUnlinkable
+		return nil, p2perrors.ErrUnknownPreviousBlock
 	}
 
 	return &chain.SubmitBlockResponse{}, nil
@@ -152,7 +151,7 @@ func TestBlockApplicator(t *testing.T) {
 
 	blockApplicator.Start(ctx)
 
-	err = blockApplicator.ApplyBlock(block1)
+	err = blockApplicator.ApplyBlock(ctx, block1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -167,16 +166,16 @@ func TestBlockApplicator(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	go func() {
-		err := blockApplicator.ApplyBlock(block2b)
-		if err != p2perrors.ErrBlockUnlinkable {
-			t.Errorf("block2b - ErrBlockUnlinkable expected but not returned, was: %v", err)
+		err := blockApplicator.ApplyBlock(ctx, block2b)
+		if err != p2perrors.ErrUnknownPreviousBlock {
+			t.Errorf("block2b - ErrUnknownPreviousBlock expected but not returned, was: %v", err)
 		}
 	}()
 
 	time.Sleep(10 * time.Millisecond)
 
 	go func() {
-		err := blockApplicator.ApplyBlock(block3a)
+		err := blockApplicator.ApplyBlock(ctx, block3a)
 		if err != nil {
 			t.Error(err)
 		}
@@ -192,16 +191,16 @@ func TestBlockApplicator(t *testing.T) {
 	}()
 
 	go func() {
-		err := blockApplicator.ApplyBlock(block3b)
-		if err == nil || errors.Is(err, p2perrors.ErrBlockUnlinkable) {
-			t.Error(err)
+		err := blockApplicator.ApplyBlock(ctx, block3b)
+		if err != p2perrors.ErrBlockApplication {
+			t.Errorf("block2b - ErrBlockApplication expected but not returned, was: %v", err)
 		}
 	}()
 
 	time.Sleep(10 * time.Millisecond)
 
 	go func() {
-		err := blockApplicator.ApplyBlock(block2a)
+		err := blockApplicator.ApplyBlock(ctx, block2a)
 		if err != nil {
 			t.Error(err)
 		}
