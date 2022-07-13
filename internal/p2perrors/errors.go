@@ -44,6 +44,9 @@ var (
 	// ErrProcessRequestTimeout represents an in process asynchronous request time out
 	ErrProcessRequestTimeout = errors.New("in process request timed out")
 
-	// ErrBlockUnlinkable represents when a block is not able to be linked to the current chain
-	ErrBlockUnlinkable = errors.New("block does not link to the current chain")
+	// ErrUnknownPreviousBlock represents when a block's previous block cannot be found
+	ErrUnknownPreviousBlock = errors.New("previous block does not exist")
+
+	// ErrBlockApplicationTimeout represents when a block application timed out
+	ErrBlockApplicationTimeout = errors.New("block application timed out")
 )

@@ -55,12 +55,18 @@ func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC) (*BlockApplicator
 }
 
 // ApplyBlock will apply the block to the chain at the appropriate time
-func (b *BlockApplicator) ApplyBlock(block *protocol.Block) error {
+func (b *BlockApplicator) ApplyBlock(ctx context.Context, block *protocol.Block) error {
 	errChan := make(chan error, 1)
 
 	b.newBlockChan <- &blockEntry{block: block, errChan: errChan}
 
-	return <-errChan
+	select {
+	case err := <-errChan:
+		return err
+
+	case <-ctx.Done():
+		return p2perrors.ErrBlockApplication
+	}
 }
 
 // HandleForkHeads handles a fork heads broadcast
@@ -141,7 +147,7 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 	} else {
 		_, err = b.rpc.ApplyBlock(ctx, entry.block)
 
-		if errors.Is(err, p2perrors.ErrBlockUnlinkable) {
+		if errors.Is(err, p2perrors.ErrUnknownPreviousBlock) {
 			b.addEntry(entry)
 			return
 		}
@@ -165,7 +171,7 @@ func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadc
 	for _, h := range heights {
 		if h <= forkHeads.LastIrreversibleBlock.Height {
 			for id := range b.blocksByHeight[h] {
-				b.blocksById[id].errChan <- p2perrors.ErrBlockUnlinkable
+				b.blocksById[id].errChan <- p2perrors.ErrUnknownPreviousBlock
 				b.removeEntry(id)
 			}
 		} else {
