@@ -6,7 +6,7 @@ require (
 	github.com/ipfs/go-log v1.0.5
 	github.com/koinos/koinos-log-golang v0.0.0-20210621202301-3310a8e5866b
 	github.com/koinos/koinos-mq-golang v0.0.0-20220307194511-07a03f6f75f0
-	github.com/koinos/koinos-proto-golang v0.2.1-0.20220304200226-d96c9cf694de
+	github.com/koinos/koinos-proto-golang v0.3.1-0.20220713180354-c6f23a99d0d7
 	github.com/koinos/koinos-util-golang v0.0.0-20220224193402-85a6df362833
 	github.com/libp2p/go-libp2p v0.19.0
 	github.com/libp2p/go-libp2p-core v0.15.1

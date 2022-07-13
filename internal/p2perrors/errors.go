@@ -43,4 +43,7 @@ var (
 
 	// ErrProcessRequestTimeout represents an in process asynchronous request time out
 	ErrProcessRequestTimeout = errors.New("in process request timed out")
+
+	// ErrBlockUnlinkable represents when a block is not able to be linked to the current chain
+	ErrBlockUnlinkable = errors.New("block does not link to the current chain")
 )
