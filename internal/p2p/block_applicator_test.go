@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
@@ -82,7 +83,7 @@ func TestBlockApplicator(t *testing.T) {
 		head:             []byte{0x00},
 	}
 
-	blockApplicator, err := NewBlockApplicator(ctx, &rpc)
+	blockApplicator, err := NewBlockApplicator(ctx, &rpc, *options.NewBlockApplicatorOptions())
 	if err != nil {
 		t.Error(err)
 	}
@@ -223,6 +224,55 @@ func TestBlockApplicator(t *testing.T) {
 				Id:       block2a.Id,
 				Height:   block2a.Header.Height,
 				Previous: block2a.Header.Previous,
+			},
+		},
+	)
+}
+
+func TestBlockApplicatorLimits(t *testing.T) {
+	ctx := context.Background()
+	rpc := blockApplicatorTestRPC{
+		blocksToFail:     make(map[string]void),
+		unlinkableBlocks: make(map[string]void),
+		head:             []byte{0x00},
+	}
+
+	blockApplicator, err := NewBlockApplicator(ctx, &rpc, *&options.BlockApplicatorOptions{MaxPendingBlocks: 5})
+	if err != nil {
+		t.Error(err)
+	}
+
+	blocks := make([]*protocol.Block, 0)
+
+	for i := 0; i < 6; i++ {
+		blocks = append(blocks, &protocol.Block{
+			Id: []byte{byte(i)},
+			Header: &protocol.BlockHeader{
+				Height:   1,
+				Previous: []byte{0},
+			},
+		})
+
+		rpc.unlinkableBlocks[string(blocks[i].Id)] = void{}
+	}
+
+	blockApplicator.Start(ctx)
+
+	for i := 0; i < 5; i++ {
+		go func(block *protocol.Block) {
+			blockApplicator.ApplyBlock(ctx, block)
+		}(blocks[i])
+	}
+
+	err = blockApplicator.ApplyBlock(ctx, blocks[5])
+	if err != p2perrors.ErrMaxPendingBlocks {
+		t.Errorf("block2b - ErrMaxPendingBlocks expected but not returned, was: %v", err)
+	}
+
+	blockApplicator.HandleForkHeads(
+		&broadcast.ForkHeads{
+			LastIrreversibleBlock: &koinos.BlockTopology{
+				Height: 2,
 			},
 		},
 	)

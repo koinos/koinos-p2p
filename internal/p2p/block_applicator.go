@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos"
@@ -31,9 +32,11 @@ type BlockApplicator struct {
 	newBlockChan       chan *blockEntry
 	forkHeadsChan      chan *broadcast.ForkHeads
 	blockBroadcastChan chan *broadcast.BlockAccepted
+
+	opts options.BlockApplicatorOptions
 }
 
-func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC) (*BlockApplicator, error) {
+func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.BlockApplicatorOptions) (*BlockApplicator, error) {
 	headInfo, err := rpc.GetHeadBlock(ctx)
 
 	if err != nil {
@@ -51,6 +54,7 @@ func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC) (*BlockApplicator
 		newBlockChan:       make(chan *blockEntry),
 		forkHeadsChan:      make(chan *broadcast.ForkHeads),
 		blockBroadcastChan: make(chan *broadcast.BlockAccepted),
+		opts:               opts,
 	}, nil
 }
 
@@ -65,7 +69,7 @@ func (b *BlockApplicator) ApplyBlock(ctx context.Context, block *protocol.Block)
 		return err
 
 	case <-ctx.Done():
-		return p2perrors.ErrBlockApplication
+		return p2perrors.ErrBlockApplicationTimeout
 	}
 }
 
@@ -142,7 +146,9 @@ func (b *BlockApplicator) applyBlock(ctx context.Context, id string) {
 func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	var err error = nil
 
-	if entry.block.Header.Height > b.head.Height+1 {
+	if len(b.blocksById) >= int(b.opts.MaxPendingBlocks) {
+		err = p2perrors.ErrMaxPendingBlocks
+	} else if entry.block.Header.Height > b.head.Height+1 {
 		err = b.addEntry(entry)
 	} else {
 		_, err = b.rpc.ApplyBlock(ctx, entry.block)

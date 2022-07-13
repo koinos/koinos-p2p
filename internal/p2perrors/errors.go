@@ -49,4 +49,7 @@ var (
 
 	// ErrBlockApplicationTimeout represents when a block application timed out
 	ErrBlockApplicationTimeout = errors.New("block application timed out")
+
+	// ErrMaxPendingBlocks represents when too many blocks are pending application
+	ErrMaxPendingBlocks = errors.New("max blocks are pending application")
 )
