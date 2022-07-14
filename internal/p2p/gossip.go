@@ -155,6 +155,7 @@ type KoinosGossip struct {
 	myPeerID         peer.ID
 	libProvider      LastIrreversibleBlockProvider
 	transactionCache *TransactionCache
+	blockApplicator  *BlockApplicator
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
@@ -165,7 +166,8 @@ func NewKoinosGossip(
 	peerErrorChan chan<- PeerError,
 	id peer.ID,
 	libProvider LastIrreversibleBlockProvider,
-	cache *TransactionCache) *KoinosGossip {
+	cache *TransactionCache,
+	blockApplicator *BlockApplicator) *KoinosGossip {
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
@@ -178,6 +180,7 @@ func NewKoinosGossip(
 		myPeerID:         id,
 		libProvider:      libProvider,
 		transactionCache: cache,
+		blockApplicator:  blockApplicator,
 	}
 
 	return &kg
@@ -319,8 +322,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	kg.transactionCache.CheckBlock(block)
 
 	// TODO: Fix nil argument
-	// TODO: Perhaps this block should sent to the block cache instead?
-	if _, err := kg.rpc.ApplyBlock(ctx, block); err != nil {
+	if err := kg.blockApplicator.ApplyBlock(ctx, block); err != nil {
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrBlockApplication, util.BlockString(block), err.Error())
 	}
 

@@ -31,7 +31,7 @@ func (k *TestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse,
 	k.Mutex.Lock()
 	defer k.Mutex.Unlock()
 
-	hi := chain.GetHeadInfoResponse{}
+	hi := chain.GetHeadInfoResponse{HeadTopology: &koinos.BlockTopology{}}
 	hi.HeadTopology.Height = k.Height
 	hi.HeadTopology.Id, _ = multihash.Encode(make([]byte, 0), k.Height+k.HeadBlockIDDelta)
 	binary.PutUvarint(hi.HeadTopology.Id, k.Height+k.HeadBlockIDDelta)

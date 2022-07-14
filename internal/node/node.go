@@ -42,6 +42,7 @@ import (
 type KoinosP2PNode struct {
 	Host              host.Host
 	localRPC          rpc.LocalRPC
+	BlockApplicator   *p2p.BlockApplicator
 	Gossip            *p2p.KoinosGossip
 	ConnectionManager *p2p.ConnectionManager
 	PeerErrorHandler  *p2p.PeerErrorHandler
@@ -139,6 +140,16 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.TransactionCache = p2p.NewTransactionCache(transactionCacheDuration)
 
+	node.BlockApplicator, err = p2p.NewBlockApplicator(
+		ctx,
+		node.localRPC,
+		config.BlockApplicatorOptions,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
 	node.Gossip = p2p.NewKoinosGossip(
 		ctx,
 		node.localRPC,
@@ -146,7 +157,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.PeerErrorChan,
 		node.Host.ID(),
 		node,
-		node.TransactionCache)
+		node.TransactionCache,
+		node.BlockApplicator)
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
@@ -354,6 +366,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.PeerErrorHandler.Start(ctx)
 	n.GossipToggle.Start(ctx)
 	n.ConnectionManager.Start(ctx)
+	n.BlockApplicator.Start(ctx)
 
 	go func() {
 		for {
