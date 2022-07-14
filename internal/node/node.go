@@ -129,6 +129,9 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	}
 
 	pubsub.TimeCacheDuration = 60 * time.Second
+	gossipOpts := pubsub.DefaultGossipSubParams()
+	gossipOpts.HeartbeatInterval = 500 * time.Millisecond
+	gossipOpts.IWantFollowupTime = time.Second
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
 		pubsub.WithMessageIdFn(generateMessageID),
