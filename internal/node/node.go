@@ -192,6 +192,10 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 		return
 	}
 
+	go func() {
+		n.BlockApplicator.HandleBlockBroadcast(blockBroadcast)
+	}()
+
 	// If gossip is enabled publish the block
 	if n.GossipToggle.IsEnabled() {
 		err = n.Gossip.PublishBlock(context.Background(), blockBroadcast.Block)
@@ -229,6 +233,10 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", base58.Encode(data))
 		return
 	}
+
+	go func() {
+		n.BlockApplicator.HandleForkHeads(forkHeads)
+	}()
 
 	n.libValue.Store(forkHeads.LastIrreversibleBlock)
 }
