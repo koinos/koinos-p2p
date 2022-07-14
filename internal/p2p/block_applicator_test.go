@@ -95,11 +95,11 @@ func TestBlockApplicator(t *testing.T) {
 	//
 	// These blocks will be applied in the following order
 	//
-	// 1  (succeeds immediately)
 	// 2b (does not connect)
 	// 3a (block is in the future, passes)
 	// 3b (block is in the future, fails)
 	// 2a (success immediately, triggers 3)
+	// 1  (succeeds immediately)
 
 	block1 := &protocol.Block{
 		Id: []byte{0x01},
@@ -128,7 +128,7 @@ func TestBlockApplicator(t *testing.T) {
 	block3a := &protocol.Block{
 		Id: []byte{0x03, 0x0a},
 		Header: &protocol.BlockHeader{
-			Height:   2,
+			Height:   3,
 			Previous: block2a.Id,
 		},
 	}
@@ -136,7 +136,7 @@ func TestBlockApplicator(t *testing.T) {
 	block3b := &protocol.Block{
 		Id: []byte{0x03, 0x0b},
 		Header: &protocol.BlockHeader{
-			Height:   2,
+			Height:   3,
 			Previous: block2a.Id,
 		},
 	}
@@ -144,27 +144,7 @@ func TestBlockApplicator(t *testing.T) {
 	rpc.blocksToFail[string(block3b.Id)] = void{}
 	rpc.unlinkableBlocks[string(block2b.Id)] = void{}
 
-	timer := time.NewTimer(time.Second)
-	go func() {
-		<-timer.C
-		t.Errorf("Test timer expired")
-	}()
-
 	blockApplicator.Start(ctx)
-
-	err = blockApplicator.ApplyBlock(ctx, block1)
-	if err != nil {
-		t.Error(err)
-	}
-	rpc.head = block1.Id
-	blockApplicator.HandleBlockBroadcast(
-		&broadcast.BlockAccepted{
-			Block: block1,
-			Head:  true,
-		},
-	)
-
-	time.Sleep(10 * time.Millisecond)
 
 	go func() {
 		err := blockApplicator.ApplyBlock(ctx, block2b)
@@ -172,8 +152,6 @@ func TestBlockApplicator(t *testing.T) {
 			t.Errorf("block2b - ErrUnknownPreviousBlock expected but not returned, was: %v", err)
 		}
 	}()
-
-	time.Sleep(10 * time.Millisecond)
 
 	go func() {
 		err := blockApplicator.ApplyBlock(ctx, block3a)
@@ -194,11 +172,9 @@ func TestBlockApplicator(t *testing.T) {
 	go func() {
 		err := blockApplicator.ApplyBlock(ctx, block3b)
 		if err != p2perrors.ErrBlockApplication {
-			t.Errorf("block2b - ErrBlockApplication expected but not returned, was: %v", err)
+			t.Errorf("block3b - ErrBlockApplication expected but not returned, was: %v", err)
 		}
 	}()
-
-	time.Sleep(10 * time.Millisecond)
 
 	go func() {
 		err := blockApplicator.ApplyBlock(ctx, block2a)
@@ -214,17 +190,29 @@ func TestBlockApplicator(t *testing.T) {
 				Head:  true,
 			},
 		)
+
+		blockApplicator.HandleForkHeads(
+			&broadcast.ForkHeads{
+				LastIrreversibleBlock: &koinos.BlockTopology{
+					Id:       block2a.Id,
+					Height:   block2a.Header.Height,
+					Previous: block2a.Header.Previous,
+				},
+			},
+		)
 	}()
 
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
-	blockApplicator.HandleForkHeads(
-		&broadcast.ForkHeads{
-			LastIrreversibleBlock: &koinos.BlockTopology{
-				Id:       block2a.Id,
-				Height:   block2a.Header.Height,
-				Previous: block2a.Header.Previous,
-			},
+	err = blockApplicator.ApplyBlock(ctx, block1)
+	if err != nil {
+		t.Error(err)
+	}
+	rpc.head = block1.Id
+	blockApplicator.HandleBlockBroadcast(
+		&broadcast.BlockAccepted{
+			Block: block1,
+			Head:  true,
 		},
 	)
 }
@@ -260,14 +248,23 @@ func TestBlockApplicatorLimits(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		go func(block *protocol.Block) {
-			blockApplicator.ApplyBlock(ctx, block)
+			err := blockApplicator.ApplyBlock(ctx, block)
+			if err != p2perrors.ErrUnknownPreviousBlock {
+				t.Errorf("block2b - ErrUnknownPreviousBlock expected but not returned, was: %v", err)
+			}
 		}(blocks[i])
 	}
 
-	err = blockApplicator.ApplyBlock(ctx, blocks[5])
-	if err != p2perrors.ErrMaxPendingBlocks {
-		t.Errorf("block2b - ErrMaxPendingBlocks expected but not returned, was: %v", err)
-	}
+	time.Sleep(100 * time.Millisecond)
+
+	go func() {
+		err = blockApplicator.ApplyBlock(ctx, blocks[5])
+		if err != p2perrors.ErrMaxPendingBlocks {
+			t.Errorf("block2b - ErrMaxPendingBlocks expected but not returned, was: %v", err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
 
 	blockApplicator.HandleForkHeads(
 		&broadcast.ForkHeads{

@@ -150,6 +150,9 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 		err = p2perrors.ErrMaxPendingBlocks
 	} else if entry.block.Header.Height > b.head.Height+1 {
 		err = b.addEntry(entry)
+		if err == nil {
+			return
+		}
 	} else {
 		_, err = b.rpc.ApplyBlock(ctx, entry.block)
 
@@ -191,7 +194,7 @@ func (b *BlockApplicator) handleBlockBroadcast(ctx context.Context, blockAccept 
 		b.head = &koinos.BlockTopology{Id: blockAccept.Block.Id, Height: blockAccept.Block.Header.Height, Previous: blockAccept.Block.Header.Previous}
 	}
 
-	if children, ok := b.blocksByPrevious[string(blockAccept.Block.Header.Previous)]; ok {
+	if children, ok := b.blocksByPrevious[string(blockAccept.Block.Id)]; ok {
 		for id := range children {
 			b.blocksToApply[id] = void{}
 		}
