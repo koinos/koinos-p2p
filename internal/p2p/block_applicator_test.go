@@ -225,7 +225,7 @@ func TestBlockApplicatorLimits(t *testing.T) {
 		head:             []byte{0x00},
 	}
 
-	blockApplicator, err := NewBlockApplicator(ctx, &rpc, *&options.BlockApplicatorOptions{MaxPendingBlocks: 5})
+	blockApplicator, err := NewBlockApplicator(ctx, &rpc, options.BlockApplicatorOptions{MaxPendingBlocks: 5})
 	if err != nil {
 		t.Error(err)
 	}

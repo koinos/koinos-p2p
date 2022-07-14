@@ -144,7 +144,7 @@ func (b *BlockApplicator) applyBlock(ctx context.Context, id string) {
 }
 
 func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
-	var err error = nil
+	var err error
 
 	if len(b.blocksById) >= int(b.opts.MaxPendingBlocks) {
 		err = p2perrors.ErrMaxPendingBlocks
@@ -157,8 +157,9 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 		_, err = b.rpc.ApplyBlock(ctx, entry.block)
 
 		if errors.Is(err, p2perrors.ErrUnknownPreviousBlock) {
-			b.addEntry(entry)
-			return
+			if err = b.addEntry(entry); err == nil {
+				return
+			}
 		}
 	}
 

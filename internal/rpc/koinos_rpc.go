@@ -27,8 +27,7 @@ const (
 )
 
 type chainError struct {
-	code    int64
-	message string
+	Code int64 `json:"code"`
 }
 
 // KoinosRPC implements LocalRPC implementation by communicating with a local Koinos node via AMQP
@@ -122,8 +121,8 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 		response = t.SubmitBlock
 	case *chainrpc.ChainResponse_Error:
 		eData := chainError{}
-		if err := json.Unmarshal([]byte(responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Data), &eData); err != nil {
-			if eData.code == int64(chain.ErrorCode_unknown_previous_block) {
+		if jsonErr := json.Unmarshal([]byte(responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Data), &eData); jsonErr != nil {
+			if eData.Code == int64(chain.ErrorCode_unknown_previous_block) {
 				err = p2perrors.ErrUnknownPreviousBlock
 				break
 			}
