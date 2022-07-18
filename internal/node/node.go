@@ -42,6 +42,7 @@ import (
 type KoinosP2PNode struct {
 	Host              host.Host
 	localRPC          rpc.LocalRPC
+	BlockApplicator   *p2p.BlockApplicator
 	Gossip            *p2p.KoinosGossip
 	ConnectionManager *p2p.ConnectionManager
 	PeerErrorHandler  *p2p.PeerErrorHandler
@@ -58,7 +59,10 @@ type KoinosP2PNode struct {
 }
 
 const (
-	transactionCacheDuration = time.Minute * 10
+	transactionCacheDuration = 10 * time.Minute
+	pubsubTimeCacheDuration  = time.Minute
+	gossipHeartbeatInterval  = 500 * time.Millisecond
+	gossipIWantFollowupTime  = time.Second
 )
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
@@ -127,7 +131,10 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		log.Info("Starting P2P node without broadcast listeners")
 	}
 
-	pubsub.TimeCacheDuration = 60 * time.Second
+	pubsub.TimeCacheDuration = pubsubTimeCacheDuration
+	gossipOpts := pubsub.DefaultGossipSubParams()
+	gossipOpts.HeartbeatInterval = gossipHeartbeatInterval
+	gossipOpts.IWantFollowupTime = gossipIWantFollowupTime
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
 		pubsub.WithMessageIdFn(generateMessageID),
@@ -139,6 +146,16 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.TransactionCache = p2p.NewTransactionCache(transactionCacheDuration)
 
+	node.BlockApplicator, err = p2p.NewBlockApplicator(
+		ctx,
+		node.localRPC,
+		config.BlockApplicatorOptions,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
 	node.Gossip = p2p.NewKoinosGossip(
 		ctx,
 		node.localRPC,
@@ -146,7 +163,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.PeerErrorChan,
 		node.Host.ID(),
 		node,
-		node.TransactionCache)
+		node.TransactionCache,
+		node.BlockApplicator)
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
@@ -176,6 +194,10 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 		log.Warnf("Unable to parse koinos.block.accept broadcast: %v", err.Error())
 		return
 	}
+
+	go func() {
+		n.BlockApplicator.HandleBlockBroadcast(blockBroadcast)
+	}()
 
 	// If gossip is enabled publish the block
 	if n.GossipToggle.IsEnabled() {
@@ -214,6 +236,10 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", base58.Encode(data))
 		return
 	}
+
+	go func() {
+		n.BlockApplicator.HandleForkHeads(forkHeads)
+	}()
 
 	n.libValue.Store(forkHeads.LastIrreversibleBlock)
 }
@@ -354,6 +380,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.PeerErrorHandler.Start(ctx)
 	n.GossipToggle.Start(ctx)
 	n.ConnectionManager.Start(ctx)
+	n.BlockApplicator.Start(ctx)
 
 	go func() {
 		for {

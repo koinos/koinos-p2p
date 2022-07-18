@@ -6,6 +6,7 @@ type Config struct {
 	PeerConnectionOptions   PeerConnectionOptions
 	PeerErrorHandlerOptions PeerErrorHandlerOptions
 	GossipToggleOptions     GossipToggleOptions
+	BlockApplicatorOptions  BlockApplicatorOptions
 }
 
 // NewConfig creates a new Config
@@ -15,6 +16,7 @@ func NewConfig() *Config {
 		PeerConnectionOptions:   *NewPeerConnectionOptions(),
 		PeerErrorHandlerOptions: *NewPeerErrorHandlerOptions(),
 		GossipToggleOptions:     *NewGossipToggleOptions(),
+		BlockApplicatorOptions:  *NewBlockApplicatorOptions(),
 	}
 	return &config
 }

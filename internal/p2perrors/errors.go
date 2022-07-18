@@ -43,4 +43,13 @@ var (
 
 	// ErrProcessRequestTimeout represents an in process asynchronous request time out
 	ErrProcessRequestTimeout = errors.New("in process request timed out")
+
+	// ErrUnknownPreviousBlock represents when a block's previous block cannot be found
+	ErrUnknownPreviousBlock = errors.New("previous block does not exist")
+
+	// ErrBlockApplicationTimeout represents when a block application timed out
+	ErrBlockApplicationTimeout = errors.New("block application timed out")
+
+	// ErrMaxPendingBlocks represents when too many blocks are pending application
+	ErrMaxPendingBlocks = errors.New("max blocks are pending application")
 )

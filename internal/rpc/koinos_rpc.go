@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -11,10 +12,11 @@ import (
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/koinos/canonical"
+	"github.com/koinos/koinos-proto-golang/koinos/chain"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
-	"github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
+	chainrpc "github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -23,6 +25,10 @@ const (
 	ChainRPC      = "chain"
 	BlockStoreRPC = "block_store"
 )
+
+type chainError struct {
+	Code int64 `json:"code"`
+}
 
 // KoinosRPC implements LocalRPC implementation by communicating with a local Koinos node via AMQP
 type KoinosRPC struct {
@@ -37,10 +43,10 @@ func NewKoinosRPC(mq *koinosmq.Client) *KoinosRPC {
 }
 
 // GetHeadBlock rpc call
-func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
-	args := &chain.ChainRequest{
-		Request: &chain.ChainRequest_GetHeadInfo{
-			GetHeadInfo: &chain.GetHeadInfoRequest{},
+func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chainrpc.GetHeadInfoResponse, error) {
+	args := &chainrpc.ChainRequest{
+		Request: &chainrpc.ChainRequest_GetHeadInfo{
+			GetHeadInfo: &chainrpc.GetHeadInfoRequest{},
 		},
 	}
 
@@ -58,18 +64,18 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoRespons
 		return nil, fmt.Errorf("%w GetHeadBlock, %s", p2perrors.ErrLocalRPC, err)
 	}
 
-	responseVariant := &chain.ChainResponse{}
+	responseVariant := &chainrpc.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, fmt.Errorf("%w GetHeadBlock, %s", p2perrors.ErrDeserialization, err)
 	}
 
-	var response *chain.GetHeadInfoResponse
+	var response *chainrpc.GetHeadInfoResponse
 
 	switch t := responseVariant.Response.(type) {
-	case *chain.ChainResponse_GetHeadInfo:
+	case *chainrpc.ChainResponse_GetHeadInfo:
 		response = t.GetHeadInfo
-	case *chain.ChainResponse_Error:
+	case *chainrpc.ChainResponse_Error:
 		err = fmt.Errorf("%w GetHeadBlock, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
 		err = fmt.Errorf("%w GetHeadBlock, unexpected chain rpc response", p2perrors.ErrLocalRPC)
@@ -79,10 +85,10 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoRespons
 }
 
 // ApplyBlock rpc call
-func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain.SubmitBlockResponse, error) {
-	args := &chain.ChainRequest{
-		Request: &chain.ChainRequest_SubmitBlock{
-			SubmitBlock: &chain.SubmitBlockRequest{
+func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chainrpc.SubmitBlockResponse, error) {
+	args := &chainrpc.ChainRequest{
+		Request: &chainrpc.ChainRequest_SubmitBlock{
+			SubmitBlock: &chainrpc.SubmitBlockRequest{
 				Block: block,
 			},
 		},
@@ -102,18 +108,25 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 		return nil, fmt.Errorf("%w ApplyBlock, %s", p2perrors.ErrLocalRPC, err)
 	}
 
-	responseVariant := &chain.ChainResponse{}
+	responseVariant := &chainrpc.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, fmt.Errorf("%w ApplyBlock, %s", p2perrors.ErrDeserialization, err)
 	}
 
-	var response *chain.SubmitBlockResponse
+	var response *chainrpc.SubmitBlockResponse
 
 	switch t := responseVariant.Response.(type) {
-	case *chain.ChainResponse_SubmitBlock:
+	case *chainrpc.ChainResponse_SubmitBlock:
 		response = t.SubmitBlock
-	case *chain.ChainResponse_Error:
+	case *chainrpc.ChainResponse_Error:
+		eData := chainError{}
+		if jsonErr := json.Unmarshal([]byte(responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Data), &eData); jsonErr != nil {
+			if eData.Code == int64(chain.ErrorCode_unknown_previous_block) {
+				err = p2perrors.ErrUnknownPreviousBlock
+				break
+			}
+		}
 		err = fmt.Errorf("%w ApplyBlock, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
 		err = fmt.Errorf("%w ApplyBlock, unexpected chain rpc response", p2perrors.ErrLocalRPC)
@@ -123,11 +136,12 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 }
 
 // ApplyTransaction rpc call
-func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
-	args := &chain.ChainRequest{
-		Request: &chain.ChainRequest_SubmitTransaction{
-			SubmitTransaction: &chain.SubmitTransactionRequest{
+func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) (*chainrpc.SubmitTransactionResponse, error) {
+	args := &chainrpc.ChainRequest{
+		Request: &chainrpc.ChainRequest_SubmitTransaction{
+			SubmitTransaction: &chainrpc.SubmitTransactionRequest{
 				Transaction: trx,
+				Broadcast: true,
 			},
 		},
 	}
@@ -146,18 +160,18 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transact
 		return nil, fmt.Errorf("%w ApplyTransaction, %s", p2perrors.ErrLocalRPC, err)
 	}
 
-	responseVariant := &chain.ChainResponse{}
+	responseVariant := &chainrpc.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, fmt.Errorf("%w ApplyTransaction, %s", p2perrors.ErrDeserialization, err)
 	}
 
-	var response *chain.SubmitTransactionResponse
+	var response *chainrpc.SubmitTransactionResponse
 
 	switch t := responseVariant.Response.(type) {
-	case *chain.ChainResponse_SubmitTransaction:
+	case *chainrpc.ChainResponse_SubmitTransaction:
 		response = t.SubmitTransaction
-	case *chain.ChainResponse_Error:
+	case *chainrpc.ChainResponse_Error:
 		err = fmt.Errorf("%w ApplyTransaction, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
 		err = fmt.Errorf("%w ApplyTransaction, unexpected chain rpc response", p2perrors.ErrLocalRPC)
@@ -266,10 +280,10 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID multihash.Mul
 }
 
 // GetChainID rpc call
-func (k *KoinosRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, error) {
-	args := &chain.ChainRequest{
-		Request: &chain.ChainRequest_GetChainId{
-			GetChainId: &chain.GetChainIdRequest{},
+func (k *KoinosRPC) GetChainID(ctx context.Context) (*chainrpc.GetChainIdResponse, error) {
+	args := &chainrpc.ChainRequest{
+		Request: &chainrpc.ChainRequest_GetChainId{
+			GetChainId: &chainrpc.GetChainIdRequest{},
 		},
 	}
 
@@ -287,18 +301,18 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, 
 		return nil, fmt.Errorf("%w GetChainID, %s", p2perrors.ErrLocalRPC, err)
 	}
 
-	responseVariant := &chain.ChainResponse{}
+	responseVariant := &chainrpc.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, fmt.Errorf("%w GetChainID, %s", p2perrors.ErrDeserialization, err)
 	}
 
-	var response *chain.GetChainIdResponse
+	var response *chainrpc.GetChainIdResponse
 
 	switch t := responseVariant.Response.(type) {
-	case *chain.ChainResponse_GetChainId:
+	case *chainrpc.ChainResponse_GetChainId:
 		response = t.GetChainId
-	case *chain.ChainResponse_Error:
+	case *chainrpc.ChainResponse_Error:
 		err = fmt.Errorf("%w GetChainID, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
 		err = fmt.Errorf("%w GetChainID, unexpected chain rpc response", p2perrors.ErrLocalRPC)
@@ -308,10 +322,10 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, 
 }
 
 // GetForkHeads rpc call
-func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error) {
-	args := &chain.ChainRequest{
-		Request: &chain.ChainRequest_GetForkHeads{
-			GetForkHeads: &chain.GetForkHeadsRequest{},
+func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chainrpc.GetForkHeadsResponse, error) {
+	args := &chainrpc.ChainRequest{
+		Request: &chainrpc.ChainRequest_GetForkHeads{
+			GetForkHeads: &chainrpc.GetForkHeadsRequest{},
 		},
 	}
 
@@ -329,18 +343,18 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsRespon
 		return nil, fmt.Errorf("%w GetForkHeads, %s", p2perrors.ErrLocalRPC, err)
 	}
 
-	responseVariant := &chain.ChainResponse{}
+	responseVariant := &chainrpc.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return nil, fmt.Errorf("%w, %s", p2perrors.ErrDeserialization, err)
 	}
 
-	var response *chain.GetForkHeadsResponse
+	var response *chainrpc.GetForkHeadsResponse
 
 	switch t := responseVariant.Response.(type) {
-	case *chain.ChainResponse_GetForkHeads:
+	case *chainrpc.ChainResponse_GetForkHeads:
 		response = t.GetForkHeads
-	case *chain.ChainResponse_Error:
+	case *chainrpc.ChainResponse_Error:
 		err = fmt.Errorf("%w GetForkHeads, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
 		err = fmt.Errorf("%w GetForkHeads, unexpected chain rpc response", p2perrors.ErrLocalRPC)
@@ -395,8 +409,8 @@ func (k *KoinosRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 // IsConnectedToChain returns if the AMQP connection can currently communicate
 // with the chain microservice.
 func (k *KoinosRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
-	args := &chain.ChainRequest{
-		Request: &chain.ChainRequest_Reserved{
+	args := &chainrpc.ChainRequest{
+		Request: &chainrpc.ChainRequest_Reserved{
 			Reserved: &rpc.ReservedRpc{},
 		},
 	}
@@ -415,7 +429,7 @@ func (k *KoinosRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("%w IsConnectedToChain, %s", p2perrors.ErrLocalRPC, err)
 	}
 
-	responseVariant := &chain.ChainResponse{}
+	responseVariant := &chainrpc.ChainResponse{}
 	err = proto.Unmarshal(responseBytes, responseVariant)
 	if err != nil {
 		return false, fmt.Errorf("%w IsConnectedToChain, %s", p2perrors.ErrDeserialization, err)
