@@ -59,7 +59,10 @@ type KoinosP2PNode struct {
 }
 
 const (
-	transactionCacheDuration = time.Minute * 10
+	transactionCacheDuration = 10 * time.Minute
+	pubsubTimeCacheDuration  = time.Minute
+	gossipHeartbeatInterval  = 500 * time.Millisecond
+	gossipIWantFollowupTime  = time.Second
 )
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
@@ -128,10 +131,10 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		log.Info("Starting P2P node without broadcast listeners")
 	}
 
-	pubsub.TimeCacheDuration = 60 * time.Second
+	pubsub.TimeCacheDuration = pubsubTimeCacheDuration
 	gossipOpts := pubsub.DefaultGossipSubParams()
-	gossipOpts.HeartbeatInterval = 500 * time.Millisecond
-	gossipOpts.IWantFollowupTime = time.Second
+	gossipOpts.HeartbeatInterval = gossipHeartbeatInterval
+	gossipOpts.IWantFollowupTime = gossipIWantFollowupTime
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
 		pubsub.WithMessageIdFn(generateMessageID),
