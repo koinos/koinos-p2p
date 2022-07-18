@@ -146,7 +146,9 @@ func (b *BlockApplicator) applyBlock(ctx context.Context, id string) {
 func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	var err error
 
-	if len(b.blocksById) >= int(b.opts.MaxPendingBlocks) {
+	if entry.block.Header.Height > b.head.Height+b.opts.MaxHeightDelta {
+		err = p2perrors.ErrBlockApplication
+	} else if len(b.blocksById) >= int(b.opts.MaxPendingBlocks) {
 		err = p2perrors.ErrMaxPendingBlocks
 	} else if entry.block.Header.Height > b.head.Height+1 {
 		err = b.addEntry(entry)
