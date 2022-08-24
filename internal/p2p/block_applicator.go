@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"sync/atomic"
 
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
@@ -18,6 +19,16 @@ type blockEntry struct {
 	errChans []chan<- error
 }
 
+type blockApplicationRequest struct {
+	block   *protocol.Block
+	errChan chan<- error
+}
+
+type blockApplicationStatus struct {
+	block *protocol.Block
+	err   error
+}
+
 // BlockError contains a block topology and an error for an error when pushing a specific block
 type BlockError struct {
 	topology koinos.BlockTopology
@@ -30,7 +41,6 @@ type BlockApplicator struct {
 	head *koinos.BlockTopology
 	lib  uint64
 
-	blocksToApply    map[string]void
 	blocksById       map[string]*blockEntry
 	blocksByPrevious map[string]map[string]void
 	blocksByHeight   map[uint64]map[string]void
@@ -38,6 +48,8 @@ type BlockApplicator struct {
 	newBlockChan       chan *blockEntry
 	forkHeadsChan      chan *broadcast.ForkHeads
 	blockBroadcastChan chan *broadcast.BlockAccepted
+	applyBlockChan     chan *blockApplicationRequest
+	blockStatusChan    chan *blockApplicationStatus
 
 	opts options.BlockApplicatorOptions
 }
@@ -53,13 +65,14 @@ func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Bloc
 		rpc:                rpc,
 		head:               headInfo.HeadTopology,
 		lib:                headInfo.LastIrreversibleBlock,
-		blocksToApply:      make(map[string]void),
 		blocksById:         make(map[string]*blockEntry),
 		blocksByPrevious:   make(map[string]map[string]void),
 		blocksByHeight:     make(map[uint64]map[string]void),
 		newBlockChan:       make(chan *blockEntry, 10),
 		forkHeadsChan:      make(chan *broadcast.ForkHeads, 10),
 		blockBroadcastChan: make(chan *broadcast.BlockAccepted, 10),
+		applyBlockChan:     make(chan *blockApplicationRequest, 10),
+		blockStatusChan:    make(chan *blockApplicationStatus, 10),
 		opts:               opts,
 	}, nil
 }
@@ -113,10 +126,14 @@ func (b *BlockApplicator) addEntry(entry *blockEntry) error {
 	return nil
 }
 
-func (b *BlockApplicator) removeEntry(id string) {
+func (b *BlockApplicator) removeEntry(ctx context.Context, id string, err error) {
 	if entry, ok := b.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
-			close(ch)
+			select {
+			case ch <- err:
+				close(ch)
+			case <-ctx.Done():
+			}
 		}
 
 		delete(b.blocksById, id)
@@ -142,22 +159,29 @@ func (b *BlockApplicator) removeEntry(id string) {
 	}
 }
 
-func (b *BlockApplicator) applyBlock(ctx context.Context, id string) {
-	if entry, ok := b.blocksById[id]; ok {
-		var err error
+func (b *BlockApplicator) requestApplication(ctx context.Context, block *protocol.Block) {
+	go func() {
+		errChan := make(chan error)
 
-		if entry.block.Header.Height <= b.lib {
-			err = p2perrors.ErrBlockIrreversibility
-		} else {
-			_, err = b.rpc.ApplyBlock(ctx, entry.block)
+		b.applyBlockChan <- &blockApplicationRequest{
+			block:   block,
+			errChan: errChan,
 		}
 
-		for _, ch := range entry.errChans {
-			ch <- err
-		}
+		select {
+		case err := <-errChan:
+			b.blockStatusChan <- &blockApplicationStatus{
+				block: block,
+				err:   err,
+			}
 
-		b.removeEntry(id)
-	}
+		case <-ctx.Done():
+		}
+	}()
+}
+
+func (b *BlockApplicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
+
 }
 
 func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
@@ -167,31 +191,28 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 		err = p2perrors.ErrBlockApplication
 	} else if len(b.blocksById) >= int(b.opts.MaxPendingBlocks) {
 		err = p2perrors.ErrMaxPendingBlocks
-	} else if entry.block.Header.Height > b.head.Height+1 {
-		err = b.addEntry(entry)
-		if err == nil {
-			return
-		}
 	} else if entry.block.Header.Height <= b.lib {
 		err = p2perrors.ErrBlockIrreversibility
 	} else {
-		_, err = b.rpc.ApplyBlock(ctx, entry.block)
-
-		if errors.Is(err, p2perrors.ErrUnknownPreviousBlock) {
-			if err = b.addEntry(entry); err == nil {
-				return
-			}
+		err = b.addEntry(entry)
+		if err == nil && entry.block.Header.Height <= b.head.Height+1 {
+			b.requestApplication(ctx, entry.block)
 		}
 	}
 
-	for _, ch := range entry.errChans {
-		ch <- err
-		close(ch)
+	if err != nil {
+		for _, ch := range entry.errChans {
+			select {
+			case ch <- err:
+				close(ch)
+			case <-ctx.Done():
+			}
+		}
 	}
 }
 
 func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
-	b.lib = forkHeads.LastIrreversibleBlock.Height
+	atomic.StoreUint64(&b.lib, forkHeads.LastIrreversibleBlock.Height)
 
 	heights := make([]uint64, 0, len(b.blocksByHeight))
 
@@ -206,10 +227,7 @@ func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadc
 	for _, h := range heights {
 		if h <= forkHeads.LastIrreversibleBlock.Height {
 			for id := range b.blocksByHeight[h] {
-				for _, ch := range b.blocksById[id].errChans {
-					ch <- p2perrors.ErrUnknownPreviousBlock
-				}
-				b.removeEntry(id)
+				b.removeEntry(ctx, id, p2perrors.ErrUnknownPreviousBlock)
 			}
 		} else {
 			break
@@ -224,7 +242,9 @@ func (b *BlockApplicator) handleBlockBroadcast(ctx context.Context, blockAccept 
 
 	if children, ok := b.blocksByPrevious[string(blockAccept.Block.Id)]; ok {
 		for id := range children {
-			b.blocksToApply[id] = void{}
+			if entry, ok := b.blocksById[id]; ok {
+				b.requestApplication(ctx, entry.block)
+			}
 		}
 	}
 }
@@ -232,21 +252,37 @@ func (b *BlockApplicator) handleBlockBroadcast(ctx context.Context, blockAccept 
 func (b *BlockApplicator) Start(ctx context.Context) {
 	go func() {
 		for {
-			for id := range b.blocksToApply {
-				b.applyBlock(ctx, id)
-			}
-
-			if len(b.blocksToApply) > 0 {
-				b.blocksToApply = make(map[string]void)
-			}
-
 			select {
+			case status := <-b.blockStatusChan:
+				if !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
+					b.removeEntry(ctx, string(status.block.Id), status.err)
+				}
 			case entry := <-b.newBlockChan:
 				b.handleNewBlock(ctx, entry)
 			case forkHeads := <-b.forkHeadsChan:
 				b.handleForkHeads(ctx, forkHeads)
 			case blockBroadcast := <-b.blockBroadcastChan:
 				b.handleBlockBroadcast(ctx, blockBroadcast)
+
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case request := <-b.applyBlockChan:
+				var err error
+				if request.block.Header.Height <= atomic.LoadUint64(&b.lib) {
+					err = p2perrors.ErrBlockIrreversibility
+				} else {
+					_, err = b.rpc.ApplyBlock(ctx, request.block)
+				}
+
+				request.errChan <- err
+				close(request.errChan)
 
 			case <-ctx.Done():
 				return
