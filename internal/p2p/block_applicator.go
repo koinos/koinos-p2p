@@ -29,12 +29,6 @@ type blockApplicationStatus struct {
 	err   error
 }
 
-// BlockError contains a block topology and an error for an error when pushing a specific block
-type BlockError struct {
-	topology koinos.BlockTopology
-	err      error
-}
-
 // BlockApplicator manages block application to avoid duplicate application and premature application
 type BlockApplicator struct {
 	rpc  rpc.LocalRPC

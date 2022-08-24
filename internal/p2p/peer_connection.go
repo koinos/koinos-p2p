@@ -15,14 +15,6 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
-func max(x, y uint64) uint64 {
-	if x > y {
-		return x
-	}
-
-	return y
-}
-
 type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
