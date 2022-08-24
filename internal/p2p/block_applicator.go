@@ -174,10 +174,6 @@ func (b *BlockApplicator) requestApplication(ctx context.Context, block *protoco
 	}()
 }
 
-func (b *BlockApplicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
-
-}
-
 func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	var err error
 

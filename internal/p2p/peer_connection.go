@@ -23,10 +23,8 @@ type PeerConnection struct {
 	isSynced   bool
 	gossipVote bool
 	opts       *options.PeerConnectionOptions
-	//lastBlockPushed uint64
 
 	requestBlockChan chan signalRequestBlocks
-	blockErrorChan   chan *BlockError
 
 	libProvider     LastIrreversibleBlockProvider
 	localRPC        rpc.LocalRPC
@@ -260,9 +258,7 @@ func NewPeerConnection(
 		isSynced:   false,
 		gossipVote: false,
 		opts:       opts,
-		//lastBlockPushed:  0,
 		requestBlockChan: make(chan signalRequestBlocks),
-		blockErrorChan:   make(chan *BlockError),
 		libProvider:      libProvider,
 		localRPC:         localRPC,
 		peerRPC:          peerRPC,
