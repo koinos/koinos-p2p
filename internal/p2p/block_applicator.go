@@ -14,8 +14,14 @@ import (
 )
 
 type blockEntry struct {
-	block   *protocol.Block
-	errChan chan<- error
+	block    *protocol.Block
+	errChans []chan<- error
+}
+
+// BlockError contains a block topology and an error for an error when pushing a specific block
+type BlockError struct {
+	topology koinos.BlockTopology
+	err      error
 }
 
 // BlockApplicator manages block application to avoid duplicate application and premature application
@@ -51,9 +57,9 @@ func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Bloc
 		blocksById:         make(map[string]*blockEntry),
 		blocksByPrevious:   make(map[string]map[string]void),
 		blocksByHeight:     make(map[uint64]map[string]void),
-		newBlockChan:       make(chan *blockEntry),
-		forkHeadsChan:      make(chan *broadcast.ForkHeads),
-		blockBroadcastChan: make(chan *broadcast.BlockAccepted),
+		newBlockChan:       make(chan *blockEntry, 10),
+		forkHeadsChan:      make(chan *broadcast.ForkHeads, 10),
+		blockBroadcastChan: make(chan *broadcast.BlockAccepted, 10),
 		opts:               opts,
 	}, nil
 }
@@ -62,7 +68,7 @@ func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Bloc
 func (b *BlockApplicator) ApplyBlock(ctx context.Context, block *protocol.Block) error {
 	errChan := make(chan error, 1)
 
-	b.newBlockChan <- &blockEntry{block: block, errChan: errChan}
+	b.newBlockChan <- &blockEntry{block: block, errChans: []chan<- error{errChan}}
 
 	select {
 	case err := <-errChan:
@@ -88,11 +94,11 @@ func (b *BlockApplicator) addEntry(entry *blockEntry) error {
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
 
-	if _, ok := b.blocksById[id]; ok {
-		return errors.New("duplicate block added")
+	if oldEntry, ok := b.blocksById[id]; ok {
+		oldEntry.errChans = append(oldEntry.errChans, entry.errChans...)
+	} else {
+		b.blocksById[id] = entry
 	}
-
-	b.blocksById[id] = entry
 
 	if _, ok := b.blocksByPrevious[previousId]; !ok {
 		b.blocksByPrevious[previousId] = make(map[string]void)
@@ -109,7 +115,10 @@ func (b *BlockApplicator) addEntry(entry *blockEntry) error {
 
 func (b *BlockApplicator) removeEntry(id string) {
 	if entry, ok := b.blocksById[id]; ok {
-		close(entry.errChan)
+		for _, ch := range entry.errChans {
+			close(ch)
+		}
+
 		delete(b.blocksById, id)
 
 		previousId := string(entry.block.Header.Previous)
@@ -135,9 +144,17 @@ func (b *BlockApplicator) removeEntry(id string) {
 
 func (b *BlockApplicator) applyBlock(ctx context.Context, id string) {
 	if entry, ok := b.blocksById[id]; ok {
+		var err error
 
-		_, err := b.rpc.ApplyBlock(ctx, entry.block)
-		entry.errChan <- err
+		if entry.block.Header.Height <= b.lib {
+			err = p2perrors.ErrBlockIrreversibility
+		} else {
+			_, err = b.rpc.ApplyBlock(ctx, entry.block)
+		}
+
+		for _, ch := range entry.errChans {
+			ch <- err
+		}
 
 		b.removeEntry(id)
 	}
@@ -155,6 +172,8 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 		if err == nil {
 			return
 		}
+	} else if entry.block.Header.Height <= b.lib {
+		err = p2perrors.ErrBlockIrreversibility
 	} else {
 		_, err = b.rpc.ApplyBlock(ctx, entry.block)
 
@@ -165,11 +184,15 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 		}
 	}
 
-	entry.errChan <- err
-	close(entry.errChan)
+	for _, ch := range entry.errChans {
+		ch <- err
+		close(ch)
+	}
 }
 
 func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
+	b.lib = forkHeads.LastIrreversibleBlock.Height
+
 	heights := make([]uint64, 0, len(b.blocksByHeight))
 
 	for h := range b.blocksByHeight {
@@ -183,7 +206,9 @@ func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadc
 	for _, h := range heights {
 		if h <= forkHeads.LastIrreversibleBlock.Height {
 			for id := range b.blocksByHeight[h] {
-				b.blocksById[id].errChan <- p2perrors.ErrUnknownPreviousBlock
+				for _, ch := range b.blocksById[id].errChans {
+					ch <- p2perrors.ErrUnknownPreviousBlock
+				}
 				b.removeEntry(id)
 			}
 		} else {

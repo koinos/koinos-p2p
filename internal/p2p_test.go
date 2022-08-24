@@ -8,8 +8,9 @@ import (
 
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
-	"github.com/koinos/koinos-p2p/internal/rpc"
+	"github.com/koinos/koinos-p2p/internal/p2p"
 	"github.com/koinos/koinos-proto-golang/koinos"
+	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
@@ -31,6 +32,7 @@ type TestRPC struct {
 	BlocksApplied    []*protocol.Block
 	BlocksByID       map[string]*protocol.Block
 	Mutex            sync.Mutex
+	BlockApplicator  *p2p.BlockApplicator
 }
 
 // getDummyBlockIDAtHeight() gets the ID of the dummy block at the given height
@@ -96,7 +98,22 @@ func (k *TestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain
 		if block.Header.Height > k.Height {
 			k.Height = block.Header.Height
 			k.LastIrreversible = k.Height - 5
+
+			k.BlockApplicator.HandleForkHeads(&broadcast.ForkHeads{
+				LastIrreversibleBlock: k.getDummyTopologyAtHeight(k.Height),
+				Heads:                 []*koinos.BlockTopology{k.getDummyTopologyAtHeight(k.LastIrreversible)},
+			})
 		}
+
+		k.BlockApplicator.HandleBlockBroadcast(&broadcast.BlockAccepted{
+			Block: block,
+			Receipt: &protocol.BlockReceipt{
+				Id:     block.Id,
+				Height: block.Header.Height,
+			},
+			Live: false,
+			Head: k.Height == block.Header.Height,
+		})
 	}
 
 	return &chain.SubmitBlockResponse{}, nil
@@ -208,17 +225,19 @@ func NewTestRPC(height uint64) *TestRPC {
 func SetUnitTestOptions(config *options.Config) {
 }
 
-func createTestClients(listenRPC rpc.LocalRPC, listenConfig *options.Config, sendRPC rpc.LocalRPC, sendConfig *options.Config) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
+func createTestClients(listenRPC *TestRPC, listenConfig *options.Config, sendRPC *TestRPC, sendConfig *options.Config) (*node.KoinosP2PNode, *node.KoinosP2PNode, multiaddr.Multiaddr, multiaddr.Multiaddr, error) {
 	listenNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8765", listenRPC, nil, "test1", listenConfig)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	listenRPC.BlockApplicator = listenNode.BlockApplicator
 	listenNode.Start(context.Background())
 
 	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, nil, "test2", sendConfig)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	sendRPC.BlockApplicator = sendNode.BlockApplicator
 	sendNode.Start(context.Background())
 
 	return listenNode, sendNode, listenNode.GetAddress(), listenNode.GetAddress(), nil
