@@ -26,11 +26,12 @@ type PeerConnection struct {
 
 	requestBlockChan chan signalRequestBlocks
 
-	libProvider    LastIrreversibleBlockProvider
-	localRPC       rpc.LocalRPC
-	peerRPC        rpc.RemoteRPC
-	peerErrorChan  chan<- PeerError
-	gossipVoteChan chan<- GossipVote
+	libProvider     LastIrreversibleBlockProvider
+	localRPC        rpc.LocalRPC
+	peerRPC         rpc.RemoteRPC
+	blockApplicator *BlockApplicator
+	peerErrorChan   chan<- PeerError
+	gossipVoteChan  chan<- GossipVote
 }
 
 func (p *PeerConnection) requestBlocks() {
@@ -152,21 +153,24 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// Apply blocks to local node
 	for i := range blocks {
-		rpcContext, cancelApplyBlock := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
+		applicatorContext, cancelApplyBlock := context.WithTimeout(ctx, p.opts.BlockApplicatorTimeout)
 		defer cancelApplyBlock()
-		_, err = p.localRPC.ApplyBlock(rpcContext, &blocks[i])
+
+		err = p.blockApplicator.ApplyBlock(applicatorContext, &blocks[i])
+
 		if err != nil {
 			// If it was a local RPC timeout, do not wrap it
 			if errors.Is(err, p2perrors.ErrLocalRPCTimeout) {
 				return err
 			}
 
-			return fmt.Errorf("%w: %s", p2perrors.ErrBlockApplication, err.Error())
+			// If we are applying a now irreversible block, it is probably we synced further with another peer,
+			// just keep applying blocks until we are caught up or we encounter a different error.
+			if errors.Is(err, p2perrors.ErrBlockIrreversibility) {
+				continue
+			}
 		}
 	}
-
-	// We will consider ourselves as syncing if we have more than 5 blocks to sync
-	p.isSynced = peerHeadHeight-blocks[len(blocks)-1].Header.Height < p.opts.SyncedBlockDelta
 
 	return nil
 }
@@ -240,16 +244,25 @@ func (p *PeerConnection) Start(ctx context.Context) {
 }
 
 // NewPeerConnection creates a PeerConnection
-func NewPeerConnection(id peer.ID, libProvider LastIrreversibleBlockProvider, localRPC rpc.LocalRPC, peerRPC rpc.RemoteRPC, peerErrorChan chan<- PeerError, gossipVoteChan chan<- GossipVote, opts *options.PeerConnectionOptions) *PeerConnection {
+func NewPeerConnection(
+	id peer.ID,
+	libProvider LastIrreversibleBlockProvider,
+	localRPC rpc.LocalRPC,
+	peerRPC rpc.RemoteRPC,
+	peerErrorChan chan<- PeerError,
+	gossipVoteChan chan<- GossipVote,
+	opts *options.PeerConnectionOptions,
+	blockApplicator *BlockApplicator) *PeerConnection {
 	return &PeerConnection{
-		id:               id,
-		isSynced:         false,
-		gossipVote:       false,
-		opts:             opts,
+		id:         id,
+		isSynced:   false,
+		gossipVote: false,
+		opts:       opts,
 		requestBlockChan: make(chan signalRequestBlocks),
 		libProvider:      libProvider,
 		localRPC:         localRPC,
 		peerRPC:          peerRPC,
+		blockApplicator:  blockApplicator,
 		peerErrorChan:    peerErrorChan,
 		gossipVoteChan:   gossipVoteChan,
 	}
