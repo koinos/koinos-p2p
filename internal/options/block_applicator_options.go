@@ -2,7 +2,7 @@ package options
 
 const (
 	maxPendingBlocksDefault = 2500
-	maxHeightDeltaDefault   = 1000
+	maxHeightDeltaDefault   = 60
 )
 
 // BlockApplicatorOptions are options for BlockApplicator
