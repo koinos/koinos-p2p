@@ -364,6 +364,20 @@ func (n *KoinosP2PNode) logConnectionsLoop(ctx context.Context) {
 	}
 }
 
+func (n *KoinosP2PNode) libLoop(ctx context.Context) {
+	for {
+		forkHeads, err := n.localRPC.GetForkHeads(ctx)
+		if err != nil {
+			n.libValue.Store(forkHeads.LastIrreversibleBlock.Height)
+		}
+
+		select {
+		case <-time.After(time.Second * 10):
+		case <-ctx.Done():
+		}
+	}
+}
+
 // Start starts background goroutines
 func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.Host.Network().Notify(n.ConnectionManager)
@@ -393,6 +407,8 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 			}
 		}
 	}()
+
+	go n.libLoop(ctx)
 }
 
 // ----------------------------------------------------------------------------
