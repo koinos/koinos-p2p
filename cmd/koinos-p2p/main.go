@@ -67,7 +67,7 @@ func main() {
 
 	var baseDir string
 
-	baseDir = *flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
+	baseDirPtr := flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
 	amqp := flag.StringP(amqpOption, "a", "", "AMQP server URL")
 	addr := flag.StringP(listenOption, "l", "", "The multiaddress on which the node will listen")
 	seed := flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
@@ -82,7 +82,7 @@ func main() {
 
 	flag.Parse()
 
-	baseDir, err := util.InitBaseDir(baseDir)
+	baseDir, err := util.InitBaseDir(*baseDirPtr)
 	if err != nil {
 		fmt.Printf("Could not initialize base directory '%v'\n", baseDir)
 		os.Exit(1)
@@ -108,7 +108,8 @@ func main() {
 	logFilename := path.Join(util.GetAppDir(baseDir, appName), logDir, "p2p.log")
 	err = log.InitLogger(*logLevel, false, logFilename, appID)
 	if err != nil {
-		panic(fmt.Sprintf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel))
+		fmt.Printf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel)
+		os.Exit(1)
 	}
 
 	if *jobs < 1 {
