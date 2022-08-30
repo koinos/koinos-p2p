@@ -254,10 +254,10 @@ func NewPeerConnection(
 	opts *options.PeerConnectionOptions,
 	blockApplicator *BlockApplicator) *PeerConnection {
 	return &PeerConnection{
-		id:         id,
-		isSynced:   false,
-		gossipVote: false,
-		opts:       opts,
+		id:               id,
+		isSynced:         false,
+		gossipVote:       false,
+		opts:             opts,
 		requestBlockChan: make(chan signalRequestBlocks),
 		libProvider:      libProvider,
 		localRPC:         localRPC,

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -36,6 +37,7 @@ const (
 	forceGossipOption   = "force-gossip"
 	logLevelOption      = "log-level"
 	instanceIDOption    = "instance-id"
+	jobsOption          = "jobs"
 )
 
 const (
@@ -61,7 +63,11 @@ func main() {
 	// Set libp2p log level
 	libp2plog.SetAllLoggers(libp2plog.LevelFatal)
 
-	baseDir := flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
+	jobsDefault := runtime.NumCPU()
+
+	var baseDir string
+
+	baseDir = *flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
 	amqp := flag.StringP(amqpOption, "a", "", "AMQP server URL")
 	addr := flag.StringP(listenOption, "l", "", "The multiaddress on which the node will listen")
 	seed := flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
@@ -72,12 +78,17 @@ func main() {
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode to always be enabled")
 	logLevel := flag.StringP(logLevelOption, "v", "", "The log filtering level (debug, info, warn, error)")
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
+	jobs := flag.IntP(jobsOption, "j", jobsDefault, "Number of RPC jobs to run")
 
 	flag.Parse()
 
-	*baseDir = util.InitBaseDir(*baseDir)
-	util.EnsureDir(*baseDir)
-	yamlConfig := util.InitYamlConfig(*baseDir)
+	baseDir, err := util.InitBaseDir(baseDir)
+	if err != nil {
+		fmt.Printf("Could not initialize base directory '%v'\n", baseDir)
+		os.Exit(1)
+	}
+
+	yamlConfig := util.InitYamlConfig(baseDir)
 
 	*amqp = util.GetStringOption(amqpOption, amqpDefault, *amqp, yamlConfig.P2P, yamlConfig.Global)
 	*addr = util.GetStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P, yamlConfig.Global)
@@ -89,18 +100,24 @@ func main() {
 	*forceGossip = util.GetBoolOption(forceGossipOption, *forceGossip, forceGossipDefault, yamlConfig.P2P, yamlConfig.Global)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
+	*jobs = util.GetIntOption(jobsOption, jobsDefault, *jobs, yamlConfig.P2P, yamlConfig.Global)
 
 	appID := fmt.Sprintf("%s.%s", appName, *instanceID)
 
 	// Initialize logger
-	logFilename := path.Join(util.GetAppDir(*baseDir, appName), logDir, "p2p.log")
-	err := log.InitLogger(*logLevel, false, logFilename, appID)
+	logFilename := path.Join(util.GetAppDir(baseDir, appName), logDir, "p2p.log")
+	err = log.InitLogger(*logLevel, false, logFilename, appID)
 	if err != nil {
 		panic(fmt.Sprintf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel))
 	}
 
+	if *jobs < 1 {
+		log.Errorf("Option '%v' must be greater than 0 (was %v)", jobsOption, *jobs)
+		os.Exit(1)
+	}
+
 	client := koinosmq.NewClient(*amqp, koinosmq.ExponentialBackoff)
-	requestHandler := koinosmq.NewRequestHandler(*amqp)
+	requestHandler := koinosmq.NewRequestHandler(*amqp, uint(*jobs))
 
 	config := options.NewConfig()
 
@@ -133,15 +150,18 @@ func main() {
 		config.PeerConnectionOptions.Checkpoints = append(config.PeerConnectionOptions.Checkpoints, options.Checkpoint{BlockHeight: blockHeight, BlockID: blockID})
 	}
 
-	client.Start()
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	defer ctxCancel()
+
+	client.Start(ctx)
 
 	koinosRPC := rpc.NewKoinosRPC(client)
 
 	log.Info("Attempting to connect to block_store...")
 	for {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		val, _ := koinosRPC.IsConnectedToBlockStore(ctx)
+		blockStoreCtx, blockStoreCancel := context.WithCancel(ctx)
+		defer blockStoreCancel()
+		val, _ := koinosRPC.IsConnectedToBlockStore(blockStoreCtx)
 		if val {
 			log.Info("Connected")
 			break
@@ -150,23 +170,23 @@ func main() {
 
 	log.Info("Attempting to connect to chain...")
 	for {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		val, _ := koinosRPC.IsConnectedToChain(ctx)
+		chainCtx, chainCancel := context.WithCancel(ctx)
+		defer chainCancel()
+		val, _ := koinosRPC.IsConnectedToChain(chainCtx)
 		if val {
 			log.Info("Connected")
 			break
 		}
 	}
 
-	node, err := node.NewKoinosP2PNode(context.Background(), *addr, rpc.NewKoinosRPC(client), requestHandler, *seed, config)
+	node, err := node.NewKoinosP2PNode(ctx, *addr, rpc.NewKoinosRPC(client), requestHandler, *seed, config)
 	if err != nil {
 		panic(err)
 	}
 
-	requestHandler.Start()
+	requestHandler.Start(ctx)
 
-	node.Start(context.Background())
+	node.Start(ctx)
 
 	log.Infof("Starting node at address: %s", node.GetAddress())
 
