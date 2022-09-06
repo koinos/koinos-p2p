@@ -122,6 +122,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.Host = host
 	node.localRPC = localRPC
 
+	node.PeerErrorHandler.SetPeerStore(node.Host.Peerstore())
+
 	if requestHandler != nil {
 		requestHandler.SetBroadcastHandler("koinos.block.accept", node.handleBlockBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.mempool.accept", node.handleTransactionBroadcast)

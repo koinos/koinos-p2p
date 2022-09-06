@@ -12,8 +12,12 @@ import (
 	"github.com/libp2p/go-libp2p-core/control"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	multiaddr "github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 )
+
+type LocalPeerStore interface {
+	PeerInfo(peer.ID) peer.AddrInfo
+}
 
 // PeerError represents an error originating from a peer
 type PeerError struct {
@@ -27,39 +31,46 @@ type errorScoreRecord struct {
 }
 
 type canConnectRequest struct {
-	id         peer.ID
+	addr       ma.Multiaddr
 	resultChan chan<- bool
 }
 
 // PeerErrorHandler handles PeerErrors and tracks errors over time
 // to determine if a peer should be disconnected from
 type PeerErrorHandler struct {
-	errorScores        map[peer.ID]*errorScoreRecord
+	errorScores        map[ma.Multiaddr]*errorScoreRecord
 	disconnectPeerChan chan<- peer.ID
 	peerErrorChan      <-chan PeerError
 	canConnectChan     chan canConnectRequest
+	peerStore          LocalPeerStore
 
 	opts options.PeerErrorHandlerOptions
 }
 
 // CanConnect to peer if the peer's error score is below the error score threshold
 func (p *PeerErrorHandler) CanConnect(ctx context.Context, id peer.ID) bool {
-	resultChan := make(chan bool, 1)
-	p.canConnectChan <- canConnectRequest{
-		id:         id,
-		resultChan: resultChan,
+	for _, addr := range p.peerStore.PeerInfo(id).Addrs {
+		resultChan := make(chan bool, 1)
+		p.canConnectChan <- canConnectRequest{
+			addr:       addr,
+			resultChan: resultChan,
+		}
+
+		select {
+		case res := <-resultChan:
+			if !res {
+				return false
+			}
+		case <-ctx.Done():
+			return false
+		}
 	}
 
-	select {
-	case res := <-resultChan:
-		return res
-	case <-ctx.Done():
-		return false
-	}
+	return true
 }
 
-func (p *PeerErrorHandler) handleCanConnect(id peer.ID) bool {
-	if record, ok := p.errorScores[id]; ok {
+func (p *PeerErrorHandler) handleCanConnect(addr ma.Multiaddr) bool {
+	if record, ok := p.errorScores[addr]; ok {
 		p.decayErrorScore(record)
 		return record.score < p.opts.ErrorScoreThreshold
 	}
@@ -68,25 +79,27 @@ func (p *PeerErrorHandler) handleCanConnect(id peer.ID) bool {
 }
 
 func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
-	if record, ok := p.errorScores[peerErr.id]; ok {
-		p.decayErrorScore(record)
-		record.score += p.getScoreForError(peerErr.err)
-	} else {
-		p.errorScores[peerErr.id] = &errorScoreRecord{
-			lastUpdate: time.Now(),
-			score:      p.getScoreForError(peerErr.err),
-		}
-	}
-
-	log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[peerErr.id].score)
-
-	if p.errorScores[peerErr.id].score >= p.opts.ErrorScoreThreshold {
-		go func() {
-			select {
-			case p.disconnectPeerChan <- peerErr.id:
-			case <-ctx.Done():
+	for _, addr := range p.peerStore.PeerInfo(peerErr.id).Addrs {
+		if record, ok := p.errorScores[addr]; ok {
+			p.decayErrorScore(record)
+			record.score += p.getScoreForError(peerErr.err)
+		} else {
+			p.errorScores[addr] = &errorScoreRecord{
+				lastUpdate: time.Now(),
+				score:      p.getScoreForError(peerErr.err),
 			}
-		}()
+		}
+
+		log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[addr].score)
+
+		if p.errorScores[addr].score >= p.opts.ErrorScoreThreshold {
+			go func() {
+				select {
+				case p.disconnectPeerChan <- peerErr.id:
+				case <-ctx.Done():
+				}
+			}()
+		}
 	}
 }
 
@@ -150,7 +163,7 @@ func (p *PeerErrorHandler) InterceptPeerDial(pid peer.ID) bool {
 }
 
 // InterceptAddrDial implements the libp2p ConnectionGater interface
-func (p *PeerErrorHandler) InterceptAddrDial(peer.ID, multiaddr.Multiaddr) bool {
+func (p *PeerErrorHandler) InterceptAddrDial(peer.ID, ma.Multiaddr) bool {
 	return true
 }
 
@@ -171,13 +184,17 @@ func (p *PeerErrorHandler) InterceptUpgraded(network.Conn) (bool, control.Discon
 
 // Start processing peer errors
 func (p *PeerErrorHandler) Start(ctx context.Context) {
+	if p.peerStore == nil {
+		return
+	}
+
 	go func() {
 		for {
 			select {
 			case perr := <-p.peerErrorChan:
 				p.handleError(ctx, perr)
 			case req := <-p.canConnectChan:
-				req.resultChan <- p.handleCanConnect(req.id)
+				req.resultChan <- p.handleCanConnect(req.addr)
 
 			case <-ctx.Done():
 				return
@@ -187,12 +204,24 @@ func (p *PeerErrorHandler) Start(ctx context.Context) {
 }
 
 // NewPeerErrorHandler creates a new PeerErrorHandler
-func NewPeerErrorHandler(disconnectPeerChan chan<- peer.ID, peerErrorChan <-chan PeerError, opts options.PeerErrorHandlerOptions) *PeerErrorHandler {
+func NewPeerErrorHandler(
+	disconnectPeerChan chan<- peer.ID,
+	peerErrorChan <-chan PeerError,
+	opts options.PeerErrorHandlerOptions) *PeerErrorHandler {
+
 	return &PeerErrorHandler{
-		errorScores:        make(map[peer.ID]*errorScoreRecord),
+		errorScores:        make(map[ma.Multiaddr]*errorScoreRecord),
 		disconnectPeerChan: disconnectPeerChan,
 		peerErrorChan:      peerErrorChan,
 		canConnectChan:     make(chan canConnectRequest),
 		opts:               opts,
 	}
+}
+
+// SetPeerStore of the PeerErrorHandler. This must be called before starting
+// the error score and is a separate function because PeerErrorHandler can
+// be passed in to a libp2p Host during construction as a ConnectionGater.
+// But the Host to be created is the PeerStore the PeerErrorHandler requires.
+func (p *PeerErrorHandler) SetPeerStore(peerStore LocalPeerStore) {
+	p.peerStore = peerStore
 }
