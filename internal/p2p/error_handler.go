@@ -15,7 +15,9 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-type LocalPeerStore interface {
+// PeerStore is just the PeerInfo method of libp2p.Host. This is the only method
+// needed and makes testing much easier
+type PeerStore interface {
 	PeerInfo(peer.ID) peer.AddrInfo
 }
 
@@ -42,7 +44,7 @@ type PeerErrorHandler struct {
 	disconnectPeerChan chan<- peer.ID
 	peerErrorChan      <-chan PeerError
 	canConnectChan     chan canConnectRequest
-	peerStore          LocalPeerStore
+	peerStore          PeerStore
 
 	opts options.PeerErrorHandlerOptions
 }
@@ -222,6 +224,6 @@ func NewPeerErrorHandler(
 // the error score and is a separate function because PeerErrorHandler can
 // be passed in to a libp2p Host during construction as a ConnectionGater.
 // But the Host to be created is the PeerStore the PeerErrorHandler requires.
-func (p *PeerErrorHandler) SetPeerStore(peerStore LocalPeerStore) {
+func (p *PeerErrorHandler) SetPeerStore(peerStore PeerStore) {
 	p.peerStore = peerStore
 }
