@@ -594,6 +594,8 @@ github.com/koinos/koinos-mq-golang v0.0.0-20220830225000-227631db90f5 h1:OiaIKsR
 github.com/koinos/koinos-mq-golang v0.0.0-20220830225000-227631db90f5/go.mod h1:EFk+fuUL5ezbaWsGJ2U0KlzbgkflwRv96az8dEVe16I=
 github.com/koinos/koinos-mq-golang v0.0.0-20220902182300-4b1c1c31e493 h1:nN/5VWvN8rccbG6uJzasiD1FQ0bkPN6LT0FR++PwcwM=
 github.com/koinos/koinos-mq-golang v0.0.0-20220902182300-4b1c1c31e493/go.mod h1:EFk+fuUL5ezbaWsGJ2U0KlzbgkflwRv96az8dEVe16I=
+github.com/koinos/koinos-mq-golang v0.0.0-20220906183403-59a5f98d6aab h1:CAmBc4qpeIB+GoRURF/WBUYLstUmvg+MVVMvxRill4U=
+github.com/koinos/koinos-mq-golang v0.0.0-20220906183403-59a5f98d6aab/go.mod h1:EFk+fuUL5ezbaWsGJ2U0KlzbgkflwRv96az8dEVe16I=
 github.com/koinos/koinos-proto-golang v0.2.1-0.20220224180227-6fbc5fe4a89a/go.mod h1:ZonOOdmZcuEbRdOqqdfYRA2I4szYHy5aKzUveMWXBog=
 github.com/koinos/koinos-proto-golang v0.2.1-0.20220304200226-d96c9cf694de h1:HqOUA4jj5ce4v1kW8jnVc/1LYrELBihqNBDVyqaU+xI=
 github.com/koinos/koinos-proto-golang v0.2.1-0.20220304200226-d96c9cf694de/go.mod h1:ZonOOdmZcuEbRdOqqdfYRA2I4szYHy5aKzUveMWXBog=
@@ -608,6 +610,8 @@ github.com/koinos/koinos-util-golang v0.0.0-20220224193402-85a6df362833 h1:7H/Rw
 github.com/koinos/koinos-util-golang v0.0.0-20220224193402-85a6df362833/go.mod h1:0+oSa/Ml9+INjfAGubMtKNOq+e4a/OoEz7GfaQPN/P8=
 github.com/koinos/koinos-util-golang v0.0.0-20220830161833-76700a84be69 h1:ub2YMFWL1JZr4iXvIbC/grIqRHRqNoMEa1zQHThNwRE=
 github.com/koinos/koinos-util-golang v0.0.0-20220830161833-76700a84be69/go.mod h1:5Va8lbIAGD886tlNL1AT5LB3ND7uvmivKODQ2p90fqI=
+github.com/koinos/koinos-util-golang v0.0.0-20220831225923-5ba6e0d4e7b9 h1:z53D8ApsfM85lpC7HBoQudL++KVRse2FP6RrE6A1ExA=
+github.com/koinos/koinos-util-golang v0.0.0-20220831225923-5ba6e0d4e7b9/go.mod h1:5Va8lbIAGD886tlNL1AT5LB3ND7uvmivKODQ2p90fqI=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/konsorten/go-windows-terminal-sequences v1.0.3/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/koron/go-ssdp v0.0.0-20191105050749-2e1c40ed0b5d/go.mod h1:5Ky9EC2xfoUKUor0Hjgi2BJhCSXJfMOFlmyYrVKGQMk=
