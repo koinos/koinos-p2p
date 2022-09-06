@@ -11,19 +11,16 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-type testPeerStore struct {
-	store map[peer.ID]peer.AddrInfo
+type testProvider struct {
+	store map[peer.ID]ma.Multiaddr
 }
 
-func (t *testPeerStore) PeerInfo(id peer.ID) peer.AddrInfo {
-	if info, ok := t.store[id]; ok {
-		return info
+func (t *testProvider) GetPeerAddress(_ context.Context, id peer.ID) ma.Multiaddr {
+	if addr, ok := t.store[id]; ok {
+		return addr
 	}
 
-	return peer.AddrInfo{
-		ID:    id,
-		Addrs: make([]ma.Multiaddr, 0),
-	}
+	return nil
 }
 
 func TestErrorHandler(t *testing.T) {
@@ -36,15 +33,15 @@ func TestErrorHandler(t *testing.T) {
 	opts.ErrorScoreThreshold = 100
 	opts.ErrorScoreDecayHalflife = time.Second * 2
 
-	peerStore := &testPeerStore{
-		store: make(map[peer.ID]peer.AddrInfo),
+	peerStore := &testProvider{
+		store: make(map[peer.ID]ma.Multiaddr),
 	}
 	peerAddr, _ := ma.NewMultiaddr("/ip4/1.2.3.4/tcp/80")
-	peerStore.store["peerA"] = peer.AddrInfo{ID: "peerA", Addrs: []ma.Multiaddr{peerAddr}}
-	peerStore.store["peerB"] = peer.AddrInfo{ID: "peerB", Addrs: []ma.Multiaddr{peerAddr}}
+	peerStore.store["peerA"] = peerAddr
+	peerStore.store["peerB"] = peerAddr
 
 	errorHandler := NewPeerErrorHandler(disconnectPeerChan, peerErrorChan, *opts)
-	errorHandler.SetPeerStore(peerStore)
+	errorHandler.SetPeerAddressProvider(peerStore)
 	errorHandler.Start(ctx)
 
 	for i := 0; i < 12; i++ {

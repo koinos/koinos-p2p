@@ -15,10 +15,9 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-// PeerStore is just the PeerInfo method of libp2p.Host. This is the only method
-// needed and makes testing much easier
-type PeerStore interface {
-	PeerInfo(peer.ID) peer.AddrInfo
+// PeerAddressProvider return's the peers remote address given a peer ID
+type PeerAddressProvider interface {
+	GetPeerAddress(ctx context.Context, id peer.ID) ma.Multiaddr
 }
 
 // PeerError represents an error originating from a peer
@@ -44,14 +43,14 @@ type PeerErrorHandler struct {
 	disconnectPeerChan chan<- peer.ID
 	peerErrorChan      <-chan PeerError
 	canConnectChan     chan canConnectRequest
-	peerStore          PeerStore
+	addrProvider       PeerAddressProvider
 
 	opts options.PeerErrorHandlerOptions
 }
 
 // CanConnect to peer if the peer's error score is below the error score threshold
 func (p *PeerErrorHandler) CanConnect(ctx context.Context, id peer.ID) bool {
-	for _, addr := range p.peerStore.PeerInfo(id).Addrs {
+	if addr := p.addrProvider.GetPeerAddress(ctx, id); addr != nil {
 		resultChan := make(chan bool, 1)
 		p.canConnectChan <- canConnectRequest{
 			addr:       addr,
@@ -81,7 +80,7 @@ func (p *PeerErrorHandler) handleCanConnect(addr ma.Multiaddr) bool {
 }
 
 func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
-	for _, addr := range p.peerStore.PeerInfo(peerErr.id).Addrs {
+	if addr := p.addrProvider.GetPeerAddress(ctx, peerErr.id); addr != nil {
 		if record, ok := p.errorScores[addr]; ok {
 			p.decayErrorScore(record)
 			record.score += p.getScoreForError(peerErr.err)
@@ -92,7 +91,7 @@ func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
 			}
 		}
 
-		log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[addr].score)
+		log.Infof("Encountered peer error: %s/%s, %s. Current error score: %v", addr.String(), peerErr.id, peerErr.err.Error(), p.errorScores[addr].score)
 
 		if p.errorScores[addr].score >= p.opts.ErrorScoreThreshold {
 			go func() {
@@ -186,7 +185,7 @@ func (p *PeerErrorHandler) InterceptUpgraded(network.Conn) (bool, control.Discon
 
 // Start processing peer errors
 func (p *PeerErrorHandler) Start(ctx context.Context) {
-	if p.peerStore == nil {
+	if p.addrProvider == nil {
 		return
 	}
 
@@ -224,6 +223,6 @@ func NewPeerErrorHandler(
 // the error score and is a separate function because PeerErrorHandler can
 // be passed in to a libp2p Host during construction as a ConnectionGater.
 // But the Host to be created is the PeerStore the PeerErrorHandler requires.
-func (p *PeerErrorHandler) SetPeerStore(peerStore PeerStore) {
-	p.peerStore = peerStore
+func (p *PeerErrorHandler) SetPeerAddressProvider(addrProvider PeerAddressProvider) {
+	p.addrProvider = addrProvider
 }
