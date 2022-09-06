@@ -125,6 +125,9 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 			if eData.Code == int64(chain.ErrorCode_unknown_previous_block) {
 				err = p2perrors.ErrUnknownPreviousBlock
 				break
+			} else if eData.Code == int64(chain.ErrorCode_pre_irreversibility_block) {
+				err = p2perrors.ErrBlockIrreversibility
+				break
 			}
 		}
 		err = fmt.Errorf("%w ApplyBlock, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
@@ -141,7 +144,7 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transact
 		Request: &chainrpc.ChainRequest_SubmitTransaction{
 			SubmitTransaction: &chainrpc.SubmitTransactionRequest{
 				Transaction: trx,
-				Broadcast: true,
+				Broadcast:   true,
 			},
 		},
 	}
