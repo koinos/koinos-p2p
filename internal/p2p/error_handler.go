@@ -39,7 +39,7 @@ type canConnectRequest struct {
 // PeerErrorHandler handles PeerErrors and tracks errors over time
 // to determine if a peer should be disconnected from
 type PeerErrorHandler struct {
-	errorScores        map[ma.Multiaddr]*errorScoreRecord
+	errorScores        map[string]*errorScoreRecord
 	disconnectPeerChan chan<- peer.ID
 	peerErrorChan      <-chan PeerError
 	canConnectChan     chan canConnectRequest
@@ -51,27 +51,29 @@ type PeerErrorHandler struct {
 // CanConnect to peer if the peer's error score is below the error score threshold
 func (p *PeerErrorHandler) CanConnect(ctx context.Context, id peer.ID) bool {
 	if addr := p.addrProvider.GetPeerAddress(ctx, id); addr != nil {
-		resultChan := make(chan bool, 1)
-		p.canConnectChan <- canConnectRequest{
-			addr:       addr,
-			resultChan: resultChan,
-		}
-
-		select {
-		case res := <-resultChan:
-			if !res {
-				return false
-			}
-		case <-ctx.Done():
-			return false
-		}
+		return p.CanConnectAddr(ctx, addr)
 	}
 
 	return true
 }
 
+func (p *PeerErrorHandler) CanConnectAddr(ctx context.Context, addr ma.Multiaddr) bool {
+	resultChan := make(chan bool, 1)
+	p.canConnectChan <- canConnectRequest{
+		addr:       addr,
+		resultChan: resultChan,
+	}
+
+	select {
+	case res := <-resultChan:
+		return res
+	case <-ctx.Done():
+		return false
+	}
+}
+
 func (p *PeerErrorHandler) handleCanConnect(addr ma.Multiaddr) bool {
-	if record, ok := p.errorScores[addr]; ok {
+	if record, ok := p.errorScores[ma.Split(addr)[0].String()]; ok {
 		p.decayErrorScore(record)
 		return record.score < p.opts.ErrorScoreThreshold
 	}
@@ -81,19 +83,20 @@ func (p *PeerErrorHandler) handleCanConnect(addr ma.Multiaddr) bool {
 
 func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
 	if addr := p.addrProvider.GetPeerAddress(ctx, peerErr.id); addr != nil {
-		if record, ok := p.errorScores[addr]; ok {
+		ipAddr := ma.Split(addr)[0].String()
+		if record, ok := p.errorScores[ipAddr]; ok {
 			p.decayErrorScore(record)
 			record.score += p.getScoreForError(peerErr.err)
 		} else {
-			p.errorScores[addr] = &errorScoreRecord{
+			p.errorScores[ipAddr] = &errorScoreRecord{
 				lastUpdate: time.Now(),
 				score:      p.getScoreForError(peerErr.err),
 			}
 		}
 
-		log.Infof("Encountered peer error: %s/%s, %s. Current error score: %v", addr.String(), peerErr.id, peerErr.err.Error(), p.errorScores[addr].score)
+		log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[ipAddr].score)
 
-		if p.errorScores[addr].score >= p.opts.ErrorScoreThreshold {
+		if p.errorScores[ipAddr].score >= p.opts.ErrorScoreThreshold {
 			go func() {
 				select {
 				case p.disconnectPeerChan <- peerErr.id:
@@ -164,18 +167,18 @@ func (p *PeerErrorHandler) InterceptPeerDial(pid peer.ID) bool {
 }
 
 // InterceptAddrDial implements the libp2p ConnectionGater interface
-func (p *PeerErrorHandler) InterceptAddrDial(peer.ID, ma.Multiaddr) bool {
-	return true
+func (p *PeerErrorHandler) InterceptAddrDial(_ peer.ID, addr ma.Multiaddr) bool {
+	return p.CanConnectAddr(context.Background(), addr)
 }
 
 // InterceptAccept implements the libp2p ConnectionGater interface
-func (p *PeerErrorHandler) InterceptAccept(network.ConnMultiaddrs) bool {
-	return true
+func (p *PeerErrorHandler) InterceptAccept(conn network.ConnMultiaddrs) bool {
+	return p.CanConnectAddr(context.Background(), conn.RemoteMultiaddr())
 }
 
 // InterceptSecured implements the libp2p ConnectionGater interface
-func (p *PeerErrorHandler) InterceptSecured(_ network.Direction, pid peer.ID, _ network.ConnMultiaddrs) bool {
-	return p.CanConnect(context.Background(), pid)
+func (p *PeerErrorHandler) InterceptSecured(_ network.Direction, _ peer.ID, conn network.ConnMultiaddrs) bool {
+	return p.CanConnectAddr(context.Background(), conn.RemoteMultiaddr())
 }
 
 // InterceptUpgraded implements the libp2p ConnectionGater interface
@@ -211,7 +214,7 @@ func NewPeerErrorHandler(
 	opts options.PeerErrorHandlerOptions) *PeerErrorHandler {
 
 	return &PeerErrorHandler{
-		errorScores:        make(map[ma.Multiaddr]*errorScoreRecord),
+		errorScores:        make(map[string]*errorScoreRecord),
 		disconnectPeerChan: disconnectPeerChan,
 		peerErrorChan:      peerErrorChan,
 		canConnectChan:     make(chan canConnectRequest),

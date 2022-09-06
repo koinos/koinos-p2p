@@ -36,9 +36,10 @@ func TestErrorHandler(t *testing.T) {
 	peerStore := &testProvider{
 		store: make(map[peer.ID]ma.Multiaddr),
 	}
-	peerAddr, _ := ma.NewMultiaddr("/ip4/1.2.3.4/tcp/80")
-	peerStore.store["peerA"] = peerAddr
-	peerStore.store["peerB"] = peerAddr
+	peerAddrA, _ := ma.NewMultiaddr("/ip4/1.2.3.4/tcp/80")
+	peerAddrB, _ := ma.NewMultiaddr("/ip4/1.2.3.4/tcp/81")
+	peerStore.store["peerA"] = peerAddrA
+	peerStore.store["peerB"] = peerAddrB
 
 	errorHandler := NewPeerErrorHandler(disconnectPeerChan, peerErrorChan, *opts)
 	errorHandler.SetPeerAddressProvider(peerStore)
