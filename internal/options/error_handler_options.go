@@ -1,7 +1,6 @@
 package options
 
 import (
-	"math"
 	"time"
 )
 
@@ -17,9 +16,9 @@ const (
 	blockApplicationTimeoutErrorScoreDefault = 5000
 	maxPendingBlocksErrorScoreDefault        = 1000
 	transactionApplicationErrorScoreDefault  = 1000
-	chainIDMismatchErrorScoreDefault         = uint64(math.MaxUint32)
-	chainNotConnectedErrorScoreDefault       = uint64(math.MaxUint32)
-	checkpointMismatchErrorScoreDefault      = uint64(math.MaxUint32)
+	chainIDMismatchErrorScoreDefault         = errorScoreThresholdDefault * 2
+	chainNotConnectedErrorScoreDefault       = errorScoreThresholdDefault * 2
+	checkpointMismatchErrorScoreDefault      = errorScoreThresholdDefault * 2
 	localRPCErrorScoreDefault                = 0
 	peerRPCErrorScoreDefault                 = 1000
 	localRPCTimeoutErrorScoreDefault         = 0
