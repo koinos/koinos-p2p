@@ -83,6 +83,7 @@ func (b *BlockApplicator) ApplyBlock(ctx context.Context, block *protocol.Block)
 
 	case <-ctx.Done():
 		return p2perrors.ErrBlockApplicationTimeout
+
 	}
 }
 
@@ -226,6 +227,7 @@ func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadc
 }
 
 func (b *BlockApplicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
+
 	if blockAccept.Head {
 		b.head = &koinos.BlockTopology{Id: blockAccept.Block.Id, Height: blockAccept.Block.Header.Height, Previous: blockAccept.Block.Header.Previous}
 	}

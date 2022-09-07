@@ -96,8 +96,8 @@ func main() {
 	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P, yamlConfig.Global)
 	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P, yamlConfig.Global)
 	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints, yamlConfig.P2P, yamlConfig.Global)
-	*disableGossip = util.GetBoolOption(disableGossipOption, *disableGossip, disableGossipDefault, yamlConfig.P2P, yamlConfig.Global)
-	*forceGossip = util.GetBoolOption(forceGossipOption, *forceGossip, forceGossipDefault, yamlConfig.P2P, yamlConfig.Global)
+	*disableGossip = util.GetBoolOption(disableGossipOption, disableGossipDefault, *disableGossip, yamlConfig.P2P, yamlConfig.Global)
+	*forceGossip = util.GetBoolOption(forceGossipOption, forceGossipDefault, *forceGossip, yamlConfig.P2P, yamlConfig.Global)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 	*jobs = util.GetIntOption(jobsOption, jobsDefault, *jobs, yamlConfig.P2P, yamlConfig.Global)
@@ -154,7 +154,7 @@ func main() {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	defer ctxCancel()
 
-	client.Start(ctx)
+	<-client.Start(ctx)
 
 	koinosRPC := rpc.NewKoinosRPC(client)
 
@@ -185,7 +185,7 @@ func main() {
 		panic(err)
 	}
 
-	requestHandler.Start(ctx)
+	<-requestHandler.Start(ctx)
 
 	node.Start(ctx)
 
