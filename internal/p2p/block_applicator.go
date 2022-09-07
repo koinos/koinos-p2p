@@ -83,7 +83,6 @@ func (b *BlockApplicator) ApplyBlock(ctx context.Context, block *protocol.Block)
 
 	case <-ctx.Done():
 		return p2perrors.ErrBlockApplicationTimeout
-
 	}
 }
 
@@ -227,7 +226,6 @@ func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadc
 }
 
 func (b *BlockApplicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
-
 	if blockAccept.Head {
 		b.head = &koinos.BlockTopology{Id: blockAccept.Block.Id, Height: blockAccept.Block.Header.Height, Previous: blockAccept.Block.Header.Previous}
 	}
@@ -246,7 +244,7 @@ func (b *BlockApplicator) Start(ctx context.Context) {
 		for {
 			select {
 			case status := <-b.blockStatusChan:
-				if !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
+				if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
 					b.removeEntry(ctx, string(status.block.Id), status.err)
 				}
 			case entry := <-b.newBlockChan:
