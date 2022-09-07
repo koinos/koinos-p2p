@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"sync"
+
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 )
@@ -12,6 +14,7 @@ type pairKey struct {
 
 type ForkWatchdog struct {
 	forkTracker map[uint64]map[pairKey]map[string]void
+	mutex       sync.Mutex
 }
 
 func NewForkWatchdog() *ForkWatchdog {
@@ -22,6 +25,9 @@ func NewForkWatchdog() *ForkWatchdog {
 
 // Add a block to the fork watchdog
 func (f *ForkWatchdog) Add(block *protocol.Block) error {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
 	pair := pairKey{
 		Signer: string(block.Header.Signer),
 		Parent: string(block.Header.Previous),
@@ -46,5 +52,8 @@ func (f *ForkWatchdog) Add(block *protocol.Block) error {
 
 // Purge a set of fork records from fork watchdog
 func (f *ForkWatchdog) Purge(lib uint64) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+
 	delete(f.forkTracker, lib)
 }
