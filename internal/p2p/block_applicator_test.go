@@ -237,7 +237,7 @@ func TestBlockApplicatorLimits(t *testing.T) {
 			Id: []byte{byte(i)},
 			Header: &protocol.BlockHeader{
 				Height:   1,
-				Previous: []byte{0},
+				Previous: []byte{byte(i)},
 			},
 		})
 
