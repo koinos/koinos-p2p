@@ -184,6 +184,8 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.PeerDisconnectedChan,
 		node.BlockApplicator)
 
+	node.PeerErrorHandler.SetPeerAddressProvider(node.ConnectionManager)
+
 	return node, nil
 }
 

@@ -32,8 +32,14 @@ type connectionMessage struct {
 	conn network.Conn
 }
 
+type peerAddressMessage struct {
+	id         peer.ID
+	returnChan chan<- multiaddr.Multiaddr
+}
+
 type peerConnectionContext struct {
 	peer   *PeerConnection
+	conn   network.Conn
 	cancel context.CancelFunc
 }
 
@@ -56,6 +62,7 @@ type ConnectionManager struct {
 	peerErrorChan            chan<- PeerError
 	gossipVoteChan           chan<- GossipVote
 	signalPeerDisconnectChan chan<- peer.ID
+	peerAddressChan          chan *peerAddressMessage
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
@@ -85,6 +92,7 @@ func NewConnectionManager(
 		peerErrorChan:            peerErrorChan,
 		gossipVoteChan:           gossipVoteChan,
 		signalPeerDisconnectChan: signalPeerDisconnectChan,
+		peerAddressChan:          make(chan *peerAddressMessage),
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -138,6 +146,19 @@ func (c *ConnectionManager) Listen(n network.Network, _ multiaddr.Multiaddr) {
 func (c *ConnectionManager) ListenClose(n network.Network, _ multiaddr.Multiaddr) {
 }
 
+func (c *ConnectionManager) GetPeerAddress(ctx context.Context, id peer.ID) multiaddr.Multiaddr {
+	returnChan := make(chan multiaddr.Multiaddr)
+
+	c.peerAddressChan <- &peerAddressMessage{id, returnChan}
+
+	select {
+	case addr := <-returnChan:
+		return addr
+	case <-ctx.Done():
+		return nil
+	}
+}
+
 func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
 	pid := msg.conn.RemotePeer()
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), pid)
@@ -157,6 +178,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 				c.peerOpts,
 				c.blockApplicator,
 			),
+			conn:   msg.conn,
 			cancel: cancel,
 		}
 
@@ -204,6 +226,18 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 	}()
 }
 
+func (c *ConnectionManager) handleGetPeerAddress(ctx context.Context, msg *peerAddressMessage) {
+	var addr multiaddr.Multiaddr
+	if peer, ok := c.connectedPeers[msg.id]; ok {
+		addr = peer.conn.RemoteMultiaddr()
+	}
+
+	select {
+	case msg.returnChan <- addr:
+	case <-ctx.Done():
+	}
+}
+
 func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
 	newlyConnectedPeers := make(map[peer.ID]util.Void)
 	peersToConnect := make(map[peer.ID]peer.AddrInfo)
@@ -242,6 +276,8 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleConnected(ctx, connMsg)
 		case connMsg := <-c.peerDisconnectedChan:
 			c.handleDisconnected(ctx, connMsg)
+		case peerAddrMsg := <-c.peerAddressChan:
+			c.handleGetPeerAddress(ctx, peerAddrMsg)
 
 		case <-ctx.Done():
 			for _, conn := range c.connectedPeers {
