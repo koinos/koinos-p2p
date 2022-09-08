@@ -244,7 +244,7 @@ func (b *BlockApplicator) Start(ctx context.Context) {
 		for {
 			select {
 			case status := <-b.blockStatusChan:
-				if !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
+				if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
 					b.removeEntry(ctx, string(status.block.Id), status.err)
 				}
 			case entry := <-b.newBlockChan:

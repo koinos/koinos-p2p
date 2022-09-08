@@ -11,9 +11,9 @@ require (
 	github.com/ipfs/go-log v1.0.5
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/koinos/koinos-log-golang v0.0.0-20210621202301-3310a8e5866b
-	github.com/koinos/koinos-mq-golang v0.0.0-20220824200525-0230763309f3
+	github.com/koinos/koinos-mq-golang v0.0.0-20220907224029-7fc455cb703a
 	github.com/koinos/koinos-proto-golang v0.4.1-0.20220906183809-4e07dbd482f6
-	github.com/koinos/koinos-util-golang v0.0.0-20220224193402-85a6df362833
+	github.com/koinos/koinos-util-golang v0.0.0-20220831225923-5ba6e0d4e7b9
 	github.com/libp2p/go-libp2p v0.20.3
 	github.com/libp2p/go-libp2p-core v0.16.1
 	github.com/libp2p/go-libp2p-gorpc v0.1.4
