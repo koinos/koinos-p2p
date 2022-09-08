@@ -164,6 +164,10 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 				return err
 			}
 
+			if errors.Is(err, p2perrors.ErrForkBomb) {
+				return err
+			}
+
 			// If we are applying a now irreversible block, it is probably we synced further with another peer,
 			// just keep applying blocks until we are caught up or we encounter a different error.
 			if errors.Is(err, p2perrors.ErrBlockIrreversibility) {

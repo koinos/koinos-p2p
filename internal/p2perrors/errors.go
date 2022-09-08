@@ -52,4 +52,7 @@ var (
 
 	// ErrMaxPendingBlocks represents when too many blocks are pending application
 	ErrMaxPendingBlocks = errors.New("max blocks are pending application")
+
+	// ErrForkBomb represents when too many forks from a producer is detected
+	ErrForkBomb = errors.New("unacceptable number of forks on the same parent for a single producer")
 )

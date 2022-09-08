@@ -35,6 +35,8 @@ type BlockApplicator struct {
 	head *koinos.BlockTopology
 	lib  uint64
 
+	forkWatchdog *ForkWatchdog
+
 	blocksById       map[string]*blockEntry
 	blocksByPrevious map[string]map[string]void
 	blocksByHeight   map[uint64]map[string]void
@@ -59,6 +61,7 @@ func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Bloc
 		rpc:                rpc,
 		head:               headInfo.HeadTopology,
 		lib:                headInfo.LastIrreversibleBlock,
+		forkWatchdog:       NewForkWatchdog(),
 		blocksById:         make(map[string]*blockEntry),
 		blocksByPrevious:   make(map[string]map[string]void),
 		blocksByHeight:     make(map[uint64]map[string]void),
@@ -73,6 +76,11 @@ func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Bloc
 
 // ApplyBlock will apply the block to the chain at the appropriate time
 func (b *BlockApplicator) ApplyBlock(ctx context.Context, block *protocol.Block) error {
+	err := b.forkWatchdog.Add(block)
+	if err != nil {
+		return err
+	}
+
 	errChan := make(chan error, 1)
 
 	b.newBlockChan <- &blockEntry{block: block, errChans: []chan<- error{errChan}}
@@ -203,6 +211,8 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 
 func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
 	atomic.StoreUint64(&b.lib, forkHeads.LastIrreversibleBlock.Height)
+
+	b.forkWatchdog.Purge(forkHeads.LastIrreversibleBlock.Height)
 
 	heights := make([]uint64, 0, len(b.blocksByHeight))
 
