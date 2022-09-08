@@ -169,6 +169,8 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 			if errors.Is(err, p2perrors.ErrBlockIrreversibility) {
 				continue
 			}
+
+			return fmt.Errorf("%w: %s", p2perrors.ErrBlockApplication, err.Error())
 		}
 	}
 

@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 
+	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -103,7 +104,10 @@ func (g *GossipToggle) handlepeerDisconnected(ctx context.Context, peer peer.ID)
 func (g *GossipToggle) Start(ctx context.Context) {
 	go func() {
 		if g.opts.AlwaysEnable {
+			log.Infof("Gossip always enabled")
 			g.gossipEnabler.EnableGossip(ctx, true)
+		} else if g.opts.AlwaysDisable {
+			log.Infof("Gossip always disabled")
 		}
 
 		for {

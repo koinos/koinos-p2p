@@ -100,7 +100,7 @@ func (k *TestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain
 			k.LastIrreversible = k.Height - 5
 
 			k.BlockApplicator.HandleForkHeads(&broadcast.ForkHeads{
-				LastIrreversibleBlock: k.getDummyTopologyAtHeight(k.Height),
+				LastIrreversibleBlock: k.getDummyTopologyAtHeight(k.LastIrreversible),
 				Heads:                 []*koinos.BlockTopology{k.getDummyTopologyAtHeight(k.LastIrreversible)},
 			})
 		}
