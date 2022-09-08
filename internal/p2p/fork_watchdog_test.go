@@ -84,4 +84,17 @@ func TestForkWatchdog(t *testing.T) {
 	if err != p2perrors.ErrForkBomb {
 		t.Error("should have detected fork bomb")
 	}
+
+	block.Header.Height = 2
+	err = fw.Add(block)
+	if err != nil {
+		t.Error(err)
+	}
+
+	fw.Purge(2)
+	block.Header.Height = 1
+	err = fw.Add(block)
+	if err != nil {
+		t.Error(err)
+	}
 }

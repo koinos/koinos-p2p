@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
@@ -55,5 +56,21 @@ func (f *ForkWatchdog) Purge(lib uint64) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
 
-	delete(f.forkTracker, lib)
+	heights := make([]uint64, 0, len(f.forkTracker))
+
+	for h := range f.forkTracker {
+		heights = append(heights, h)
+	}
+
+	sort.Slice(heights, func(i, j int) bool {
+		return heights[i] < heights[j]
+	})
+
+	for _, h := range heights {
+		if h <= lib {
+			delete(f.forkTracker, h)
+		} else {
+			break
+		}
+	}
 }
