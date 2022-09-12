@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 	"sync/atomic"
+	"time"
 
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
@@ -164,6 +165,23 @@ func (b *BlockApplicator) removeEntry(ctx context.Context, id string, err error)
 func (b *BlockApplicator) requestApplication(ctx context.Context, block *protocol.Block) {
 	go func() {
 		errChan := make(chan error)
+
+		// If block is more than 4 seconds in the future, do not apply it until
+		// it is less than 4 seconds in the future.
+		applicationThreshold := time.Now().Add(time.Second * 4)
+		blockTime := time.Unix(int64(block.Header.Timestamp), 0)
+
+		if blockTime.After(applicationThreshold) {
+			select {
+			case <-time.NewTimer(applicationThreshold.Sub(blockTime)).C:
+			case <-ctx.Done():
+				b.blockStatusChan <- &blockApplicationStatus{
+					block: block,
+					err:   ctx.Err(),
+				}
+				return
+			}
+		}
 
 		b.applyBlockChan <- &blockApplicationRequest{
 			block:   block,
