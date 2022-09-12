@@ -168,13 +168,15 @@ func (b *BlockApplicator) requestApplication(ctx context.Context, block *protoco
 
 		// If block is more than 4 seconds in the future, do not apply it until
 		// it is less than 4 seconds in the future.
-		applicationThreshold := time.Now().Add(time.Second * 4)
+		applicationThreshold := time.Now().Add(b.opts.DelayThreshold)
 		blockTime := time.Unix(int64(block.Header.Timestamp), 0)
 
 		if blockTime.After(applicationThreshold) {
+			delayCtx, delayCancel := context.WithTimeout(ctx, b.opts.DelayTimeout)
+			defer delayCancel()
 			select {
 			case <-time.NewTimer(applicationThreshold.Sub(blockTime)).C:
-			case <-ctx.Done():
+			case <-delayCtx.Done():
 				b.blockStatusChan <- &blockApplicationStatus{
 					block: block,
 					err:   ctx.Err(),
