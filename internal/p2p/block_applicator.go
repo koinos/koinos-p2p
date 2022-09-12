@@ -163,7 +163,7 @@ func (b *BlockApplicator) removeEntry(ctx context.Context, id string, err error)
 
 func (b *BlockApplicator) requestApplication(ctx context.Context, block *protocol.Block) {
 	go func() {
-		errChan := make(chan error)
+		errChan := make(chan error, 1)
 
 		b.applyBlockChan <- &blockApplicationRequest{
 			block:   block,
