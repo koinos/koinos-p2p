@@ -23,11 +23,18 @@ type blockEntry struct {
 type blockApplicationRequest struct {
 	block   *protocol.Block
 	errChan chan<- error
+	ctx     context.Context
 }
 
 type blockApplicationStatus struct {
 	block *protocol.Block
 	err   error
+}
+
+type transactionApplicatorRequest struct {
+	trx     *protocol.Transaction
+	errChan chan<- error
+	ctx     context.Context
 }
 
 // Applicator manages block application to avoid duplicate application and premature application
@@ -42,11 +49,12 @@ type Applicator struct {
 	blocksByPrevious map[string]map[string]void
 	blocksByHeight   map[uint64]map[string]void
 
-	newBlockChan       chan *blockEntry
-	forkHeadsChan      chan *broadcast.ForkHeads
-	blockBroadcastChan chan *broadcast.BlockAccepted
-	applyBlockChan     chan *blockApplicationRequest
-	blockStatusChan    chan *blockApplicationStatus
+	newBlockChan         chan *blockEntry
+	forkHeadsChan        chan *broadcast.ForkHeads
+	blockBroadcastChan   chan *broadcast.BlockAccepted
+	applyBlockChan       chan *blockApplicationRequest
+	blockStatusChan      chan *blockApplicationStatus
+	applyTransactionChan chan *transactionApplicatorRequest
 
 	opts options.ApplicatorOptions
 }
@@ -92,6 +100,20 @@ func (b *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 
 	case <-ctx.Done():
 		return p2perrors.ErrBlockApplicationTimeout
+	}
+}
+
+func (b *Applicator) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) error {
+	errChan := make(chan error, 1)
+
+	b.applyTransactionChan <- &transactionApplicatorRequest{trx, errChan, ctx}
+
+	select {
+	case err := <-errChan:
+		return err
+
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -188,10 +210,7 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 			}
 		}
 
-		b.applyBlockChan <- &blockApplicationRequest{
-			block:   block,
-			errChan: errChan,
-		}
+		b.applyBlockChan <- &blockApplicationRequest{block, errChan, ctx}
 
 		select {
 		case err := <-errChan:
@@ -272,6 +291,25 @@ func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 	}
 }
 
+func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
+	var err error
+	if request.block.Header.Height <= atomic.LoadUint64(&b.lib) {
+		err = p2perrors.ErrBlockIrreversibility
+	} else {
+		_, err = b.rpc.ApplyBlock(request.ctx, request.block)
+	}
+
+	request.errChan <- err
+	close(request.errChan)
+}
+
+func (b *Applicator) handleApplyTransaction(request *transactionApplicatorRequest) {
+	_, err := b.rpc.ApplyTransaction(request.ctx, request.trx)
+
+	request.errChan <- err
+	close(request.errChan)
+}
+
 func (b *Applicator) Start(ctx context.Context) {
 	go func() {
 		for {
@@ -293,23 +331,23 @@ func (b *Applicator) Start(ctx context.Context) {
 		}
 	}()
 
-	go func() {
-		for {
-			select {
-			case request := <-b.applyBlockChan:
-				var err error
-				if request.block.Header.Height <= atomic.LoadUint64(&b.lib) {
-					err = p2perrors.ErrBlockIrreversibility
-				} else {
-					_, err = b.rpc.ApplyBlock(ctx, request.block)
+	for i := 0; i < b.opts.ApplicationJobs; i++ {
+		go func() {
+			for {
+				select {
+				case request := <-b.applyBlockChan:
+					b.handleApplyBlock(request)
+				default:
+					select {
+					case request := <-b.applyBlockChan:
+						b.handleApplyBlock(request)
+					case request := <-b.applyTransactionChan:
+						b.handleApplyTransaction(request)
+					case <-ctx.Done():
+						return
+					}
 				}
-
-				request.errChan <- err
-				close(request.errChan)
-
-			case <-ctx.Done():
-				return
 			}
-		}
-	}()
+		}()
+	}
 }
