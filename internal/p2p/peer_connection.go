@@ -72,7 +72,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 		defer cancel()
 		peerBlock, err := p.peerRPC.GetAncestorBlockID(rpcContext, peerHeadID, checkpoint.BlockHeight)
 		if err != nil {
-			return err
+			return p2perrors.ErrCheckpointMismatch
 		}
 
 		if !bytes.Equal(peerBlock, checkpoint.BlockID) {

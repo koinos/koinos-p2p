@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 	"sync/atomic"
+	"time"
 
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
@@ -165,6 +166,28 @@ func (b *BlockApplicator) requestApplication(ctx context.Context, block *protoco
 	go func() {
 		errChan := make(chan error)
 
+		// If block is more than 4 seconds in the future, do not apply it until
+		// it is less than 4 seconds in the future.
+		applicationThreshold := time.Now().Add(b.opts.DelayThreshold)
+		blockTime := time.Unix(int64(block.Header.Timestamp/1000), int64(block.Header.Timestamp%1000))
+
+		if blockTime.After(applicationThreshold) {
+			delayCtx, delayCancel := context.WithTimeout(ctx, b.opts.DelayTimeout)
+			defer delayCancel()
+			timerCtx, timerCancel := context.WithTimeout(ctx, blockTime.Sub(applicationThreshold))
+			defer timerCancel()
+
+			select {
+			case <-timerCtx.Done():
+			case <-delayCtx.Done():
+				b.blockStatusChan <- &blockApplicationStatus{
+					block: block,
+					err:   ctx.Err(),
+				}
+				return
+			}
+		}
+
 		b.applyBlockChan <- &blockApplicationRequest{
 			block:   block,
 			errChan: errChan,
@@ -193,7 +216,7 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 		err = p2perrors.ErrBlockIrreversibility
 	} else {
 		err = b.addEntry(entry)
-		if err == nil && entry.block.Header.Height <= b.head.Height+1 {
+		if err == nil && entry.block.Header.Height <= b.head.Height+1 && entry.block.Header.Height > b.lib {
 			b.requestApplication(ctx, entry.block)
 		}
 	}
@@ -227,7 +250,7 @@ func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadc
 	for _, h := range heights {
 		if h <= forkHeads.LastIrreversibleBlock.Height {
 			for id := range b.blocksByHeight[h] {
-				b.removeEntry(ctx, id, p2perrors.ErrUnknownPreviousBlock)
+				b.removeEntry(ctx, id, p2perrors.ErrBlockIrreversibility)
 			}
 		} else {
 			break
