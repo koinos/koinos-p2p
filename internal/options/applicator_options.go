@@ -9,17 +9,17 @@ const (
 	delayTimeoutDefault     = time.Second * 60
 )
 
-// BlockApplicatorOptions are options for BlockApplicator
-type BlockApplicatorOptions struct {
+// ApplicatorOptions are options for Applicator
+type ApplicatorOptions struct {
 	MaxPendingBlocks uint64
 	MaxHeightDelta   uint64
 	DelayThreshold   time.Duration
 	DelayTimeout     time.Duration
 }
 
-// NewBlockApplicatorOptions returns default initialized BlockApplicatorOptions
-func NewBlockApplicatorOptions() *BlockApplicatorOptions {
-	return &BlockApplicatorOptions{
+// NewApplicatorOptions returns default initialized ApplicatorOptions
+func NewApplicatorOptions() *ApplicatorOptions {
+	return &ApplicatorOptions{
 		MaxPendingBlocks: maxPendingBlocksDefault,
 		MaxHeightDelta:   maxHeightDeltaDefault,
 		DelayThreshold:   delayThresholdDefault,

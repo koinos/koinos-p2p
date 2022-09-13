@@ -13,40 +13,40 @@ type Checkpoint struct {
 }
 
 const (
-	localRPCTimeoutDefault        = time.Second * 6
-	blockApplicatorTimeoutDefault = localRPCTimeoutDefault * 2
-	remoteRPCTimeoutDefault       = time.Second * 6
-	blockRequestBatchSizeDefault  = 1000
-	blockRequestTimeoutDefault    = time.Second * 6
-	handshakeRetryTimeDefault     = time.Second * 6
-	syncedBlockDeltaDefault       = 5
-	syncedPingTimeDefault         = time.Second * 10
+	localRPCTimeoutDefault       = time.Second * 6
+	applicatorTimeoutDefault     = localRPCTimeoutDefault * 2
+	remoteRPCTimeoutDefault      = time.Second * 6
+	blockRequestBatchSizeDefault = 1000
+	blockRequestTimeoutDefault   = time.Second * 6
+	handshakeRetryTimeDefault    = time.Second * 6
+	syncedBlockDeltaDefault      = 5
+	syncedPingTimeDefault        = time.Second * 10
 )
 
 // PeerConnectionOptions are options for PeerConnection
 type PeerConnectionOptions struct {
-	Checkpoints            []Checkpoint
-	LocalRPCTimeout        time.Duration
-	BlockApplicatorTimeout time.Duration
-	RemoteRPCTimeout       time.Duration
-	BlockRequestBatchSize  uint64
-	BlockRequestTimeout    time.Duration
-	HandshakeRetryTime     time.Duration
-	SyncedBlockDelta       uint64
-	SyncedPingTime         time.Duration
+	Checkpoints           []Checkpoint
+	LocalRPCTimeout       time.Duration
+	ApplicatorTimeout     time.Duration
+	RemoteRPCTimeout      time.Duration
+	BlockRequestBatchSize uint64
+	BlockRequestTimeout   time.Duration
+	HandshakeRetryTime    time.Duration
+	SyncedBlockDelta      uint64
+	SyncedPingTime        time.Duration
 }
 
 // NewPeerConnectionOptions returns default initialized PeerConnectionOptions
 func NewPeerConnectionOptions() *PeerConnectionOptions {
 	return &PeerConnectionOptions{
-		Checkpoints:            make([]Checkpoint, 0),
-		LocalRPCTimeout:        localRPCTimeoutDefault,
-		BlockApplicatorTimeout: blockApplicatorTimeoutDefault,
-		RemoteRPCTimeout:       remoteRPCTimeoutDefault,
-		BlockRequestBatchSize:  blockRequestBatchSizeDefault,
-		BlockRequestTimeout:    blockRequestTimeoutDefault,
-		HandshakeRetryTime:     handshakeRetryTimeDefault,
-		SyncedBlockDelta:       syncedBlockDeltaDefault,
-		SyncedPingTime:         syncedPingTimeDefault,
+		Checkpoints:           make([]Checkpoint, 0),
+		LocalRPCTimeout:       localRPCTimeoutDefault,
+		ApplicatorTimeout:     applicatorTimeoutDefault,
+		RemoteRPCTimeout:      remoteRPCTimeoutDefault,
+		BlockRequestBatchSize: blockRequestBatchSizeDefault,
+		BlockRequestTimeout:   blockRequestTimeoutDefault,
+		HandshakeRetryTime:    handshakeRetryTimeDefault,
+		SyncedBlockDelta:      syncedBlockDeltaDefault,
+		SyncedPingTime:        syncedPingTimeDefault,
 	}
 }

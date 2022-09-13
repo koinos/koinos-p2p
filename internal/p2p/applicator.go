@@ -30,8 +30,8 @@ type blockApplicationStatus struct {
 	err   error
 }
 
-// BlockApplicator manages block application to avoid duplicate application and premature application
-type BlockApplicator struct {
+// Applicator manages block application to avoid duplicate application and premature application
+type Applicator struct {
 	rpc  rpc.LocalRPC
 	head *koinos.BlockTopology
 	lib  uint64
@@ -48,17 +48,17 @@ type BlockApplicator struct {
 	applyBlockChan     chan *blockApplicationRequest
 	blockStatusChan    chan *blockApplicationStatus
 
-	opts options.BlockApplicatorOptions
+	opts options.ApplicatorOptions
 }
 
-func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.BlockApplicatorOptions) (*BlockApplicator, error) {
+func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.ApplicatorOptions) (*Applicator, error) {
 	headInfo, err := rpc.GetHeadBlock(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &BlockApplicator{
+	return &Applicator{
 		rpc:                rpc,
 		head:               headInfo.HeadTopology,
 		lib:                headInfo.LastIrreversibleBlock,
@@ -76,7 +76,7 @@ func NewBlockApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Bloc
 }
 
 // ApplyBlock will apply the block to the chain at the appropriate time
-func (b *BlockApplicator) ApplyBlock(ctx context.Context, block *protocol.Block) error {
+func (b *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) error {
 	err := b.forkWatchdog.Add(block)
 	if err != nil {
 		return err
@@ -96,16 +96,16 @@ func (b *BlockApplicator) ApplyBlock(ctx context.Context, block *protocol.Block)
 }
 
 // HandleForkHeads handles a fork heads broadcast
-func (b *BlockApplicator) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
+func (b *Applicator) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
 	b.forkHeadsChan <- forkHeads
 }
 
 // HandleBlockBroadcast handles a block broadcast
-func (b *BlockApplicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) {
+func (b *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) {
 	b.blockBroadcastChan <- blockAccept
 }
 
-func (b *BlockApplicator) addEntry(entry *blockEntry) error {
+func (b *Applicator) addEntry(entry *blockEntry) error {
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
@@ -129,7 +129,7 @@ func (b *BlockApplicator) addEntry(entry *blockEntry) error {
 	return nil
 }
 
-func (b *BlockApplicator) removeEntry(ctx context.Context, id string, err error) {
+func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
 	if entry, ok := b.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
 			select {
@@ -162,7 +162,7 @@ func (b *BlockApplicator) removeEntry(ctx context.Context, id string, err error)
 	}
 }
 
-func (b *BlockApplicator) requestApplication(ctx context.Context, block *protocol.Block) {
+func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Block) {
 	go func() {
 		errChan := make(chan error, 1)
 
@@ -205,7 +205,7 @@ func (b *BlockApplicator) requestApplication(ctx context.Context, block *protoco
 	}()
 }
 
-func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
+func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	var err error
 
 	if entry.block.Header.Height > b.head.Height+b.opts.MaxHeightDelta {
@@ -232,7 +232,7 @@ func (b *BlockApplicator) handleNewBlock(ctx context.Context, entry *blockEntry)
 	}
 }
 
-func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
+func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
 	atomic.StoreUint64(&b.lib, forkHeads.LastIrreversibleBlock.Height)
 
 	b.forkWatchdog.Purge(forkHeads.LastIrreversibleBlock.Height)
@@ -258,7 +258,7 @@ func (b *BlockApplicator) handleForkHeads(ctx context.Context, forkHeads *broadc
 	}
 }
 
-func (b *BlockApplicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
+func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
 	if blockAccept.Head {
 		b.head = &koinos.BlockTopology{Id: blockAccept.Block.Id, Height: blockAccept.Block.Header.Height, Previous: blockAccept.Block.Header.Previous}
 	}
@@ -272,7 +272,7 @@ func (b *BlockApplicator) handleBlockBroadcast(ctx context.Context, blockAccept 
 	}
 }
 
-func (b *BlockApplicator) Start(ctx context.Context) {
+func (b *Applicator) Start(ctx context.Context) {
 	go func() {
 		for {
 			select {
