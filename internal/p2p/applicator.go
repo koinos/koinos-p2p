@@ -67,19 +67,20 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Applicato
 	}
 
 	return &Applicator{
-		rpc:                rpc,
-		head:               headInfo.HeadTopology,
-		lib:                headInfo.LastIrreversibleBlock,
-		forkWatchdog:       NewForkWatchdog(),
-		blocksById:         make(map[string]*blockEntry),
-		blocksByPrevious:   make(map[string]map[string]void),
-		blocksByHeight:     make(map[uint64]map[string]void),
-		newBlockChan:       make(chan *blockEntry, 10),
-		forkHeadsChan:      make(chan *broadcast.ForkHeads, 10),
-		blockBroadcastChan: make(chan *broadcast.BlockAccepted, 10),
-		applyBlockChan:     make(chan *blockApplicationRequest, 10),
-		blockStatusChan:    make(chan *blockApplicationStatus, 10),
-		opts:               opts,
+		rpc:                  rpc,
+		head:                 headInfo.HeadTopology,
+		lib:                  headInfo.LastIrreversibleBlock,
+		forkWatchdog:         NewForkWatchdog(),
+		blocksById:           make(map[string]*blockEntry),
+		blocksByPrevious:     make(map[string]map[string]void),
+		blocksByHeight:       make(map[uint64]map[string]void),
+		newBlockChan:         make(chan *blockEntry, 10),
+		forkHeadsChan:        make(chan *broadcast.ForkHeads, 10),
+		blockBroadcastChan:   make(chan *broadcast.BlockAccepted, 10),
+		applyBlockChan:       make(chan *blockApplicationRequest, 10),
+		blockStatusChan:      make(chan *blockApplicationStatus, 10),
+		applyTransactionChan: make(chan *transactionApplicatorRequest, 10),
+		opts:                 opts,
 	}, nil
 }
 
