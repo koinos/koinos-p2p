@@ -146,12 +146,17 @@ func TestBlockApplicator(t *testing.T) {
 
 	blockApplicator.Start(ctx)
 
+	testChan1 := make(chan struct{})
+
 	go func() {
 		err := blockApplicator.ApplyBlock(ctx, block2b)
-		if err != p2perrors.ErrUnknownPreviousBlock {
-			t.Errorf("block2b - ErrUnknownPreviousBlock expected but not returned, was: %v", err)
+		if err != p2perrors.ErrBlockIrreversibility {
+			t.Errorf("block2b - ErrBlockIrreversibility expected but not returned, was: %v", err)
 		}
+		testChan1 <- struct{}{}
 	}()
+
+	testChan2 := make(chan struct{})
 
 	go func() {
 		err := blockApplicator.ApplyBlock(ctx, block3a)
@@ -167,14 +172,22 @@ func TestBlockApplicator(t *testing.T) {
 				Head:  true,
 			},
 		)
+
+		testChan2 <- struct{}{}
 	}()
+
+	testChan3 := make(chan struct{})
 
 	go func() {
 		err := blockApplicator.ApplyBlock(ctx, block3b)
 		if err != p2perrors.ErrBlockApplication {
 			t.Errorf("block3b - ErrBlockApplication expected but not returned, was: %v", err)
 		}
+
+		testChan3 <- struct{}{}
 	}()
+
+	testChan4 := make(chan struct{})
 
 	go func() {
 		err := blockApplicator.ApplyBlock(ctx, block2a)
@@ -200,6 +213,8 @@ func TestBlockApplicator(t *testing.T) {
 				},
 			},
 		)
+
+		testChan4 <- struct{}{}
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -215,6 +230,11 @@ func TestBlockApplicator(t *testing.T) {
 			Head:  true,
 		},
 	)
+
+	<-testChan1
+	<-testChan2
+	<-testChan3
+	<-testChan4
 }
 
 func TestBlockApplicatorLimits(t *testing.T) {
@@ -246,22 +266,30 @@ func TestBlockApplicatorLimits(t *testing.T) {
 
 	blockApplicator.Start(ctx)
 
+	testChans := make([]chan struct{}, 0, 5)
+
 	for i := 0; i < 5; i++ {
-		go func(block *protocol.Block) {
+		testChans = append(testChans, make(chan struct{}))
+		go func(block *protocol.Block, signalChan chan<- struct{}) {
 			err := blockApplicator.ApplyBlock(ctx, block)
-			if err != p2perrors.ErrUnknownPreviousBlock {
-				t.Errorf("block2b - ErrUnknownPreviousBlock expected but not returned, was: %v", err)
+			if err != p2perrors.ErrBlockIrreversibility {
+				t.Errorf("block2b - ErrBlockIrreversibility expected but not returned, was: %v", err)
 			}
-		}(blocks[i])
+			signalChan <- struct{}{}
+		}(blocks[i], testChans[i])
 	}
 
 	time.Sleep(100 * time.Millisecond)
+
+	testChan := make(chan struct{})
 
 	go func() {
 		err = blockApplicator.ApplyBlock(ctx, blocks[5])
 		if err != p2perrors.ErrMaxPendingBlocks {
 			t.Errorf("block2b - ErrMaxPendingBlocks expected but not returned, was: %v", err)
 		}
+
+		testChan <- struct{}{}
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -286,4 +314,9 @@ func TestBlockApplicatorLimits(t *testing.T) {
 	if err != p2perrors.ErrBlockApplication {
 		t.Errorf("block2b - ErrBlockApplication expected but not returned, was: %v", err)
 	}
+
+	for _, ch := range testChans {
+		<-ch
+	}
+	<-testChan
 }
