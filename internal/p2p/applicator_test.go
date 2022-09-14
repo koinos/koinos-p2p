@@ -15,13 +15,13 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
-type blockApplicatorTestRPC struct {
+type applicatorTestRPC struct {
 	blocksToFail     map[string]void
 	unlinkableBlocks map[string]void
 	head             []byte
 }
 
-func (b *blockApplicatorTestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
+func (b *applicatorTestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
 	return &chain.GetHeadInfoResponse{
 		HeadTopology: &koinos.BlockTopology{
 			Id:       []byte{0},
@@ -31,7 +31,7 @@ func (b *blockApplicatorTestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHe
 	}, nil
 }
 
-func (b *blockApplicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain.SubmitBlockResponse, error) {
+func (b *applicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain.SubmitBlockResponse, error) {
 	if _, ok := b.blocksToFail[string(block.Id)]; ok {
 		return nil, p2perrors.ErrBlockApplication
 	}
@@ -43,47 +43,47 @@ func (b *blockApplicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol
 	return &chain.SubmitBlockResponse{}, nil
 }
 
-func (b *blockApplicatorTestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
+func (b *applicatorTestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
 	return &chain.SubmitTransactionResponse{}, nil
 }
 
-func (b *blockApplicatorTestRPC) GetBlocksByHeight(ctx context.Context, blockIDs multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
+func (b *applicatorTestRPC) GetBlocksByHeight(ctx context.Context, blockIDs multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
 	return &block_store.GetBlocksByHeightResponse{}, nil
 }
 
-func (b *blockApplicatorTestRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, error) {
+func (b *applicatorTestRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, error) {
 	return &chain.GetChainIdResponse{}, nil
 }
 
-func (b *blockApplicatorTestRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error) {
+func (b *applicatorTestRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error) {
 	return &chain.GetForkHeadsResponse{}, nil
 }
 
-func (b *blockApplicatorTestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error) {
+func (b *applicatorTestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error) {
 	return &block_store.GetBlocksByIdResponse{}, nil
 }
 
-func (b *blockApplicatorTestRPC) BroadcastGossipStatus(enabled bool) error {
+func (b *applicatorTestRPC) BroadcastGossipStatus(enabled bool) error {
 	return nil
 }
 
-func (b *blockApplicatorTestRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
+func (b *applicatorTestRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (b *blockApplicatorTestRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
+func (b *applicatorTestRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func TestBlockApplicator(t *testing.T) {
+func TestApplicator(t *testing.T) {
 	ctx := context.Background()
-	rpc := blockApplicatorTestRPC{
+	rpc := applicatorTestRPC{
 		blocksToFail:     make(map[string]void),
 		unlinkableBlocks: make(map[string]void),
 		head:             []byte{0x00},
 	}
 
-	blockApplicator, err := NewBlockApplicator(ctx, &rpc, *options.NewBlockApplicatorOptions())
+	applicator, err := NewApplicator(ctx, &rpc, *options.NewApplicatorOptions())
 	if err != nil {
 		t.Error(err)
 	}
@@ -144,12 +144,12 @@ func TestBlockApplicator(t *testing.T) {
 	rpc.blocksToFail[string(block3b.Id)] = void{}
 	rpc.unlinkableBlocks[string(block2b.Id)] = void{}
 
-	blockApplicator.Start(ctx)
+	applicator.Start(ctx)
 
 	testChan1 := make(chan struct{})
 
 	go func() {
-		err := blockApplicator.ApplyBlock(ctx, block2b)
+		err := applicator.ApplyBlock(ctx, block2b)
 		if err != p2perrors.ErrBlockIrreversibility {
 			t.Errorf("block2b - ErrBlockIrreversibility expected but not returned, was: %v", err)
 		}
@@ -159,14 +159,14 @@ func TestBlockApplicator(t *testing.T) {
 	testChan2 := make(chan struct{})
 
 	go func() {
-		err := blockApplicator.ApplyBlock(ctx, block3a)
+		err := applicator.ApplyBlock(ctx, block3a)
 		if err != nil {
 			t.Error(err)
 		}
 
 		rpc.head = block3a.Id
 
-		blockApplicator.HandleBlockBroadcast(
+		applicator.HandleBlockBroadcast(
 			&broadcast.BlockAccepted{
 				Block: block3a,
 				Head:  true,
@@ -179,7 +179,7 @@ func TestBlockApplicator(t *testing.T) {
 	testChan3 := make(chan struct{})
 
 	go func() {
-		err := blockApplicator.ApplyBlock(ctx, block3b)
+		err := applicator.ApplyBlock(ctx, block3b)
 		if err != p2perrors.ErrBlockApplication {
 			t.Errorf("block3b - ErrBlockApplication expected but not returned, was: %v", err)
 		}
@@ -190,21 +190,21 @@ func TestBlockApplicator(t *testing.T) {
 	testChan4 := make(chan struct{})
 
 	go func() {
-		err := blockApplicator.ApplyBlock(ctx, block2a)
+		err := applicator.ApplyBlock(ctx, block2a)
 		if err != nil {
 			t.Error(err)
 		}
 
 		rpc.head = block2a.Id
 
-		blockApplicator.HandleBlockBroadcast(
+		applicator.HandleBlockBroadcast(
 			&broadcast.BlockAccepted{
 				Block: block2a,
 				Head:  true,
 			},
 		)
 
-		blockApplicator.HandleForkHeads(
+		applicator.HandleForkHeads(
 			&broadcast.ForkHeads{
 				LastIrreversibleBlock: &koinos.BlockTopology{
 					Id:       block2a.Id,
@@ -219,12 +219,12 @@ func TestBlockApplicator(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	err = blockApplicator.ApplyBlock(ctx, block1)
+	err = applicator.ApplyBlock(ctx, block1)
 	if err != nil {
 		t.Error(err)
 	}
 	rpc.head = block1.Id
-	blockApplicator.HandleBlockBroadcast(
+	applicator.HandleBlockBroadcast(
 		&broadcast.BlockAccepted{
 			Block: block1,
 			Head:  true,
@@ -237,15 +237,15 @@ func TestBlockApplicator(t *testing.T) {
 	<-testChan4
 }
 
-func TestBlockApplicatorLimits(t *testing.T) {
+func TestApplicatorLimits(t *testing.T) {
 	ctx := context.Background()
-	rpc := blockApplicatorTestRPC{
+	rpc := applicatorTestRPC{
 		blocksToFail:     make(map[string]void),
 		unlinkableBlocks: make(map[string]void),
 		head:             []byte{0x00},
 	}
 
-	blockApplicator, err := NewBlockApplicator(ctx, &rpc, options.BlockApplicatorOptions{MaxPendingBlocks: 5, MaxHeightDelta: 5})
+	applicator, err := NewApplicator(ctx, &rpc, options.ApplicatorOptions{MaxPendingBlocks: 5, MaxHeightDelta: 5})
 	if err != nil {
 		t.Error(err)
 	}
@@ -264,14 +264,14 @@ func TestBlockApplicatorLimits(t *testing.T) {
 		rpc.unlinkableBlocks[string(blocks[i].Id)] = void{}
 	}
 
-	blockApplicator.Start(ctx)
+	applicator.Start(ctx)
 
 	testChans := make([]chan struct{}, 0, 5)
 
 	for i := 0; i < 5; i++ {
 		testChans = append(testChans, make(chan struct{}))
 		go func(block *protocol.Block, signalChan chan<- struct{}) {
-			err := blockApplicator.ApplyBlock(ctx, block)
+			err := applicator.ApplyBlock(ctx, block)
 			if err != p2perrors.ErrBlockIrreversibility {
 				t.Errorf("block2b - ErrBlockIrreversibility expected but not returned, was: %v", err)
 			}
@@ -284,7 +284,7 @@ func TestBlockApplicatorLimits(t *testing.T) {
 	testChan := make(chan struct{})
 
 	go func() {
-		err = blockApplicator.ApplyBlock(ctx, blocks[5])
+		err = applicator.ApplyBlock(ctx, blocks[5])
 		if err != p2perrors.ErrMaxPendingBlocks {
 			t.Errorf("block2b - ErrMaxPendingBlocks expected but not returned, was: %v", err)
 		}
@@ -294,7 +294,7 @@ func TestBlockApplicatorLimits(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	blockApplicator.HandleForkHeads(
+	applicator.HandleForkHeads(
 		&broadcast.ForkHeads{
 			LastIrreversibleBlock: &koinos.BlockTopology{
 				Height: 2,
@@ -310,7 +310,7 @@ func TestBlockApplicatorLimits(t *testing.T) {
 		},
 	}
 
-	err = blockApplicator.ApplyBlock(ctx, futureBlock)
+	err = applicator.ApplyBlock(ctx, futureBlock)
 	if err != p2perrors.ErrBlockApplication {
 		t.Errorf("block2b - ErrBlockApplication expected but not returned, was: %v", err)
 	}
