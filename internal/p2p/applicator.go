@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"errors"
-	"sort"
 	"sync/atomic"
 	"time"
 
@@ -253,27 +252,23 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 }
 
 func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
+	oldLib := b.lib
 	atomic.StoreUint64(&b.lib, forkHeads.LastIrreversibleBlock.Height)
 
 	b.forkWatchdog.Purge(forkHeads.LastIrreversibleBlock.Height)
 
-	heights := make([]uint64, 0, len(b.blocksByHeight))
-
-	for h := range b.blocksByHeight {
-		heights = append(heights, h)
-	}
-
-	sort.Slice(heights, func(i, j int) bool {
-		return heights[i] < heights[j]
-	})
-
-	for _, h := range heights {
-		if h <= forkHeads.LastIrreversibleBlock.Height {
-			for id := range b.blocksByHeight[h] {
+	// Blocks at or before LIB are automatically rejected, so all entries have height
+	// greater than previous LIB. We check every block height greater than old LIB,
+	// up to and including the current LIB and remove their entry.
+	// Some blocks may be on unreachable forks at this point. That's ok.
+	// Because they are not reachable, we will never get a parent block that causes their
+	// application and they'll be cleaned up using this logic once their height passes
+	// beyond irreversibility
+	for h := oldLib + 1; h <= forkHeads.LastIrreversibleBlock.Height; h++ {
+		if ids, ok := b.blocksByHeight[h]; ok {
+			for id := range ids {
 				b.removeEntry(ctx, id, p2perrors.ErrBlockIrreversibility)
 			}
-		} else {
-			break
 		}
 	}
 }
