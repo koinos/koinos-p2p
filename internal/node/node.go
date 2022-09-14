@@ -42,7 +42,7 @@ import (
 type KoinosP2PNode struct {
 	Host              host.Host
 	localRPC          rpc.LocalRPC
-	BlockApplicator   *p2p.BlockApplicator
+	Applicator        *p2p.Applicator
 	Gossip            *p2p.KoinosGossip
 	ConnectionManager *p2p.ConnectionManager
 	PeerErrorHandler  *p2p.PeerErrorHandler
@@ -146,10 +146,10 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.TransactionCache = p2p.NewTransactionCache(transactionCacheDuration)
 
-	node.BlockApplicator, err = p2p.NewBlockApplicator(
+	node.Applicator, err = p2p.NewApplicator(
 		ctx,
 		node.localRPC,
-		config.BlockApplicatorOptions,
+		config.ApplicatorOptions,
 	)
 
 	if err != nil {
@@ -164,7 +164,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.Host.ID(),
 		node,
 		node.TransactionCache,
-		node.BlockApplicator)
+		node.Applicator)
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
@@ -182,7 +182,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.PeerErrorChan,
 		node.GossipVoteChan,
 		node.PeerDisconnectedChan,
-		node.BlockApplicator)
+		node.Applicator)
 
 	node.PeerErrorHandler.SetPeerAddressProvider(node.ConnectionManager)
 
@@ -199,7 +199,7 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	}
 
 	go func() {
-		n.BlockApplicator.HandleBlockBroadcast(blockBroadcast)
+		n.Applicator.HandleBlockBroadcast(blockBroadcast)
 	}()
 
 	// If gossip is enabled publish the block
@@ -241,7 +241,7 @@ func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
 	}
 
 	go func() {
-		n.BlockApplicator.HandleForkHeads(forkHeads)
+		n.Applicator.HandleForkHeads(forkHeads)
 	}()
 
 	n.libValue.Store(forkHeads.LastIrreversibleBlock)
@@ -383,7 +383,7 @@ func (n *KoinosP2PNode) Start(ctx context.Context) {
 	n.PeerErrorHandler.Start(ctx)
 	n.GossipToggle.Start(ctx)
 	n.ConnectionManager.Start(ctx)
-	n.BlockApplicator.Start(ctx)
+	n.Applicator.Start(ctx)
 
 	go func() {
 		for {

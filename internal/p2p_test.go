@@ -32,7 +32,7 @@ type TestRPC struct {
 	BlocksApplied    []*protocol.Block
 	BlocksByID       map[string]*protocol.Block
 	Mutex            sync.Mutex
-	BlockApplicator  *p2p.BlockApplicator
+	Applicator       *p2p.Applicator
 }
 
 // getDummyBlockIDAtHeight() gets the ID of the dummy block at the given height
@@ -99,13 +99,13 @@ func (k *TestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain
 			k.Height = block.Header.Height
 			k.LastIrreversible = k.Height - 5
 
-			k.BlockApplicator.HandleForkHeads(&broadcast.ForkHeads{
+			k.Applicator.HandleForkHeads(&broadcast.ForkHeads{
 				LastIrreversibleBlock: k.getDummyTopologyAtHeight(k.LastIrreversible),
 				Heads:                 []*koinos.BlockTopology{k.getDummyTopologyAtHeight(k.LastIrreversible)},
 			})
 		}
 
-		k.BlockApplicator.HandleBlockBroadcast(&broadcast.BlockAccepted{
+		k.Applicator.HandleBlockBroadcast(&broadcast.BlockAccepted{
 			Block: block,
 			Receipt: &protocol.BlockReceipt{
 				Id:     block.Id,
@@ -230,14 +230,14 @@ func createTestClients(listenRPC *TestRPC, listenConfig *options.Config, sendRPC
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	listenRPC.BlockApplicator = listenNode.BlockApplicator
+	listenRPC.Applicator = listenNode.Applicator
 	listenNode.Start(context.Background())
 
 	sendNode, err := node.NewKoinosP2PNode(context.Background(), "/ip4/127.0.0.1/tcp/8888", sendRPC, nil, "test2", sendConfig)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
-	sendRPC.BlockApplicator = sendNode.BlockApplicator
+	sendRPC.Applicator = sendNode.Applicator
 	sendNode.Start(context.Background())
 
 	return listenNode, sendNode, listenNode.GetAddress(), listenNode.GetAddress(), nil

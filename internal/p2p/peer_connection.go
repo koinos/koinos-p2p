@@ -26,12 +26,12 @@ type PeerConnection struct {
 
 	requestBlockChan chan signalRequestBlocks
 
-	libProvider     LastIrreversibleBlockProvider
-	localRPC        rpc.LocalRPC
-	peerRPC         rpc.RemoteRPC
-	blockApplicator *BlockApplicator
-	peerErrorChan   chan<- PeerError
-	gossipVoteChan  chan<- GossipVote
+	libProvider    LastIrreversibleBlockProvider
+	localRPC       rpc.LocalRPC
+	peerRPC        rpc.RemoteRPC
+	applicator     *Applicator
+	peerErrorChan  chan<- PeerError
+	gossipVoteChan chan<- GossipVote
 }
 
 func (p *PeerConnection) requestBlocks() {
@@ -153,10 +153,10 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 	// Apply blocks to local node
 	for i := range blocks {
-		applicatorContext, cancelApplyBlock := context.WithTimeout(ctx, p.opts.BlockApplicatorTimeout)
+		applicatorContext, cancelApplyBlock := context.WithTimeout(ctx, p.opts.ApplicatorTimeout)
 		defer cancelApplyBlock()
 
-		err = p.blockApplicator.ApplyBlock(applicatorContext, &blocks[i])
+		err = p.applicator.ApplyBlock(applicatorContext, &blocks[i])
 
 		if err != nil {
 			// If it was a local RPC timeout, do not wrap it
@@ -258,7 +258,7 @@ func NewPeerConnection(
 	peerErrorChan chan<- PeerError,
 	gossipVoteChan chan<- GossipVote,
 	opts *options.PeerConnectionOptions,
-	blockApplicator *BlockApplicator) *PeerConnection {
+	applicator *Applicator) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
 		isSynced:         false,
@@ -268,7 +268,7 @@ func NewPeerConnection(
 		libProvider:      libProvider,
 		localRPC:         localRPC,
 		peerRPC:          peerRPC,
-		blockApplicator:  blockApplicator,
+		applicator:       applicator,
 		peerErrorChan:    peerErrorChan,
 		gossipVoteChan:   gossipVoteChan,
 	}

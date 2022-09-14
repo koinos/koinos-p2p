@@ -49,10 +49,10 @@ type ConnectionManager struct {
 	server *gorpc.Server
 	client *gorpc.Client
 
-	localRPC        rpc.LocalRPC
-	peerOpts        *options.PeerConnectionOptions
-	libProvider     LastIrreversibleBlockProvider
-	blockApplicator *BlockApplicator
+	localRPC    rpc.LocalRPC
+	peerOpts    *options.PeerConnectionOptions
+	libProvider LastIrreversibleBlockProvider
+	applicator  *Applicator
 
 	initialPeers   map[peer.ID]peer.AddrInfo
 	connectedPeers map[peer.ID]*peerConnectionContext
@@ -75,7 +75,7 @@ func NewConnectionManager(
 	peerErrorChan chan<- PeerError,
 	gossipVoteChan chan<- GossipVote,
 	signalPeerDisconnectChan chan<- peer.ID,
-	blockApplicator *BlockApplicator) *ConnectionManager {
+	applicator *Applicator) *ConnectionManager {
 
 	connectionManager := ConnectionManager{
 		host:                     host,
@@ -84,7 +84,7 @@ func NewConnectionManager(
 		localRPC:                 localRPC,
 		peerOpts:                 peerOpts,
 		libProvider:              libProvider,
-		blockApplicator:          blockApplicator,
+		applicator:               applicator,
 		initialPeers:             make(map[peer.ID]peer.AddrInfo),
 		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
 		peerConnectedChan:        make(chan connectionMessage),
@@ -176,7 +176,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 				c.peerErrorChan,
 				c.gossipVoteChan,
 				c.peerOpts,
-				c.blockApplicator,
+				c.applicator,
 			),
 			conn:   msg.conn,
 			cancel: cancel,

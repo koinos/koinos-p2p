@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
@@ -155,7 +156,7 @@ type KoinosGossip struct {
 	myPeerID         peer.ID
 	libProvider      LastIrreversibleBlockProvider
 	transactionCache *TransactionCache
-	blockApplicator  *BlockApplicator
+	applicator       *Applicator
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
@@ -167,7 +168,7 @@ func NewKoinosGossip(
 	id peer.ID,
 	libProvider LastIrreversibleBlockProvider,
 	cache *TransactionCache,
-	blockApplicator *BlockApplicator) *KoinosGossip {
+	applicator *Applicator) *KoinosGossip {
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
@@ -180,7 +181,7 @@ func NewKoinosGossip(
 		myPeerID:         id,
 		libProvider:      libProvider,
 		transactionCache: cache,
-		blockApplicator:  blockApplicator,
+		applicator:       applicator,
 	}
 
 	return &kg
@@ -324,7 +325,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 	log.Infof("Pushing gossip block - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
 
 	// TODO: Fix nil argument
-	if err := kg.blockApplicator.ApplyBlock(ctx, block); err != nil {
+	if err := kg.applicator.ApplyBlock(ctx, block); err != nil {
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrBlockApplication, util.BlockString(block), err.Error())
 	}
 
@@ -393,7 +394,10 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 		return nil
 	}
 
-	if _, err := kg.rpc.ApplyTransaction(ctx, transaction); err != nil {
+	trxCtx, trxCancel := context.WithTimeout(ctx, time.Second*10)
+	defer trxCancel()
+
+	if err := kg.applicator.ApplyTransaction(trxCtx, transaction); err != nil {
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrTransactionApplication, util.TransactionString(transaction), err.Error())
 	}
 
