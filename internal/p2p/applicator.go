@@ -127,13 +127,14 @@ func (b *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) 
 	b.blockBroadcastChan <- blockAccept
 }
 
-func (b *Applicator) addEntry(entry *blockEntry) error {
+func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
 
 	if oldEntry, ok := b.blocksById[id]; ok {
 		oldEntry.errChans = append(oldEntry.errChans, entry.errChans...)
+		return
 	} else {
 		b.blocksById[id] = entry
 	}
@@ -148,7 +149,9 @@ func (b *Applicator) addEntry(entry *blockEntry) error {
 	}
 	b.blocksByHeight[height][id] = void{}
 
-	return nil
+	if entry.block.Header.Height <= b.head.Height+1 {
+		b.requestApplication(ctx, entry.block)
+	}
 }
 
 func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
@@ -234,10 +237,7 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	} else if entry.block.Header.Height <= b.lib {
 		err = p2perrors.ErrBlockIrreversibility
 	} else {
-		err = b.addEntry(entry)
-		if err == nil && entry.block.Header.Height <= b.head.Height+1 && entry.block.Header.Height > b.lib {
-			b.requestApplication(ctx, entry.block)
-		}
+		b.addEntry(ctx, entry)
 	}
 
 	if err != nil {
