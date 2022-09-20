@@ -189,7 +189,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 }
 
 func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.block.accept broadcast: %v", base64.StdEncoding.EncodeToString(data))
+	log.Debug("Received koinos.block.accept broadcast")
 	blockBroadcast := &broadcast.BlockAccepted{}
 	err := proto.Unmarshal(data, blockBroadcast)
 	if err != nil {
@@ -212,11 +212,11 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
-	log.Debugf("Received koinos.mempool.accept broadcast: %v", base64.StdEncoding.EncodeToString(data))
+	log.Debug("Received koinos.mempool.accept broadcast")
 	trxBroadcast := &broadcast.MempoolAccepted{}
 	err := proto.Unmarshal(data, trxBroadcast)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", base64.StdEncoding.EncodeToString(data))
+		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", err.Error())
 		return
 	}
 
@@ -231,11 +231,11 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 }
 
 func (n *KoinosP2PNode) handleForkUpdate(topic string, data []byte) {
-	log.Debugf("Received koinos.block.forks broadcast: %v", base64.StdEncoding.EncodeToString(data))
+	log.Debug("Received koinos.block.forks broadcast")
 	forkHeads := &broadcast.ForkHeads{}
 	err := proto.Unmarshal(data, forkHeads)
 	if err != nil {
-		log.Warnf("Unable to parse koinos.block.forks broadcast: %v", base64.StdEncoding.EncodeToString(data))
+		log.Warnf("Unable to parse koinos.block.forks broadcast: %s", err.Error())
 		return
 	}
 
