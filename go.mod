@@ -25,7 +25,6 @@ require (
 	github.com/libp2p/go-libp2p-yamux v0.9.1 // indirect
 	github.com/libp2p/go-tcp-transport v0.5.1 // indirect
 	github.com/miekg/dns v1.1.48 // indirect
-	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-base32 v0.0.4 // indirect
 	github.com/multiformats/go-multiaddr v0.5.0
 	github.com/multiformats/go-multihash v0.1.0
