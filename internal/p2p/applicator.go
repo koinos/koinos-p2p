@@ -2,16 +2,20 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	util "github.com/koinos/koinos-util-golang"
 )
 
 type blockEntry struct {
@@ -85,6 +89,8 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Applicato
 
 // ApplyBlock will apply the block to the chain at the appropriate time
 func (b *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) error {
+	log.Debugf("applying block via applicator - %v", util.BlockString(block))
+
 	err := b.forkWatchdog.Add(block)
 	if err != nil {
 		return err
@@ -104,6 +110,7 @@ func (b *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 }
 
 func (b *Applicator) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) error {
+	log.Debugf("applying tansaction via applicator - %v", util.TransactionString(trx))
 	errChan := make(chan error, 1)
 
 	b.applyTransactionChan <- &transactionApplicatorRequest{trx, errChan, ctx}
@@ -119,15 +126,18 @@ func (b *Applicator) ApplyTransaction(ctx context.Context, trx *protocol.Transac
 
 // HandleForkHeads handles a fork heads broadcast
 func (b *Applicator) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
+	log.Debugf("handling fork heads")
 	b.forkHeadsChan <- forkHeads
 }
 
 // HandleBlockBroadcast handles a block broadcast
 func (b *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) {
+	log.Debugf("handling block broadcast for block - %v", util.BlockString(blockAccept.Block))
 	b.blockBroadcastChan <- blockAccept
 }
 
 func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
+	log.Debugf("adding entry for block - %v", util.BlockString(entry.block))
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
@@ -155,6 +165,8 @@ func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
 }
 
 func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
+	log.Debugf("removing entry for block - ID: 0x%v", hex.EncodeToString([]byte(id)))
+
 	if entry, ok := b.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
 			select {
@@ -189,6 +201,7 @@ func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
 
 func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Block) {
 	go func() {
+		log.Debugf("requesting application of block - %v", util.BlockString(block))
 		errChan := make(chan error, 1)
 
 		// If block is more than 4 seconds in the future, do not apply it until
@@ -231,7 +244,7 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	var err error
 
 	if entry.block.Header.Height > b.head.Height+b.opts.MaxHeightDelta {
-		err = p2perrors.ErrBlockApplication
+		err = fmt.Errorf("%w, block height exeeds applicator height delta", p2perrors.ErrBlockApplication)
 	} else if len(b.blocksById) >= int(b.opts.MaxPendingBlocks) {
 		err = p2perrors.ErrMaxPendingBlocks
 	} else if entry.block.Header.Height <= b.lib {
@@ -288,6 +301,7 @@ func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 }
 
 func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
+	log.Debugf("applying block - %v", util.BlockString(request.block))
 	var err error
 	if request.block.Header.Height <= atomic.LoadUint64(&b.lib) {
 		err = p2perrors.ErrBlockIrreversibility
@@ -300,6 +314,7 @@ func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
 }
 
 func (b *Applicator) handleApplyTransaction(request *transactionApplicatorRequest) {
+	log.Debugf("applying transaction - %v", util.TransactionString(request.trx))
 	_, err := b.rpc.ApplyTransaction(request.ctx, request.trx)
 
 	request.errChan <- err
