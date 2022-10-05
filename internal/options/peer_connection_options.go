@@ -17,7 +17,7 @@ const (
 	applicatorTimeoutDefault     = localRPCTimeoutDefault * 2
 	remoteRPCTimeoutDefault      = time.Second * 6
 	blockRequestBatchSizeDefault = 1000
-	blockRequestTimeoutDefault   = time.Second * 6
+	blockRequestTimeoutDefault   = time.Second * time.Duration(blockRequestBatchSizeDefault * 0.3) // Roughly calculated considering 30Mbps minimum upload speed and 1MB blocks
 	handshakeRetryTimeDefault    = time.Second * 6
 	syncedBlockDeltaDefault      = 5
 	syncedPingTimeDefault        = time.Second * 10
