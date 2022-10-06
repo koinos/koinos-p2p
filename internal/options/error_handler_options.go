@@ -5,8 +5,9 @@ import (
 )
 
 const (
-	errorScoreDecayHalflifeDefault = time.Minute * 10
-	errorScoreThresholdDefault     = 100000
+	errorScoreDecayHalflifeDefault      = time.Minute * 10
+	errorScoreThresholdDefault          = 100000
+	errorScoreReconnectThresholdDefault = errorScoreThresholdDefault / 2
 
 	deserializationErrorScoreDefault         = 5000
 	serializationErrorScoreDefault           = 0
@@ -30,8 +31,9 @@ const (
 
 // PeerErrorHandlerOptions are options for PeerErrorHandler
 type PeerErrorHandlerOptions struct {
-	ErrorScoreDecayHalflife time.Duration
-	ErrorScoreThreshold     uint64
+	ErrorScoreDecayHalflife      time.Duration
+	ErrorScoreThreshold          uint64
+	ErrorScoreReconnectThreshold uint64
 
 	DeserializationErrorScore         uint64
 	SerializationErrorScore           uint64
@@ -58,6 +60,7 @@ func NewPeerErrorHandlerOptions() *PeerErrorHandlerOptions {
 	return &PeerErrorHandlerOptions{
 		ErrorScoreDecayHalflife:           errorScoreDecayHalflifeDefault,
 		ErrorScoreThreshold:               errorScoreThresholdDefault,
+		ErrorScoreReconnectThreshold:      errorScoreReconnectThresholdDefault,
 		DeserializationErrorScore:         deserializationErrorScoreDefault,
 		SerializationErrorScore:           serializationErrorScoreDefault,
 		BlockIrreversibilityErrorScore:    blockIrreversibilityErrorScoreDefault,
