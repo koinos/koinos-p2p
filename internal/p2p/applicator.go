@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -231,7 +230,7 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	var err error
 
 	if entry.block.Header.Height > b.highestBlock+b.opts.MaxHeightDelta {
-		err = fmt.Errorf("%w, block height exeeds applicator height delta", p2perrors.ErrBlockApplication)
+		err = p2perrors.ErrMaxHeight
 	} else if len(b.blocksById) >= int(b.opts.MaxPendingBlocks) {
 		err = p2perrors.ErrMaxPendingBlocks
 	} else if entry.block.Header.Height <= b.lib {

@@ -311,7 +311,7 @@ func TestApplicatorLimits(t *testing.T) {
 	}
 
 	err = applicator.ApplyBlock(ctx, futureBlock)
-	if err != p2perrors.ErrBlockApplication {
+	if err != p2perrors.ErrMaxHeight {
 		t.Errorf("block2b - ErrBlockApplication expected but not returned, was: %v", err)
 	}
 
