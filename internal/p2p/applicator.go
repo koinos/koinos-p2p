@@ -46,6 +46,7 @@ type Applicator struct {
 	blocksById       map[string]*blockEntry
 	blocksByPrevious map[string]map[string]void
 	blocksByHeight   map[uint64]map[string]void
+	pendingBlocks    map[string]void
 
 	newBlockChan         chan *blockEntry
 	forkHeadsChan        chan *broadcast.ForkHeads
@@ -72,6 +73,7 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Applicato
 		blocksById:           make(map[string]*blockEntry),
 		blocksByPrevious:     make(map[string]map[string]void),
 		blocksByHeight:       make(map[uint64]map[string]void),
+		pendingBlocks:        make(map[string]void),
 		newBlockChan:         make(chan *blockEntry, 10),
 		forkHeadsChan:        make(chan *broadcast.ForkHeads, 10),
 		blockBroadcastChan:   make(chan *broadcast.BlockAccepted, 10),
@@ -187,6 +189,13 @@ func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
 }
 
 func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Block) {
+	// If there is already a pending application of the block, return
+	if _, ok := b.pendingBlocks[string(block.Id)]; ok {
+		return
+	}
+
+	b.pendingBlocks[string(block.Id)] = void{}
+
 	go func() {
 		errChan := make(chan error, 1)
 
@@ -224,6 +233,14 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 		case <-ctx.Done():
 		}
 	}()
+}
+
+func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
+	delete(b.pendingBlocks, string(status.block.Id))
+
+	if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
+		b.removeEntry(ctx, string(status.block.Id), status.err)
+	}
 }
 
 func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
@@ -311,9 +328,7 @@ func (b *Applicator) Start(ctx context.Context) {
 		for {
 			select {
 			case status := <-b.blockStatusChan:
-				if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
-					b.removeEntry(ctx, string(status.block.Id), status.err)
-				}
+				b.handleBlockStatus(ctx, status)
 			case entry := <-b.newBlockChan:
 				b.handleNewBlock(ctx, entry)
 			case forkHeads := <-b.forkHeadsChan:
