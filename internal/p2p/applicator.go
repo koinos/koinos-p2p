@@ -236,9 +236,7 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 }
 
 func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
-	if _, ok := b.pendingBlocks[string(status.block.Id)]; ok {
-		delete(b.pendingBlocks, string(status.block.Id))
-	}
+	delete(b.pendingBlocks, string(status.block.Id))
 
 	if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
 		b.removeEntry(ctx, string(status.block.Id), status.err)
