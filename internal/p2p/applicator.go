@@ -9,7 +9,6 @@ import (
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos"
 	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 )
@@ -38,9 +37,9 @@ type transactionApplicatorRequest struct {
 
 // Applicator manages block application to avoid duplicate application and premature application
 type Applicator struct {
-	rpc  rpc.LocalRPC
-	head *koinos.BlockTopology
-	lib  uint64
+	rpc          rpc.LocalRPC
+	highestBlock uint64
+	lib          uint64
 
 	forkWatchdog *ForkWatchdog
 
@@ -67,7 +66,7 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Applicato
 
 	return &Applicator{
 		rpc:                  rpc,
-		head:                 headInfo.HeadTopology,
+		highestBlock:         headInfo.HeadTopology.Height,
 		lib:                  headInfo.LastIrreversibleBlock,
 		forkWatchdog:         NewForkWatchdog(),
 		blocksById:           make(map[string]*blockEntry),
@@ -149,7 +148,7 @@ func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
 	}
 	b.blocksByHeight[height][id] = void{}
 
-	if entry.block.Header.Height <= b.head.Height+1 {
+	if entry.block.Header.Height <= b.highestBlock+1 {
 		b.requestApplication(ctx, entry.block)
 	}
 }
@@ -230,8 +229,8 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	var err error
 
-	if entry.block.Header.Height > b.head.Height+b.opts.MaxHeightDelta {
-		err = p2perrors.ErrBlockApplication
+	if entry.block.Header.Height > b.highestBlock+b.opts.MaxHeightDelta {
+		err = p2perrors.ErrMaxHeight
 	} else if len(b.blocksById) >= int(b.opts.MaxPendingBlocks) {
 		err = p2perrors.ErrMaxPendingBlocks
 	} else if entry.block.Header.Height <= b.lib {
@@ -274,8 +273,9 @@ func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 }
 
 func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
-	if blockAccept.Head {
-		b.head = &koinos.BlockTopology{Id: blockAccept.Block.Id, Height: blockAccept.Block.Header.Height, Previous: blockAccept.Block.Header.Previous}
+	// It is not possible for a block with a new highest height to not be head, so this check is sufficient
+	if blockAccept.Block.Header.Height > b.highestBlock {
+		b.highestBlock = blockAccept.Block.Header.Height
 	}
 
 	if children, ok := b.blocksByPrevious[string(blockAccept.Block.Id)]; ok {

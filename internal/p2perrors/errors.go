@@ -55,4 +55,7 @@ var (
 
 	// ErrForkBomb represents when too many forks from a producer is detected
 	ErrForkBomb = errors.New("unacceptable number of forks on the same parent for a single producer")
+
+	// ErrMaxHeight represents when a block application is requested that has too high of a height
+	ErrMaxHeight = errors.New("block height exceeds max height")
 )

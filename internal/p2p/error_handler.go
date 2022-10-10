@@ -122,6 +122,8 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 		return p.opts.BlockApplicationTimeoutErrorScore
 	case errors.Is(err, p2perrors.ErrMaxPendingBlocks):
 		return p.opts.MaxPendingBlocksErrorScore
+	case errors.Is(err, p2perrors.ErrMaxHeight):
+		return p.opts.MaxHeightErrorScore
 	case errors.Is(err, p2perrors.ErrDeserialization):
 		return p.opts.DeserializationErrorScore
 	case errors.Is(err, p2perrors.ErrBlockIrreversibility):
