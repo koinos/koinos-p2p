@@ -75,7 +75,7 @@ func (p *PeerErrorHandler) CanConnectAddr(ctx context.Context, addr ma.Multiaddr
 func (p *PeerErrorHandler) handleCanConnect(addr ma.Multiaddr) bool {
 	if record, ok := p.errorScores[ma.Split(addr)[0].String()]; ok {
 		p.decayErrorScore(record)
-		return record.score < p.opts.ErrorScoreThreshold
+		return record.score < p.opts.ErrorScoreReconnectThreshold
 	}
 
 	return true

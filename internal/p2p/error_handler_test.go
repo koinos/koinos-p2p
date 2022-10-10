@@ -31,6 +31,7 @@ func TestErrorHandler(t *testing.T) {
 
 	opts.BlockApplicationErrorScore = 10
 	opts.ErrorScoreThreshold = 100
+	opts.ErrorScoreReconnectThreshold = 50
 	opts.ErrorScoreDecayHalflife = time.Second * 2
 
 	peerStore := &testProvider{
@@ -64,7 +65,7 @@ func TestErrorHandler(t *testing.T) {
 		t.Errorf("Expected failed connection to peerA")
 	}
 
-	time.Sleep(time.Millisecond * 500)
+	time.Sleep(time.Millisecond * 2500)
 
 	if !errorHandler.CanConnect(ctx, "peerA") {
 		t.Errorf("Expected successful connection to peerA")
