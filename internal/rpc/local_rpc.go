@@ -18,7 +18,7 @@ type LocalRPC interface {
 	GetChainID(ctx context.Context) (*chain.GetChainIdResponse, error)
 	GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error)
 	GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error)
-	BroadcastGossipStatus(enabled bool) error
+	BroadcastGossipStatus(ctx context.Context, enabled bool) error
 
 	IsConnectedToBlockStore(ctx context.Context) (bool, error)
 	IsConnectedToChain(ctx context.Context) (bool, error)

@@ -123,7 +123,7 @@ func (k *TestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transact
 	return &chain.SubmitTransactionResponse{}, nil
 }
 
-func (k *TestRPC) BroadcastGossipStatus(enabled bool) error {
+func (k *TestRPC) BroadcastGossipStatus(ctx context.Context, enabled bool) error {
 	return nil
 }
 

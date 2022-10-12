@@ -367,14 +367,14 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chainrpc.GetForkHeadsRes
 }
 
 // BroadcastGossipStatus broadcasts the gossip status to the
-func (k *KoinosRPC) BroadcastGossipStatus(enabled bool) error {
+func (k *KoinosRPC) BroadcastGossipStatus(ctx context.Context, enabled bool) error {
 	status := &broadcast.GossipStatus{Enabled: enabled}
 	data, err := canonical.Marshal(status)
 	if err != nil {
 		return fmt.Errorf("%w BroadcastGossipStatus, %s", p2perrors.ErrSerialization, err)
 	}
 
-	return k.mq.Broadcast("application/octet-stream", "koinos.gossip.status", data)
+	return k.mq.Broadcast(ctx, "application/octet-stream", "koinos.gossip.status", data)
 }
 
 // IsConnectedToBlockStore returns if the AMQP connection can currently communicate
