@@ -579,6 +579,8 @@ github.com/koinos/koinos-log-golang v0.0.0-20210621202301-3310a8e5866b h1:pZ9L1E
 github.com/koinos/koinos-log-golang v0.0.0-20210621202301-3310a8e5866b/go.mod h1:/dzAVdA+woySENUYwls8RT+5i87Rm4qoMZ4ctEQI8k0=
 github.com/koinos/koinos-mq-golang v0.0.0-20220907224029-7fc455cb703a h1:tFMtd4xMDxpJVUgeHxA8N/fExZWD1wl8qVTRaVvSh78=
 github.com/koinos/koinos-mq-golang v0.0.0-20220907224029-7fc455cb703a/go.mod h1:EFk+fuUL5ezbaWsGJ2U0KlzbgkflwRv96az8dEVe16I=
+github.com/koinos/koinos-mq-golang v0.0.0-20220923190404-3c5aa9b8945a h1:FRf8LSzLCVwdwFC/csYVpk+fo9SbIb5icZ72Or6caBA=
+github.com/koinos/koinos-mq-golang v0.0.0-20220923190404-3c5aa9b8945a/go.mod h1:N4U4Sja49OQuTKfjql3MEGL+2WtaprX0EbmvU0d3RPk=
 github.com/koinos/koinos-proto-golang v0.3.1-0.20220708180354-16481ac5469c/go.mod h1:ZonOOdmZcuEbRdOqqdfYRA2I4szYHy5aKzUveMWXBog=
 github.com/koinos/koinos-proto-golang v0.4.1-0.20220906183809-4e07dbd482f6 h1:CM/2njHtG58C6xw8Yto49D/8/+MoZ+L7fFk9cX63Pbg=
 github.com/koinos/koinos-proto-golang v0.4.1-0.20220906183809-4e07dbd482f6/go.mod h1:ZonOOdmZcuEbRdOqqdfYRA2I4szYHy5aKzUveMWXBog=
@@ -1173,6 +1175,8 @@ github.com/prometheus/procfs v0.6.0/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1
 github.com/prometheus/procfs v0.7.3 h1:4jVXhlkAyzOScmCkXBTOLRLTz8EeU+eyjrwB/EPq0VU=
 github.com/prometheus/procfs v0.7.3/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1xBZuNvfVA=
 github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40TwIPHuXU=
+github.com/rabbitmq/amqp091-go v1.5.0 h1:VouyHPBu1CrKyJVfteGknGOGCzmOz0zcv/tONLkb7rg=
+github.com/rabbitmq/amqp091-go v1.5.0/go.mod h1:JsV0ofX5f1nwOGafb8L5rBItt9GyhfQfcJj+oyz0dGg=
 github.com/raulk/clock v1.1.0 h1:dpb29+UKMbLqiU/jqIJptgLR1nn23HLgMY0sTCDza5Y=
 github.com/raulk/clock v1.1.0/go.mod h1:3MpVxdZ/ODBQDxbN+kzshf5OSZwPjtMDx6BBXBmOeY0=
 github.com/raulk/go-watchdog v1.2.0 h1:konN75pw2BMmZ+AfuAm5rtFsWcJpKF3m02rKituuXNo=
