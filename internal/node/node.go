@@ -138,6 +138,24 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		ctx, node.Host,
 		pubsub.WithMessageIdFn(generateMessageID),
 		pubsub.WithPeerExchange(true),
+		pubsub.WithPeerScore(
+			&pubsub.PeerScoreParams{
+				AppSpecificScore: func(p peer.ID) float64 {
+					rawScore := float64(node.PeerErrorHandler.GetPeerErrorScore(context.Background(), p))
+					return -rawScore + float64(node.PeerErrorHandler.GetOptions().ErrorScoreReconnectThreshold)
+				},
+				AppSpecificWeight: 0,
+				DecayInterval:     1 * time.Minute,
+				DecayToZero:       0.01,
+			},
+			&pubsub.PeerScoreThresholds{
+				GossipThreshold:             -1,
+				PublishThreshold:            -1,
+				GraylistThreshold:           -1,
+				AcceptPXThreshold:           1,
+				OpportunisticGraftThreshold: .1,
+			},
+		),
 	)
 	if err != nil {
 		return nil, err

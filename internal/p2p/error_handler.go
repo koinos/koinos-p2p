@@ -72,6 +72,21 @@ func (p *PeerErrorHandler) CanConnectAddr(ctx context.Context, addr ma.Multiaddr
 	}
 }
 
+func (p *PeerErrorHandler) GetPeerErrorScore(ctx context.Context, id peer.ID) uint64 {
+	if addr := p.addrProvider.GetPeerAddress(ctx, id); addr != nil {
+		if record, ok := p.errorScores[ma.Split(addr)[0].String()]; ok {
+			p.decayErrorScore(record)
+			return record.score
+		}
+	}
+
+	return 0
+}
+
+func (p *PeerErrorHandler) GetOptions() options.PeerErrorHandlerOptions {
+	return p.opts
+}
+
 func (p *PeerErrorHandler) handleCanConnect(addr ma.Multiaddr) bool {
 	if record, ok := p.errorScores[ma.Split(addr)[0].String()]; ok {
 		p.decayErrorScore(record)
