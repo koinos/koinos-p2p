@@ -144,7 +144,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 					rawScore := float64(node.PeerErrorHandler.GetPeerErrorScore(context.Background(), p))
 					return -rawScore + float64(node.PeerErrorHandler.GetOptions().ErrorScoreReconnectThreshold)
 				},
-				AppSpecificWeight: 0,
+				AppSpecificWeight: 1,
 				DecayInterval:     1 * time.Minute,
 				DecayToZero:       0.01,
 			},
