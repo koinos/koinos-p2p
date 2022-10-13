@@ -36,14 +36,20 @@ type canConnectRequest struct {
 	resultChan chan<- bool
 }
 
+type getPeerErrorScoreRequest struct {
+	addr       ma.Multiaddr
+	resultChan chan<- uint64
+}
+
 // PeerErrorHandler handles PeerErrors and tracks errors over time
 // to determine if a peer should be disconnected from
 type PeerErrorHandler struct {
-	errorScores        map[string]*errorScoreRecord
-	disconnectPeerChan chan<- peer.ID
-	peerErrorChan      <-chan PeerError
-	canConnectChan     chan canConnectRequest
-	addrProvider       PeerAddressProvider
+	errorScores           map[string]*errorScoreRecord
+	disconnectPeerChan    chan<- peer.ID
+	peerErrorChan         <-chan PeerError
+	canConnectChan        chan canConnectRequest
+	getPeerErrorScoreChan chan getPeerErrorScoreRequest
+	addrProvider          PeerAddressProvider
 
 	opts options.PeerErrorHandlerOptions
 }
@@ -57,6 +63,7 @@ func (p *PeerErrorHandler) CanConnect(ctx context.Context, id peer.ID) bool {
 	return true
 }
 
+// CanConnectAddr to peer if the peer's error score is below the error score threshold
 func (p *PeerErrorHandler) CanConnectAddr(ctx context.Context, addr ma.Multiaddr) bool {
 	resultChan := make(chan bool, 1)
 	p.canConnectChan <- canConnectRequest{
@@ -72,11 +79,16 @@ func (p *PeerErrorHandler) CanConnectAddr(ctx context.Context, addr ma.Multiaddr
 	}
 }
 
+// GetPeerErrorScore returns the current error score for a given peer ID
 func (p *PeerErrorHandler) GetPeerErrorScore(ctx context.Context, id peer.ID) uint64 {
+	resultChan := make(chan uint64, 1)
 	if addr := p.addrProvider.GetPeerAddress(ctx, id); addr != nil {
-		if record, ok := p.errorScores[ma.Split(addr)[0].String()]; ok {
-			p.decayErrorScore(record)
-			return record.score
+		p.getPeerErrorScoreChan <- getPeerErrorScoreRequest{addr, resultChan}
+
+		select {
+		case res := <-resultChan:
+			return res
+		case <-ctx.Done():
 		}
 	}
 
@@ -94,6 +106,15 @@ func (p *PeerErrorHandler) handleCanConnect(addr ma.Multiaddr) bool {
 	}
 
 	return true
+}
+
+func (p *PeerErrorHandler) handleGetPeerErrorScore(addr ma.Multiaddr) uint64 {
+	if record, ok := p.errorScores[ma.Split(addr)[0].String()]; ok {
+		p.decayErrorScore(record)
+		return record.score
+	}
+
+	return 0
 }
 
 func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
@@ -216,6 +237,8 @@ func (p *PeerErrorHandler) Start(ctx context.Context) {
 				p.handleError(ctx, perr)
 			case req := <-p.canConnectChan:
 				req.resultChan <- p.handleCanConnect(req.addr)
+			case req := <-p.getPeerErrorScoreChan:
+				req.resultChan <- p.handleGetPeerErrorScore(req.addr)
 
 			case <-ctx.Done():
 				return
@@ -231,11 +254,12 @@ func NewPeerErrorHandler(
 	opts options.PeerErrorHandlerOptions) *PeerErrorHandler {
 
 	return &PeerErrorHandler{
-		errorScores:        make(map[string]*errorScoreRecord),
-		disconnectPeerChan: disconnectPeerChan,
-		peerErrorChan:      peerErrorChan,
-		canConnectChan:     make(chan canConnectRequest),
-		opts:               opts,
+		errorScores:           make(map[string]*errorScoreRecord),
+		disconnectPeerChan:    disconnectPeerChan,
+		peerErrorChan:         peerErrorChan,
+		canConnectChan:        make(chan canConnectRequest, 10),
+		getPeerErrorScoreChan: make(chan getPeerErrorScoreRequest, 10),
+		opts:                  opts,
 	}
 }
 
