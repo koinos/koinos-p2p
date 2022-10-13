@@ -191,8 +191,14 @@ func NewKoinosGossip(
 func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
 	if enable {
 		kg.StartGossip(ctx)
+		if kg.rpc != nil {
+			_ = kg.rpc.BroadcastGossipStatus(ctx, true)
+		}
 	} else {
 		kg.StopGossip()
+		if kg.rpc != nil {
+			_ = kg.rpc.BroadcastGossipStatus(ctx, false)
+		}
 	}
 }
 

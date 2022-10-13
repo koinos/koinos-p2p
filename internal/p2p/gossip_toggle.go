@@ -5,7 +5,6 @@ import (
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
-	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
@@ -20,7 +19,6 @@ type GossipVote struct {
 
 // GossipToggle tracks peer gossip votes and toggles gossip accordingly
 type GossipToggle struct {
-	rpc                  rpc.LocalRPC
 	gossipEnabler        GossipEnableHandler
 	enabled              bool
 	peerVotes            map[peer.ID]bool
@@ -50,15 +48,9 @@ func (g *GossipToggle) checkThresholds(ctx context.Context) {
 	if threshold-g.opts.EnableThreshold >= -epsilon && !g.enabled {
 		g.enabled = true
 		g.gossipEnabler.EnableGossip(ctx, true)
-		if g.rpc != nil {
-			_ = g.rpc.BroadcastGossipStatus(ctx, true)
-		}
 	} else if g.opts.DisableThreshold-threshold >= -epsilon && g.enabled {
 		g.enabled = false
 		g.gossipEnabler.EnableGossip(ctx, false)
-		if g.rpc != nil {
-			_ = g.rpc.BroadcastGossipStatus(ctx, false)
-		}
 	}
 }
 
@@ -125,9 +117,8 @@ func (g *GossipToggle) Start(ctx context.Context) {
 }
 
 // NewGossipToggle creates a GossipToggle
-func NewGossipToggle(gossipEnabler GossipEnableHandler, rpc rpc.LocalRPC, voteChan <-chan GossipVote, peerDisconnectedChan <-chan peer.ID, opts options.GossipToggleOptions) *GossipToggle {
+func NewGossipToggle(gossipEnabler GossipEnableHandler, voteChan <-chan GossipVote, peerDisconnectedChan <-chan peer.ID, opts options.GossipToggleOptions) *GossipToggle {
 	return &GossipToggle{
-		rpc:                  rpc,
 		gossipEnabler:        gossipEnabler,
 		enabled:              false,
 		peerVotes:            make(map[peer.ID]bool),
