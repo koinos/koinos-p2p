@@ -15,17 +15,17 @@ const (
 	blockApplicationErrorScoreDefault        = 5000
 	unknownPreviousBlockErrorScoreDefault    = 5000
 	blockApplicationTimeoutErrorScoreDefault = 5000
-	maxPendingBlocksErrorScoreDefault        = 1000
-	transactionApplicationErrorScoreDefault  = 1000
+	maxPendingBlocksErrorScoreDefault        = 2500
+	transactionApplicationErrorScoreDefault  = 2500
 	chainIDMismatchErrorScoreDefault         = errorScoreThresholdDefault * 2
 	chainNotConnectedErrorScoreDefault       = errorScoreThresholdDefault * 2
 	checkpointMismatchErrorScoreDefault      = errorScoreThresholdDefault * 2
 	localRPCErrorScoreDefault                = 0
-	peerRPCErrorScoreDefault                 = 1000
+	peerRPCErrorScoreDefault                 = 2500
 	localRPCTimeoutErrorScoreDefault         = 0
-	peerRPCTimeoutErrorScoreDefault          = 1000
+	peerRPCTimeoutErrorScoreDefault          = 2500
 	processRequestTimeoutErrorScoreDefault   = 0
-	forkBombErrorScoreDefault                = 200000
+	forkBombErrorScoreDefault                = errorScoreThresholdDefault * 2
 	maxHeightErrorScoreDefault               = blockApplicationErrorScoreDefault
 	unknownErrorScoreDefault                 = blockApplicationErrorScoreDefault
 )
