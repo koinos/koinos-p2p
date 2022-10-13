@@ -21,11 +21,11 @@ const (
 	chainNotConnectedErrorScoreDefault       = errorScoreThresholdDefault * 2
 	checkpointMismatchErrorScoreDefault      = errorScoreThresholdDefault * 2
 	localRPCErrorScoreDefault                = 0
-	peerRPCErrorScoreDefault                 = 1000
+	peerRPCErrorScoreDefault                 = 10000
 	localRPCTimeoutErrorScoreDefault         = 0
-	peerRPCTimeoutErrorScoreDefault          = 1000
+	peerRPCTimeoutErrorScoreDefault          = 10000
 	processRequestTimeoutErrorScoreDefault   = 0
-	forkBombErrorScoreDefault                = 200000
+	forkBombErrorScoreDefault                = errorScoreThresholdDefault * 2
 	maxHeightErrorScoreDefault               = blockApplicationErrorScoreDefault
 	unknownErrorScoreDefault                 = blockApplicationErrorScoreDefault
 )
