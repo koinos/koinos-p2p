@@ -21,7 +21,7 @@ const (
 	chainNotConnectedErrorScoreDefault       = errorScoreThresholdDefault * 2
 	checkpointMismatchErrorScoreDefault      = errorScoreThresholdDefault * 2
 	localRPCErrorScoreDefault                = 0
-	peerRPCErrorScoreDefault                 = 2500
+	peerRPCErrorScoreDefault                 = 10000
 	localRPCTimeoutErrorScoreDefault         = 0
 	peerRPCTimeoutErrorScoreDefault          = 10000
 	processRequestTimeoutErrorScoreDefault   = 0
