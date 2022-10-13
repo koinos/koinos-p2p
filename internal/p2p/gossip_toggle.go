@@ -41,6 +41,9 @@ func (g *GossipToggle) checkThresholds(ctx context.Context) {
 		if g.enabled && !g.opts.AlwaysEnable {
 			g.enabled = false
 			g.gossipEnabler.EnableGossip(ctx, false)
+			if g.rpc != nil {
+				_ = g.rpc.BroadcastGossipStatus(ctx, false)
+			}
 		}
 		return
 	}
