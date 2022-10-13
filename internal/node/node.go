@@ -152,7 +152,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 				GossipThreshold:             -1,
 				PublishThreshold:            -1,
 				GraylistThreshold:           -1,
-				AcceptPXThreshold:           1,
+				AcceptPXThreshold:           5000,
 				OpportunisticGraftThreshold: .1,
 			},
 		),
