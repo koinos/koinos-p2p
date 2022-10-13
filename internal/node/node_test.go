@@ -72,7 +72,7 @@ func (k *TestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multih
 	return nil, nil
 }
 
-func (k *TestRPC) BroadcastGossipStatus(enabled bool) error {
+func (k *TestRPC) BroadcastGossipStatus(ctx context.Context, enabled bool) error {
 	return nil
 }
 

@@ -11,7 +11,7 @@ require (
 	github.com/ipfs/go-log v1.0.5
 	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/koinos/koinos-log-golang v0.0.0-20210621202301-3310a8e5866b
-	github.com/koinos/koinos-mq-golang v0.0.0-20220907224029-7fc455cb703a
+	github.com/koinos/koinos-mq-golang v0.0.0-20220923190404-3c5aa9b8945a
 	github.com/koinos/koinos-proto-golang v0.4.1-0.20220906183809-4e07dbd482f6
 	github.com/koinos/koinos-util-golang v0.0.0-20220831225923-5ba6e0d4e7b9
 	github.com/libp2p/go-libp2p v0.20.3
@@ -31,6 +31,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/prometheus/common v0.33.0 // indirect
 	github.com/spf13/pflag v1.0.5
+	github.com/streadway/amqp v1.0.0 // indirect
 	github.com/stretchr/testify v1.7.0
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect

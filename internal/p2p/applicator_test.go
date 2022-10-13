@@ -63,7 +63,7 @@ func (b *applicatorTestRPC) GetBlocksByID(ctx context.Context, blockIDs []multih
 	return &block_store.GetBlocksByIdResponse{}, nil
 }
 
-func (b *applicatorTestRPC) BroadcastGossipStatus(enabled bool) error {
+func (b *applicatorTestRPC) BroadcastGossipStatus(ctx context.Context, enabled bool) error {
 	return nil
 }
 
