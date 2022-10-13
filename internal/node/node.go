@@ -167,7 +167,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
-		node.localRPC,
 		node.GossipVoteChan,
 		node.PeerDisconnectedChan,
 		config.GossipToggleOptions)
