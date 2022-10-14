@@ -355,6 +355,8 @@ func (n *KoinosP2PNode) GetLastIrreversibleBlock() *koinos.BlockTopology {
 
 // Close closes the node
 func (n *KoinosP2PNode) Close() error {
+	n.Gossip.EnableGossip(context.Background(), false)
+
 	if err := n.Host.Close(); err != nil {
 		return err
 	}
