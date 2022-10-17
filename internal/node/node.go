@@ -51,7 +51,6 @@ type KoinosP2PNode struct {
 
 	PeerErrorChan        chan p2p.PeerError
 	DisconnectPeerChan   chan peer.ID
-	GossipVoteChan       chan p2p.GossipVote
 	PeerDisconnectedChan chan peer.ID
 
 	Options options.NodeOptions
@@ -79,7 +78,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.Options = config.NodeOptions
 	node.PeerErrorChan = make(chan p2p.PeerError)
 	node.DisconnectPeerChan = make(chan peer.ID)
-	node.GossipVoteChan = make(chan p2p.GossipVote)
 	node.PeerDisconnectedChan = make(chan peer.ID)
 
 	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
@@ -185,8 +183,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
-		node.GossipVoteChan,
-		node.PeerDisconnectedChan,
 		config.GossipToggleOptions)
 
 	node.ConnectionManager = p2p.NewConnectionManager(
@@ -196,7 +192,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node,
 		node.Options.InitialPeers,
 		node.PeerErrorChan,
-		node.GossipVoteChan,
 		node.PeerDisconnectedChan,
 		node.Applicator)
 
@@ -213,6 +208,12 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 		log.Warnf("Unable to parse koinos.block.accept broadcast: %v", err.Error())
 		return
 	}
+
+	go func() {
+		if blockBroadcast.Head {
+			n.GossipToggle.UpdateHeadTime(blockBroadcast.Block.Header.Timestamp)
+		}
+	}()
 
 	go func() {
 		n.Applicator.HandleBlockBroadcast(blockBroadcast)
@@ -295,7 +296,7 @@ func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PRespons
 			respVal := rpcp2p.P2PResponse_GetGossipStatus{GetGossipStatus: &result}
 			response.Response = &respVal
 		default:
-			err = errors.New("Unknown request")
+			err = errors.New("unknown request")
 		}
 	} else {
 		err = errors.New("expected request was nil")

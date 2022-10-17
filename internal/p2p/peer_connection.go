@@ -19,19 +19,17 @@ type signalRequestBlocks struct{}
 
 // PeerConnection handles the sync portion of a connection to a peer
 type PeerConnection struct {
-	id         peer.ID
-	isSynced   bool
-	gossipVote bool
-	opts       *options.PeerConnectionOptions
+	id       peer.ID
+	isSynced bool
+	opts     *options.PeerConnectionOptions
 
 	requestBlockChan chan signalRequestBlocks
 
-	libProvider    LastIrreversibleBlockProvider
-	localRPC       rpc.LocalRPC
-	peerRPC        rpc.RemoteRPC
-	applicator     *Applicator
-	peerErrorChan  chan<- PeerError
-	gossipVoteChan chan<- GossipVote
+	libProvider   LastIrreversibleBlockProvider
+	localRPC      rpc.LocalRPC
+	peerRPC       rpc.RemoteRPC
+	applicator    *Applicator
+	peerErrorChan chan<- PeerError
 }
 
 func (p *PeerConnection) requestBlocks() {
@@ -184,16 +182,6 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	return nil
 }
 
-func (p *PeerConnection) reportGossipVote(ctx context.Context) {
-	p.gossipVote = p.isSynced
-	go func() {
-		select {
-		case p.gossipVoteChan <- GossipVote{p.id, p.gossipVote}:
-		case <-ctx.Done():
-		}
-	}()
-}
-
 func (p *PeerConnection) connectionLoop(ctx context.Context) {
 	for {
 		select {
@@ -210,9 +198,6 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 					}
 				}()
 			} else {
-				if p.gossipVote != p.isSynced {
-					p.reportGossipVote(ctx)
-				}
 				if p.isSynced {
 					go time.AfterFunc(p.opts.SyncedPingTime, p.requestBlocks)
 				} else {
@@ -238,7 +223,6 @@ func (p *PeerConnection) Start(ctx context.Context) {
 					}
 				}()
 			} else {
-				p.reportGossipVote(ctx)
 				go p.connectionLoop(ctx)
 				go p.requestBlocks()
 				return
@@ -259,13 +243,11 @@ func NewPeerConnection(
 	localRPC rpc.LocalRPC,
 	peerRPC rpc.RemoteRPC,
 	peerErrorChan chan<- PeerError,
-	gossipVoteChan chan<- GossipVote,
 	opts *options.PeerConnectionOptions,
 	applicator *Applicator) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
 		isSynced:         false,
-		gossipVote:       false,
 		opts:             opts,
 		requestBlockChan: make(chan signalRequestBlocks),
 		libProvider:      libProvider,
@@ -273,6 +255,5 @@ func NewPeerConnection(
 		peerRPC:          peerRPC,
 		applicator:       applicator,
 		peerErrorChan:    peerErrorChan,
-		gossipVoteChan:   gossipVoteChan,
 	}
 }
