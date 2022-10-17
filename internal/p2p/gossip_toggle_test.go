@@ -36,7 +36,7 @@ func TestNormalGossipToggle(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	if !testHandler.enabled {
-		t.Error("gossip should be enabled")
+		t.Error("Gossip should be enabled")
 	}
 
 	timePoint = time.Now().Add(-1 * (time.Second * 65)).UnixMilli()
@@ -46,7 +46,7 @@ func TestNormalGossipToggle(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	if testHandler.enabled {
-		t.Error("gossip should be disabled")
+		t.Error("Gossip should be disabled")
 	}
 
 	timePoint = time.Now().UnixMilli()
@@ -56,7 +56,7 @@ func TestNormalGossipToggle(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	if !testHandler.enabled {
-		t.Error("gossip should be enabled")
+		t.Error("Gossip should be enabled")
 	}
 }
 
@@ -74,6 +74,16 @@ func TestAlwaysEnabledGossipToggle(t *testing.T) {
 	if !testHandler.enabled {
 		t.Errorf("Gossip was incorrectly disabled on startup")
 	}
+
+	timePoint := time.Now().Add(-1 * (time.Second * 65)).UnixMilli()
+
+	gossipToggle.UpdateHeadTime(uint64(timePoint))
+
+	time.Sleep(2 * time.Second)
+
+	if !testHandler.enabled {
+		t.Error("Gossip should be enabled")
+	}
 }
 
 func TestAlwaysDisabledGossipToggle(t *testing.T) {
@@ -89,5 +99,14 @@ func TestAlwaysDisabledGossipToggle(t *testing.T) {
 
 	if testHandler.enabled {
 		t.Errorf("Gossip was incorrectly enabled on startup")
+	}
+
+	timePoint := time.Now().UnixMilli()
+	gossipToggle.UpdateHeadTime(uint64(timePoint))
+
+	time.Sleep(2 * time.Second)
+
+	if testHandler.enabled {
+		t.Error("Gossip should be disabled")
 	}
 }

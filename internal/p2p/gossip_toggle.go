@@ -37,8 +37,12 @@ func (g *GossipToggle) Start(ctx context.Context) {
 		if g.opts.AlwaysEnable {
 			log.Infof("Gossip always enabled")
 			g.gossipEnabler.EnableGossip(ctx, true)
+			g.enabled = true
+			return
 		} else if g.opts.AlwaysDisable {
 			log.Infof("Gossip always disabled")
+			g.enabled = false
+			return
 		}
 
 		ticker := time.NewTicker(time.Second * 1)
