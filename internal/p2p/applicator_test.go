@@ -83,7 +83,7 @@ func TestApplicator(t *testing.T) {
 		head:             []byte{0x00},
 	}
 
-	applicator, err := NewApplicator(ctx, &rpc, *options.NewApplicatorOptions())
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
 	if err != nil {
 		t.Error(err)
 	}
@@ -245,7 +245,7 @@ func TestApplicatorLimits(t *testing.T) {
 		head:             []byte{0x00},
 	}
 
-	applicator, err := NewApplicator(ctx, &rpc, options.ApplicatorOptions{MaxPendingBlocks: 5, MaxHeightDelta: 5})
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(10*time.Minute), options.ApplicatorOptions{MaxPendingBlocks: 5, MaxHeightDelta: 5})
 	if err != nil {
 		t.Error(err)
 	}
