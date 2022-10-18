@@ -13,6 +13,7 @@ import (
 type GossipToggle struct {
 	gossipEnabler GossipEnableHandler
 	enabled       bool
+	enabledMutex  sync.Mutex
 	headTime      uint64
 	headMutex     sync.Mutex
 
@@ -21,6 +22,8 @@ type GossipToggle struct {
 
 // IsEnabled returns whether gossip is enabled
 func (g *GossipToggle) IsEnabled() bool {
+	g.enabledMutex.Lock()
+	defer g.enabledMutex.Unlock()
 	return g.enabled
 }
 
@@ -37,11 +40,15 @@ func (g *GossipToggle) Start(ctx context.Context) {
 		if g.opts.AlwaysEnable {
 			log.Infof("Gossip always enabled")
 			g.gossipEnabler.EnableGossip(ctx, true)
+			g.enabledMutex.Lock()
 			g.enabled = true
+			g.enabledMutex.Unlock()
 			return
 		} else if g.opts.AlwaysDisable {
 			log.Infof("Gossip always disabled")
+			g.enabledMutex.Lock()
 			g.enabled = false
+			g.enabledMutex.Unlock()
 			return
 		}
 
@@ -64,12 +71,16 @@ func (g *GossipToggle) Start(ctx context.Context) {
 			if time.Since(t) <= time.Minute {
 				if !g.enabled {
 					g.gossipEnabler.EnableGossip(ctx, true)
+					g.enabledMutex.Lock()
 					g.enabled = true
+					g.enabledMutex.Unlock()
 				}
 			} else {
 				if g.enabled {
 					g.gossipEnabler.EnableGossip(ctx, false)
+					g.enabledMutex.Lock()
 					g.enabled = false
+					g.enabledMutex.Unlock()
 				}
 			}
 		}

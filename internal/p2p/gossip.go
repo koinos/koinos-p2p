@@ -218,12 +218,15 @@ func (kg *KoinosGossip) StopGossip() {
 
 // PublishTransaction publishes a transaction to the transaction topic
 func (kg *KoinosGossip) PublishTransaction(ctx context.Context, transaction *protocol.Transaction) error {
-	binary, err := canonical.Marshal(transaction)
-	if err != nil {
-		return err
-	}
+	kg.transaction.enableMutex.Lock()
+	defer kg.transaction.enableMutex.Unlock()
 
 	if kg.transaction.Enabled {
+		binary, err := canonical.Marshal(transaction)
+		if err != nil {
+			return err
+		}
+
 		// Add to the transaction cache
 		kg.transactionCache.CheckTransactions(transaction)
 
@@ -236,12 +239,15 @@ func (kg *KoinosGossip) PublishTransaction(ctx context.Context, transaction *pro
 
 // PublishBlock publishes a block to the block topic
 func (kg *KoinosGossip) PublishBlock(ctx context.Context, block *protocol.Block) error {
-	binary, err := canonical.Marshal(block)
-	if err != nil {
-		return err
-	}
+	kg.block.enableMutex.Lock()
+	defer kg.block.enableMutex.Unlock()
 
 	if kg.block.Enabled {
+		binary, err := canonical.Marshal(block)
+		if err != nil {
+			return err
+		}
+
 		// Add to the transaction cache
 		kg.transactionCache.CheckBlock(block)
 

@@ -220,12 +220,10 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	}()
 
 	// If gossip is enabled publish the block
-	if n.GossipToggle.IsEnabled() {
-		err = n.Gossip.PublishBlock(context.Background(), blockBroadcast.Block)
-		if err != nil {
-			log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
-			return
-		}
+	err = n.Gossip.PublishBlock(context.Background(), blockBroadcast.Block)
+	if err != nil {
+		log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
+		return
 	}
 }
 
@@ -239,12 +237,10 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 	}
 
 	// If gossip is enabled publish the transaction
-	if n.GossipToggle.IsEnabled() {
-		err = n.Gossip.PublishTransaction(context.Background(), trxBroadcast.Transaction)
-		if err != nil {
-			log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
-			return
-		}
+	err = n.Gossip.PublishTransaction(context.Background(), trxBroadcast.Transaction)
+	if err != nil {
+		log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
+		return
 	}
 }
 
