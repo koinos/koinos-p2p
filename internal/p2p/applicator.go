@@ -41,6 +41,8 @@ type Applicator struct {
 	highestBlock uint64
 	lib          uint64
 
+	transactionCache *TransactionCache
+
 	forkWatchdog *ForkWatchdog
 
 	blocksById       map[string]*blockEntry
@@ -58,7 +60,7 @@ type Applicator struct {
 	opts options.ApplicatorOptions
 }
 
-func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.ApplicatorOptions) (*Applicator, error) {
+func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCache, opts options.ApplicatorOptions) (*Applicator, error) {
 	headInfo, err := rpc.GetHeadBlock(ctx)
 
 	if err != nil {
@@ -69,6 +71,7 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, opts options.Applicato
 		rpc:                  rpc,
 		highestBlock:         headInfo.HeadTopology.Height,
 		lib:                  headInfo.LastIrreversibleBlock,
+		transactionCache:     cache,
 		forkWatchdog:         NewForkWatchdog(),
 		blocksById:           make(map[string]*blockEntry),
 		blocksByPrevious:     make(map[string]map[string]void),
@@ -290,6 +293,8 @@ func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 }
 
 func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
+	b.transactionCache.CheckBlock(blockAccept.Block)
+
 	// It is not possible for a block with a new highest height to not be head, so this check is sufficient
 	if blockAccept.Block.Header.Height > b.highestBlock {
 		b.highestBlock = blockAccept.Block.Header.Height
@@ -317,7 +322,10 @@ func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
 }
 
 func (b *Applicator) handleApplyTransaction(request *transactionApplicatorRequest) {
-	_, err := b.rpc.ApplyTransaction(request.ctx, request.trx)
+	var err error
+	if b.transactionCache.CheckTransactions(request.trx) == 0 {
+		_, err = b.rpc.ApplyTransaction(request.ctx, request.trx)
+	}
 
 	request.errChan <- err
 	close(request.errChan)
