@@ -50,7 +50,11 @@ func (g *GossipToggle) Start(ctx context.Context) {
 
 		// Check if head block is within wall clock time
 		for {
-			<-ticker.C
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
 
 			g.headMutex.Lock()
 			t := time.Unix(0, int64(g.headTime)*int64(1000000) /* Conversion to nanoseconds */)
