@@ -51,7 +51,6 @@ type KoinosP2PNode struct {
 
 	PeerErrorChan        chan p2p.PeerError
 	DisconnectPeerChan   chan peer.ID
-	GossipVoteChan       chan p2p.GossipVote
 	PeerDisconnectedChan chan peer.ID
 
 	Options options.NodeOptions
@@ -79,7 +78,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.Options = config.NodeOptions
 	node.PeerErrorChan = make(chan p2p.PeerError)
 	node.DisconnectPeerChan = make(chan peer.ID)
-	node.GossipVoteChan = make(chan p2p.GossipVote)
 	node.PeerDisconnectedChan = make(chan peer.ID)
 
 	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
@@ -185,8 +183,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 
 	node.GossipToggle = p2p.NewGossipToggle(
 		node.Gossip,
-		node.GossipVoteChan,
-		node.PeerDisconnectedChan,
 		config.GossipToggleOptions)
 
 	node.ConnectionManager = p2p.NewConnectionManager(
@@ -196,7 +192,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node,
 		node.Options.InitialPeers,
 		node.PeerErrorChan,
-		node.GossipVoteChan,
 		node.PeerDisconnectedChan,
 		node.Applicator)
 
@@ -215,16 +210,20 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 	}
 
 	go func() {
+		if blockBroadcast.Head {
+			n.GossipToggle.UpdateHeadTime(blockBroadcast.Block.Header.Timestamp)
+		}
+	}()
+
+	go func() {
 		n.Applicator.HandleBlockBroadcast(blockBroadcast)
 	}()
 
 	// If gossip is enabled publish the block
-	if n.GossipToggle.IsEnabled() {
-		err = n.Gossip.PublishBlock(context.Background(), blockBroadcast.Block)
-		if err != nil {
-			log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
-			return
-		}
+	err = n.Gossip.PublishBlock(context.Background(), blockBroadcast.Block)
+	if err != nil {
+		log.Warnf("Unable to serialize block from broadcast: %v", err.Error())
+		return
 	}
 }
 
@@ -238,12 +237,10 @@ func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
 	}
 
 	// If gossip is enabled publish the transaction
-	if n.GossipToggle.IsEnabled() {
-		err = n.Gossip.PublishTransaction(context.Background(), trxBroadcast.Transaction)
-		if err != nil {
-			log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
-			return
-		}
+	err = n.Gossip.PublishTransaction(context.Background(), trxBroadcast.Transaction)
+	if err != nil {
+		log.Warnf("Unable to serialize transaction from broadcast: %v", err.Error())
+		return
 	}
 }
 
@@ -295,7 +292,7 @@ func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PRespons
 			respVal := rpcp2p.P2PResponse_GetGossipStatus{GetGossipStatus: &result}
 			response.Response = &respVal
 		default:
-			err = errors.New("Unknown request")
+			err = errors.New("unknown request")
 		}
 	} else {
 		err = errors.New("expected request was nil")

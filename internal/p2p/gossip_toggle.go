@@ -2,129 +2,97 @@ package p2p
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	log "github.com/koinos/koinos-log-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
-	"github.com/libp2p/go-libp2p-core/peer"
 )
 
-// https://stackoverflow.com/questions/22185636/easiest-way-to-get-the-machine-epsilon-in-go
-const epsilon = float64(7.)/3 - float64(4.)/3 - float64(1.)
-
-// GossipVote is a vote from a peer to enable gossip or not
-type GossipVote struct {
-	peer   peer.ID
-	synced bool
-}
-
-// GossipToggle tracks peer gossip votes and toggles gossip accordingly
+// GossipToggle tracks our head block time and toggles gossip accordingly
 type GossipToggle struct {
-	gossipEnabler        GossipEnableHandler
-	enabled              bool
-	peerVotes            map[peer.ID]bool
-	yesCount             int
-	voteChan             <-chan GossipVote
-	peerDisconnectedChan <-chan peer.ID
+	gossipEnabler GossipEnableHandler
+	enabled       bool
+	enabledMutex  sync.Mutex
+	headTime      uint64
+	headMutex     sync.Mutex
 
 	opts options.GossipToggleOptions
 }
 
 // IsEnabled returns whether gossip is enabled
 func (g *GossipToggle) IsEnabled() bool {
+	g.enabledMutex.Lock()
+	defer g.enabledMutex.Unlock()
 	return g.enabled
 }
 
-func (g *GossipToggle) checkThresholds(ctx context.Context) {
-	if len(g.peerVotes) == 0 {
-		if g.enabled && !g.opts.AlwaysEnable {
-			g.enabled = false
-			g.gossipEnabler.EnableGossip(ctx, false)
-		}
-		return
-	}
-
-	threshold := float64(g.yesCount) / float64(len(g.peerVotes))
-
-	if threshold-g.opts.EnableThreshold >= -epsilon && !g.enabled {
-		g.enabled = true
-		g.gossipEnabler.EnableGossip(ctx, true)
-	} else if g.opts.DisableThreshold-threshold >= -epsilon && g.enabled {
-		g.enabled = false
-		g.gossipEnabler.EnableGossip(ctx, false)
-	}
+// UpdateHeadTime updates the head block time
+func (g *GossipToggle) UpdateHeadTime(blockTime uint64) {
+	g.headMutex.Lock()
+	defer g.headMutex.Unlock()
+	g.headTime = blockTime
 }
 
-func (g *GossipToggle) handleVote(ctx context.Context, vote GossipVote) {
-	if g.opts.AlwaysEnable || g.opts.AlwaysDisable {
-		return
-	}
-
-	if synced, ok := g.peerVotes[vote.peer]; ok {
-		switch {
-		case !synced && vote.synced:
-			g.yesCount++
-		case synced && !vote.synced:
-			g.yesCount--
-		}
-	} else {
-		if vote.synced {
-			g.yesCount++
-		}
-	}
-
-	g.peerVotes[vote.peer] = vote.synced
-	g.checkThresholds(ctx)
-}
-
-func (g *GossipToggle) handlepeerDisconnected(ctx context.Context, peer peer.ID) {
-	if g.opts.AlwaysEnable || g.opts.AlwaysDisable {
-		return
-	}
-
-	if vote, ok := g.peerVotes[peer]; ok {
-		if vote {
-			g.yesCount--
-		}
-
-		delete(g.peerVotes, peer)
-
-		g.checkThresholds(ctx)
-	}
-}
-
-// Start begins gossip vote processing
+// Start begins checking if we are in gossip range
 func (g *GossipToggle) Start(ctx context.Context) {
 	go func() {
 		if g.opts.AlwaysEnable {
 			log.Infof("Gossip always enabled")
 			g.gossipEnabler.EnableGossip(ctx, true)
+			g.enabledMutex.Lock()
+			g.enabled = true
+			g.enabledMutex.Unlock()
+			return
 		} else if g.opts.AlwaysDisable {
 			log.Infof("Gossip always disabled")
+			g.enabledMutex.Lock()
+			g.enabled = false
+			g.enabledMutex.Unlock()
+			return
 		}
 
+		ticker := time.NewTicker(time.Second * 1)
+		defer ticker.Stop()
+
+		// Check if head block is within wall clock time
 		for {
 			select {
-			case vote := <-g.voteChan:
-				g.handleVote(ctx, vote)
-			case peer := <-g.peerDisconnectedChan:
-				g.handlepeerDisconnected(ctx, peer)
-
 			case <-ctx.Done():
 				return
+			case <-ticker.C:
+			}
+
+			g.headMutex.Lock()
+			t := time.Unix(0, int64(g.headTime)*int64(1000000) /* Conversion to nanoseconds */)
+			g.headMutex.Unlock()
+
+			// We disable gossip when we are 1 minute behind the current time
+			if time.Since(t) <= time.Minute {
+				if !g.enabled {
+					g.gossipEnabler.EnableGossip(ctx, true)
+					g.enabledMutex.Lock()
+					g.enabled = true
+					g.enabledMutex.Unlock()
+				}
+			} else {
+				if g.enabled {
+					g.gossipEnabler.EnableGossip(ctx, false)
+					g.enabledMutex.Lock()
+					g.enabled = false
+					g.enabledMutex.Unlock()
+				}
 			}
 		}
 	}()
 }
 
 // NewGossipToggle creates a GossipToggle
-func NewGossipToggle(gossipEnabler GossipEnableHandler, voteChan <-chan GossipVote, peerDisconnectedChan <-chan peer.ID, opts options.GossipToggleOptions) *GossipToggle {
+func NewGossipToggle(gossipEnabler GossipEnableHandler, opts options.GossipToggleOptions) *GossipToggle {
 	return &GossipToggle{
-		gossipEnabler:        gossipEnabler,
-		enabled:              false,
-		peerVotes:            make(map[peer.ID]bool),
-		yesCount:             0,
-		voteChan:             voteChan,
-		peerDisconnectedChan: peerDisconnectedChan,
-		opts:                 opts,
+		gossipEnabler: gossipEnabler,
+		enabled:       false,
+		opts:          opts,
+		headTime:      0,
 	}
 }

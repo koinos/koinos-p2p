@@ -60,7 +60,6 @@ type ConnectionManager struct {
 	peerConnectedChan        chan connectionMessage
 	peerDisconnectedChan     chan connectionMessage
 	peerErrorChan            chan<- PeerError
-	gossipVoteChan           chan<- GossipVote
 	signalPeerDisconnectChan chan<- peer.ID
 	peerAddressChan          chan *peerAddressMessage
 }
@@ -73,7 +72,6 @@ func NewConnectionManager(
 	libProvider LastIrreversibleBlockProvider,
 	initialPeers []string,
 	peerErrorChan chan<- PeerError,
-	gossipVoteChan chan<- GossipVote,
 	signalPeerDisconnectChan chan<- peer.ID,
 	applicator *Applicator) *ConnectionManager {
 
@@ -90,7 +88,6 @@ func NewConnectionManager(
 		peerConnectedChan:        make(chan connectionMessage),
 		peerDisconnectedChan:     make(chan connectionMessage),
 		peerErrorChan:            peerErrorChan,
-		gossipVoteChan:           gossipVoteChan,
 		signalPeerDisconnectChan: signalPeerDisconnectChan,
 		peerAddressChan:          make(chan *peerAddressMessage),
 	}
@@ -174,7 +171,6 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 				c.localRPC,
 				rpc.NewPeerRPC(c.client, pid),
 				c.peerErrorChan,
-				c.gossipVoteChan,
 				c.peerOpts,
 				c.applicator,
 			),
