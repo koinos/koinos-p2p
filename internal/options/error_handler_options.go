@@ -16,7 +16,7 @@ const (
 	unknownPreviousBlockErrorScoreDefault    = 5000
 	blockApplicationTimeoutErrorScoreDefault = 5000
 	maxPendingBlocksErrorScoreDefault        = 1000
-	transactionApplicationErrorScoreDefault  = 1000
+	transactionApplicationErrorScoreDefault  = 100
 	chainIDMismatchErrorScoreDefault         = errorScoreThresholdDefault * 2
 	chainNotConnectedErrorScoreDefault       = errorScoreThresholdDefault * 2
 	checkpointMismatchErrorScoreDefault      = errorScoreThresholdDefault * 2

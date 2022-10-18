@@ -164,6 +164,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.Applicator, err = p2p.NewApplicator(
 		ctx,
 		node.localRPC,
+		node.TransactionCache,
 		config.ApplicatorOptions,
 	)
 
@@ -178,7 +179,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node.PeerErrorChan,
 		node.Host.ID(),
 		node,
-		node.TransactionCache,
 		node.Applicator)
 
 	node.GossipToggle = p2p.NewGossipToggle(
