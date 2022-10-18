@@ -58,7 +58,4 @@ var (
 
 	// ErrMaxHeight represents when a block application is requested that has too high of a height
 	ErrMaxHeight = errors.New("block height exceeds max height")
-
-	// ErrDuplicateTransaction represents when a transaction is already in the transaction cache
-	ErrDuplicateTransaction = errors.New("transaction already exists in transaction cache")
 )
