@@ -134,9 +134,10 @@ func readMessages(ctx context.Context, ch chan<- []byte, sub *pubsub.Subscriptio
 		}
 
 		select {
-		case ch <- msg.Data:
 		case <-ctx.Done():
 			return
+		case ch <- msg.Data:
+
 		}
 	}
 }
