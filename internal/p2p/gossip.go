@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/koinos/koinos-log-golang"
@@ -156,6 +157,8 @@ type KoinosGossip struct {
 	myPeerID      peer.ID
 	libProvider   LastIrreversibleBlockProvider
 	applicator    *Applicator
+	recentBlocks  uint32
+	recentTrxs    uint32
 }
 
 // NewKoinosGossip constructs a new koinosGossip instance
@@ -204,6 +207,22 @@ func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 	log.Info("Starting gossip mode")
 	kg.startBlockGossip(ctx)
 	kg.startTransactionGossip(ctx)
+
+	go func() {
+		for {
+			select {
+			case <-time.After(60 * time.Second):
+				numBlocks := atomic.SwapUint32(&kg.recentBlocks, 0)
+				numTrxs := atomic.SwapUint32(&kg.recentTrxs, 0)
+
+				if numBlocks > 0 || numTrxs > 0 {
+					log.Infof("Recently gossiped %v block(s) and %v transaction(s)", numBlocks, numTrxs)
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 
 // StopGossip stops gossiping on both block and transaction topics
@@ -224,7 +243,8 @@ func (kg *KoinosGossip) PublishTransaction(ctx context.Context, transaction *pro
 			return err
 		}
 
-		log.Infof("Publishing transaction - %s", util.TransactionString(transaction))
+		log.Debugf("Publishing transaction - %s", util.TransactionString(transaction))
+		atomic.AddUint32(&kg.recentTrxs, 1)
 		kg.transaction.PublishMessage(context.Background(), binary)
 	}
 
@@ -242,7 +262,8 @@ func (kg *KoinosGossip) PublishBlock(ctx context.Context, block *protocol.Block)
 			return err
 		}
 
-		log.Infof("Publishing block - %s", util.BlockString(block))
+		log.Debugf("Publishing block - %s", util.BlockString(block))
+		atomic.AddUint32(&kg.recentBlocks, 1)
 		kg.block.PublishMessage(context.Background(), binary)
 	}
 
@@ -322,14 +343,14 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 		return p2perrors.ErrBlockIrreversibility
 	}
 
-	log.Infof("Pushing gossip block - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
+	log.Debugf("Pushing gossip block - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
 
 	// TODO: Fix nil argument
 	if err := kg.applicator.ApplyBlock(ctx, block); err != nil {
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrBlockApplication, util.BlockString(block), err.Error())
 	}
 
-	log.Infof("Gossiped block applied - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
+	log.Debugf("Gossiped block applied - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
 	return nil
 }
 
@@ -396,6 +417,6 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrTransactionApplication, util.TransactionString(transaction), err.Error())
 	}
 
-	log.Infof("Gossiped transaction applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
+	log.Debugf("Gossiped transaction applied - %s from peer %v", util.TransactionString(transaction), msg.ReceivedFrom)
 	return nil
 }
