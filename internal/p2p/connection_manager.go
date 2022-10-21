@@ -37,6 +37,10 @@ type peerAddressMessage struct {
 	returnChan chan<- multiaddr.Multiaddr
 }
 
+type numConnectionsMessage struct {
+	returnChan chan<- int
+}
+
 type peerConnectionContext struct {
 	peer   *PeerConnection
 	conn   network.Conn
@@ -57,11 +61,11 @@ type ConnectionManager struct {
 	initialPeers   map[peer.ID]peer.AddrInfo
 	connectedPeers map[peer.ID]*peerConnectionContext
 
-	peerConnectedChan        chan connectionMessage
-	peerDisconnectedChan     chan connectionMessage
-	peerErrorChan            chan<- PeerError
-	signalPeerDisconnectChan chan<- peer.ID
-	peerAddressChan          chan *peerAddressMessage
+	peerConnectedChan    chan connectionMessage
+	peerDisconnectedChan chan connectionMessage
+	peerErrorChan        chan<- PeerError
+	peerAddressChan      chan *peerAddressMessage
+	numConnectionsChan   chan *numConnectionsMessage
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
@@ -72,24 +76,23 @@ func NewConnectionManager(
 	libProvider LastIrreversibleBlockProvider,
 	initialPeers []string,
 	peerErrorChan chan<- PeerError,
-	signalPeerDisconnectChan chan<- peer.ID,
 	applicator *Applicator) *ConnectionManager {
 
 	connectionManager := ConnectionManager{
-		host:                     host,
-		client:                   gorpc.NewClient(host, rpc.PeerRPCID),
-		server:                   gorpc.NewServer(host, rpc.PeerRPCID),
-		localRPC:                 localRPC,
-		peerOpts:                 peerOpts,
-		libProvider:              libProvider,
-		applicator:               applicator,
-		initialPeers:             make(map[peer.ID]peer.AddrInfo),
-		connectedPeers:           make(map[peer.ID]*peerConnectionContext),
-		peerConnectedChan:        make(chan connectionMessage),
-		peerDisconnectedChan:     make(chan connectionMessage),
-		peerErrorChan:            peerErrorChan,
-		signalPeerDisconnectChan: signalPeerDisconnectChan,
-		peerAddressChan:          make(chan *peerAddressMessage),
+		host:                 host,
+		client:               gorpc.NewClient(host, rpc.PeerRPCID),
+		server:               gorpc.NewServer(host, rpc.PeerRPCID),
+		localRPC:             localRPC,
+		peerOpts:             peerOpts,
+		libProvider:          libProvider,
+		applicator:           applicator,
+		initialPeers:         make(map[peer.ID]peer.AddrInfo),
+		connectedPeers:       make(map[peer.ID]*peerConnectionContext),
+		peerConnectedChan:    make(chan connectionMessage),
+		peerDisconnectedChan: make(chan connectionMessage),
+		peerErrorChan:        peerErrorChan,
+		peerAddressChan:      make(chan *peerAddressMessage),
+		numConnectionsChan:   make(chan *numConnectionsMessage),
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -156,6 +159,19 @@ func (c *ConnectionManager) GetPeerAddress(ctx context.Context, id peer.ID) mult
 	}
 }
 
+func (c *ConnectionManager) GetNumConnections(ctx context.Context) int {
+	returnChan := make(chan int)
+
+	c.numConnectionsChan <- &numConnectionsMessage{returnChan}
+
+	select {
+	case num := <-returnChan:
+		return num
+	case <-ctx.Done():
+		return 0
+	}
+}
+
 func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
 	pid := msg.conn.RemotePeer()
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), pid)
@@ -213,13 +229,6 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 			}
 		}()
 	}
-
-	go func() {
-		select {
-		case c.signalPeerDisconnectChan <- pid:
-		case <-ctx.Done():
-		}
-	}()
 }
 
 func (c *ConnectionManager) handleGetPeerAddress(ctx context.Context, msg *peerAddressMessage) {
@@ -230,6 +239,13 @@ func (c *ConnectionManager) handleGetPeerAddress(ctx context.Context, msg *peerA
 
 	select {
 	case msg.returnChan <- addr:
+	case <-ctx.Done():
+	}
+}
+
+func (c *ConnectionManager) handleGetNumConnections(ctx context.Context, msg *numConnectionsMessage) {
+	select {
+	case msg.returnChan <- len(c.connectedPeers):
 	case <-ctx.Done():
 	}
 }
@@ -274,6 +290,8 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleDisconnected(ctx, connMsg)
 		case peerAddrMsg := <-c.peerAddressChan:
 			c.handleGetPeerAddress(ctx, peerAddrMsg)
+		case numConnectionsMsg := <-c.numConnectionsChan:
+			c.handleGetNumConnections(ctx, numConnectionsMsg)
 
 		case <-ctx.Done():
 			for _, conn := range c.connectedPeers {

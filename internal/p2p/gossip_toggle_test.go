@@ -16,14 +16,23 @@ func (t *TestGossipEnableHandler) EnableGossip(ctx context.Context, enabled bool
 	t.enabled = enabled
 }
 
+type TestNumConnectionsProvider struct {
+	connections int
+}
+
+func (t *TestNumConnectionsProvider) GetNumConnections(ctx context.Context) int {
+	return t.connections
+}
+
 func TestNormalGossipToggle(t *testing.T) {
 	ctx := context.Background()
 	testHandler := TestGossipEnableHandler{false}
+	testProvider := TestNumConnectionsProvider{1}
 	opts := options.NewGossipToggleOptions()
 	opts.AlwaysDisable = false
 	opts.AlwaysEnable = false
 
-	gossipToggle := NewGossipToggle(&testHandler, *opts)
+	gossipToggle := NewGossipToggle(&testHandler, &testProvider, *opts)
 	gossipToggle.Start(ctx)
 
 	if testHandler.enabled {
@@ -58,16 +67,24 @@ func TestNormalGossipToggle(t *testing.T) {
 	if !testHandler.enabled {
 		t.Error("Gossip should be enabled")
 	}
+
+	testProvider.connections = 0
+	time.Sleep(2 * time.Second)
+
+	if testHandler.enabled {
+		t.Error("Gossip should not be enabled")
+	}
 }
 
 func TestAlwaysEnabledGossipToggle(t *testing.T) {
 	ctx := context.Background()
 	testHandler := TestGossipEnableHandler{false}
+	testProvider := TestNumConnectionsProvider{1}
 	opts := options.NewGossipToggleOptions()
 	opts.AlwaysDisable = false
 	opts.AlwaysEnable = true
 
-	gossipToggle := NewGossipToggle(&testHandler, *opts)
+	gossipToggle := NewGossipToggle(&testHandler, &testProvider, *opts)
 	gossipToggle.Start(ctx)
 	time.Sleep(time.Millisecond * 5)
 
@@ -89,11 +106,12 @@ func TestAlwaysEnabledGossipToggle(t *testing.T) {
 func TestAlwaysDisabledGossipToggle(t *testing.T) {
 	ctx := context.Background()
 	testHandler := TestGossipEnableHandler{false}
+	testProvider := TestNumConnectionsProvider{1}
 	opts := options.NewGossipToggleOptions()
 	opts.AlwaysDisable = true
 	opts.AlwaysEnable = false
 
-	gossipToggle := NewGossipToggle(&testHandler, *opts)
+	gossipToggle := NewGossipToggle(&testHandler, &testProvider, *opts)
 	gossipToggle.Start(ctx)
 	time.Sleep(time.Millisecond * 5)
 

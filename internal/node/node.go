@@ -49,9 +49,8 @@ type KoinosP2PNode struct {
 	TransactionCache  *p2p.TransactionCache
 	libValue          atomic.Value
 
-	PeerErrorChan        chan p2p.PeerError
-	DisconnectPeerChan   chan peer.ID
-	PeerDisconnectedChan chan peer.ID
+	PeerErrorChan      chan p2p.PeerError
+	DisconnectPeerChan chan peer.ID
 
 	Options options.NodeOptions
 }
@@ -80,7 +79,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.Options = config.NodeOptions
 	node.PeerErrorChan = make(chan p2p.PeerError)
 	node.DisconnectPeerChan = make(chan peer.ID)
-	node.PeerDisconnectedChan = make(chan peer.ID)
 
 	node.PeerErrorHandler = p2p.NewPeerErrorHandler(
 		node.DisconnectPeerChan,
@@ -185,10 +183,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node,
 		node.Applicator)
 
-	node.GossipToggle = p2p.NewGossipToggle(
-		node.Gossip,
-		config.GossipToggleOptions)
-
 	node.ConnectionManager = p2p.NewConnectionManager(
 		node.Host,
 		node.localRPC,
@@ -196,8 +190,12 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		node,
 		node.Options.InitialPeers,
 		node.PeerErrorChan,
-		node.PeerDisconnectedChan,
 		node.Applicator)
+
+	node.GossipToggle = p2p.NewGossipToggle(
+		node.Gossip,
+		node.ConnectionManager,
+		config.GossipToggleOptions)
 
 	node.PeerErrorHandler.SetPeerAddressProvider(node.ConnectionManager)
 
