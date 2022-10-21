@@ -9,13 +9,19 @@ import (
 	"github.com/koinos/koinos-p2p/internal/options"
 )
 
+// NumConnectionsProvider returns the current number of peer connections
+type NumConnectionsProvider interface {
+	GetNumConnections(ctx context.Context) int
+}
+
 // GossipToggle tracks our head block time and toggles gossip accordingly
 type GossipToggle struct {
-	gossipEnabler GossipEnableHandler
-	enabled       bool
-	enabledMutex  sync.Mutex
-	headTime      uint64
-	headMutex     sync.Mutex
+	gossipEnabler    GossipEnableHandler
+	enabled          bool
+	enabledMutex     sync.Mutex
+	headTime         uint64
+	headMutex        sync.Mutex
+	numConnsProvider NumConnectionsProvider
 
 	opts options.GossipToggleOptions
 }
@@ -63,24 +69,33 @@ func (g *GossipToggle) Start(ctx context.Context) {
 			case <-ticker.C:
 			}
 
-			g.headMutex.Lock()
-			t := time.Unix(0, int64(g.headTime)*int64(1000000) /* Conversion to nanoseconds */)
-			g.headMutex.Unlock()
-
-			// We disable gossip when we are 1 minute behind the current time
-			if time.Since(t) <= time.Minute {
-				if !g.enabled {
-					g.gossipEnabler.EnableGossip(ctx, true)
-					g.enabledMutex.Lock()
-					g.enabled = true
-					g.enabledMutex.Unlock()
-				}
-			} else {
+			if g.numConnsProvider.GetNumConnections(ctx) == 0 {
 				if g.enabled {
 					g.gossipEnabler.EnableGossip(ctx, false)
 					g.enabledMutex.Lock()
 					g.enabled = false
 					g.enabledMutex.Unlock()
+				}
+			} else {
+				g.headMutex.Lock()
+				t := time.Unix(0, int64(g.headTime)*int64(1000000) /* Conversion to nanoseconds */)
+				g.headMutex.Unlock()
+
+				// We disable gossip when we are 30 seconds behind the current time
+				if time.Since(t) <= 30*time.Second {
+					if !g.enabled {
+						g.gossipEnabler.EnableGossip(ctx, true)
+						g.enabledMutex.Lock()
+						g.enabled = true
+						g.enabledMutex.Unlock()
+					}
+				} else {
+					if g.enabled {
+						g.gossipEnabler.EnableGossip(ctx, false)
+						g.enabledMutex.Lock()
+						g.enabled = false
+						g.enabledMutex.Unlock()
+					}
 				}
 			}
 		}
@@ -88,11 +103,12 @@ func (g *GossipToggle) Start(ctx context.Context) {
 }
 
 // NewGossipToggle creates a GossipToggle
-func NewGossipToggle(gossipEnabler GossipEnableHandler, opts options.GossipToggleOptions) *GossipToggle {
+func NewGossipToggle(gossipEnabler GossipEnableHandler, numConnsProvider NumConnectionsProvider, opts options.GossipToggleOptions) *GossipToggle {
 	return &GossipToggle{
-		gossipEnabler: gossipEnabler,
-		enabled:       false,
-		opts:          opts,
-		headTime:      0,
+		gossipEnabler:    gossipEnabler,
+		enabled:          false,
+		opts:             opts,
+		headTime:         0,
+		numConnsProvider: numConnsProvider,
 	}
 }
