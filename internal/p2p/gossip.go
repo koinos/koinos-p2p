@@ -85,7 +85,7 @@ func (gm *GossipManager) Start(ctx context.Context, ch chan<- []byte) error {
 	subCtx, cancel := context.WithCancel(ctx)
 	gm.cancel = cancel
 
-	go gm.readMessages(subCtx, ch)
+	go readMessages(subCtx, ch, gm.sub, gm.topicName)
 
 	gm.Enabled = true
 
@@ -118,25 +118,26 @@ func (gm *GossipManager) PublishMessage(ctx context.Context, bytes []byte) bool 
 	return true
 }
 
-func (gm *GossipManager) readMessages(ctx context.Context, ch chan<- []byte) {
+func readMessages(ctx context.Context, ch chan<- []byte, sub *pubsub.Subscription, topicName string) {
 	//
-	// The purpose of this function is to move messages from each topic's gm.sub.Next()
+	// The purpose of this function is to move messages from each topic's sub.Next()
 	// and send them to a single channel.
 	//
 	// Note that libp2p has already used the callback passed to RegisterValidator()
 	// to validate blocks / transactions.
 	//
 	for {
-		msg, err := gm.sub.Next(ctx)
+		msg, err := sub.Next(ctx)
 		if err != nil && !errors.Is(context.DeadlineExceeded, err) {
-			log.Warnf("Error getting message for topic %s: %s", gm.topicName, err)
+			log.Warnf("Error getting message for topic %s: %s", topicName, err)
 			return
 		}
 
 		select {
-		case ch <- msg.Data:
 		case <-ctx.Done():
 			return
+		case ch <- msg.Data:
+
 		}
 	}
 }
