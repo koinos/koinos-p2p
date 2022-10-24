@@ -118,7 +118,7 @@ func main() {
 	}
 
 	client := koinosmq.NewClient(*amqp, koinosmq.ExponentialBackoff)
-	requestHandler := koinosmq.NewRequestHandler(*amqp, uint(*jobs))
+	requestHandler := koinosmq.NewRequestHandler(*amqp, uint(*jobs), koinosmq.ExponentialBackoff)
 
 	config := options.NewConfig()
 
