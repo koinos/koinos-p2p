@@ -418,10 +418,7 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 		return fmt.Errorf("%w, gossiped transaction missing id", p2perrors.ErrDeserialization)
 	}
 
-	trxCtx, trxCancel := context.WithTimeout(ctx, time.Second*10)
-	defer trxCancel()
-
-	if err := kg.applicator.ApplyTransaction(trxCtx, transaction); err != nil {
+	if err := kg.applicator.ApplyTransaction(ctx, transaction); err != nil {
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrTransactionApplication, util.TransactionString(transaction), err.Error())
 	}
 
