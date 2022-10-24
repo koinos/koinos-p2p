@@ -158,6 +158,7 @@ type KoinosGossip struct {
 	myPeerID      peer.ID
 	libProvider   LastIrreversibleBlockProvider
 	applicator    *Applicator
+	reportCancel  *context.CancelFunc
 	recentBlocks  uint32
 	recentTrxs    uint32
 }
@@ -208,6 +209,8 @@ func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 	log.Info("Starting gossip mode")
 	kg.startBlockGossip(ctx)
 	kg.startTransactionGossip(ctx)
+	reportCtx, reportCancel := context.WithCancel(ctx)
+	kg.reportCancel = &reportCancel
 
 	go func() {
 		for {
@@ -219,7 +222,7 @@ func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 				if numBlocks > 0 || numTrxs > 0 {
 					log.Infof("Recently gossiped %v block(s) and %v transaction(s)", numBlocks, numTrxs)
 				}
-			case <-ctx.Done():
+			case <-reportCtx.Done():
 				return
 			}
 		}
@@ -231,6 +234,10 @@ func (kg *KoinosGossip) StopGossip() {
 	log.Info("Stopping gossip mode")
 	kg.block.Stop()
 	kg.transaction.Stop()
+	if kg.reportCancel != nil {
+		(*kg.reportCancel)()
+		kg.reportCancel = nil
+	}
 }
 
 // PublishTransaction publishes a transaction to the transaction topic
