@@ -58,4 +58,7 @@ var (
 
 	// ErrMaxHeight represents when a block application is requested that has too high of a height
 	ErrMaxHeight = errors.New("block height exceeds max height")
+
+	// ErrBlockState represents when chain cannot create a new block state node
+	ErrBlockState = errors.New("could not create new block state node")
 )
