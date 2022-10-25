@@ -82,7 +82,7 @@ func (g *GossipToggle) Start(ctx context.Context) {
 				g.headMutex.Unlock()
 
 				// We disable gossip when we are 30 seconds behind the current time
-				if time.Since(t) <= 30*time.Second {
+				if time.Since(t) <= 45*time.Second {
 					if !g.enabled {
 						g.gossipEnabler.EnableGossip(ctx, true)
 						g.enabledMutex.Lock()

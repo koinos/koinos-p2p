@@ -121,12 +121,15 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 		response = t.SubmitBlock
 	case *chainrpc.ChainResponse_Error:
 		eData := chainError{}
-		if jsonErr := json.Unmarshal([]byte(responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Data), &eData); jsonErr != nil {
+		if jsonErr := json.Unmarshal([]byte(responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Data), &eData); jsonErr == nil {
 			if eData.Code == int64(chain.ErrorCode_unknown_previous_block) {
 				err = p2perrors.ErrUnknownPreviousBlock
 				break
 			} else if eData.Code == int64(chain.ErrorCode_pre_irreversibility_block) {
 				err = p2perrors.ErrBlockIrreversibility
+				break
+			} else if eData.Code == int64(chain.ErrorCode_block_state_error) {
+				err = p2perrors.ErrBlockState
 				break
 			}
 		}

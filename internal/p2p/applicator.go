@@ -241,7 +241,9 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
 	delete(b.pendingBlocks, string(status.block.Id))
 
-	if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
+	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
+		b.requestApplication(ctx, status.block)
+	} else if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
 		b.removeEntry(ctx, string(status.block.Id), status.err)
 	}
 }
@@ -270,11 +272,25 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	}
 }
 
+func (b *Applicator) checkChildren(ctx context.Context, blockID string) {
+	if children, ok := b.blocksByPrevious[string(blockID)]; ok {
+		for id := range children {
+			if entry, ok := b.blocksById[id]; ok {
+				b.requestApplication(ctx, entry.block)
+			}
+		}
+	}
+}
+
 func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
 	oldLib := b.lib
 	atomic.StoreUint64(&b.lib, forkHeads.LastIrreversibleBlock.Height)
 
 	b.forkWatchdog.Purge(forkHeads.LastIrreversibleBlock.Height)
+
+	for _, head := range forkHeads.Heads {
+		b.checkChildren(ctx, string(head.Id))
+	}
 
 	// Blocks at or before LIB are automatically rejected, so all entries have height
 	// greater than previous LIB. We check every block height greater than old LIB,
@@ -300,13 +316,7 @@ func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 		b.highestBlock = blockAccept.Block.Header.Height
 	}
 
-	if children, ok := b.blocksByPrevious[string(blockAccept.Block.Id)]; ok {
-		for id := range children {
-			if entry, ok := b.blocksById[id]; ok {
-				b.requestApplication(ctx, entry.block)
-			}
-		}
-	}
+	b.checkChildren(ctx, string(blockAccept.Block.Id))
 }
 
 func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
