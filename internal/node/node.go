@@ -56,12 +56,12 @@ type KoinosP2PNode struct {
 }
 
 const (
-	transactionCacheDuration = 10 * time.Minute
-	pubsubTimeCacheDuration  = 2 * time.Minute
+	transactionCacheDuration = 5 * time.Minute
+	pubsubTimeCacheDuration  = 30 * time.Second
 	gossipHeartbeatInterval  = 1 * time.Second
 	gossipIWantFollowupTime  = 3 * time.Second
-	gossipHistoryLength      = 60
-	gossipHistoryGossip      = 30
+	gossipHistoryLength      = 5
+	gossipHistoryGossip      = 3
 )
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress

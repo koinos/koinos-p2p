@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	errorScoreDecayHalflifeDefault      = time.Minute * 10
+	errorScoreDecayHalflifeDefault      = time.Minute * 30
 	errorScoreThresholdDefault          = 100000
 	errorScoreReconnectThresholdDefault = errorScoreThresholdDefault / 2
 
@@ -13,17 +13,17 @@ const (
 	serializationErrorScoreDefault           = 0
 	blockIrreversibilityErrorScoreDefault    = 100
 	blockApplicationErrorScoreDefault        = 5000
-	unknownPreviousBlockErrorScoreDefault    = 5000
-	blockApplicationTimeoutErrorScoreDefault = 5000
+	unknownPreviousBlockErrorScoreDefault    = 2500
+	blockApplicationTimeoutErrorScoreDefault = 2500
 	maxPendingBlocksErrorScoreDefault        = 1000
 	transactionApplicationErrorScoreDefault  = 100
 	chainIDMismatchErrorScoreDefault         = errorScoreThresholdDefault * 2
 	chainNotConnectedErrorScoreDefault       = errorScoreThresholdDefault * 2
 	checkpointMismatchErrorScoreDefault      = errorScoreThresholdDefault * 2
 	localRPCErrorScoreDefault                = 0
-	peerRPCErrorScoreDefault                 = 10000
+	peerRPCErrorScoreDefault                 = 5000
 	localRPCTimeoutErrorScoreDefault         = 0
-	peerRPCTimeoutErrorScoreDefault          = 10000
+	peerRPCTimeoutErrorScoreDefault          = 3500
 	processRequestTimeoutErrorScoreDefault   = 0
 	forkBombErrorScoreDefault                = errorScoreThresholdDefault * 2
 	maxHeightErrorScoreDefault               = blockApplicationErrorScoreDefault
