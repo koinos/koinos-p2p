@@ -26,6 +26,10 @@ const (
 	BlockStoreRPC = "block_store"
 )
 
+const (
+	maxMessageSize = 536870912
+)
+
 type chainError struct {
 	Code int64 `json:"code"`
 }
@@ -42,6 +46,13 @@ func NewKoinosRPC(mq *koinosmq.Client) *KoinosRPC {
 	return rpc
 }
 
+func checkMessageSize(b []byte) error {
+	if len(b) > maxMessageSize {
+		return fmt.Errorf("message exceeds maximum size %v", maxMessageSize)
+	}
+	return nil
+}
+
 // GetHeadBlock rpc call
 func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chainrpc.GetHeadInfoResponse, error) {
 	args := &chainrpc.ChainRequest{
@@ -53,6 +64,11 @@ func (k *KoinosRPC) GetHeadBlock(ctx context.Context) (*chainrpc.GetHeadInfoResp
 	data, err := proto.Marshal(args)
 	if err != nil {
 		return nil, fmt.Errorf("%w GetHeadBlock, %s", p2perrors.ErrSerialization, err)
+	}
+
+	err = checkMessageSize(data)
+	if err != nil {
+		return nil, err
 	}
 
 	var responseBytes []byte
@@ -97,6 +113,11 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 	data, err := proto.Marshal(args)
 	if err != nil {
 		return nil, fmt.Errorf("%w ApplyBlock, %s", p2perrors.ErrSerialization, err)
+	}
+
+	err = checkMessageSize(data)
+	if err != nil {
+		return nil, err
 	}
 
 	var responseBytes []byte
@@ -157,6 +178,11 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transact
 		return nil, fmt.Errorf("%w ApplyTransaction, %s", p2perrors.ErrSerialization, err)
 	}
 
+	err = checkMessageSize(data)
+	if err != nil {
+		return nil, err
+	}
+
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPC(ctx, "application/octet-stream", ChainRPC, data)
 	if err != nil {
@@ -208,6 +234,11 @@ func (k *KoinosRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Mult
 		return nil, fmt.Errorf("%w GetBlocksByID, %s", p2perrors.ErrSerialization, err)
 	}
 
+	err = checkMessageSize(data)
+	if err != nil {
+		return nil, err
+	}
+
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPC(ctx, "application/octet-stream", BlockStoreRPC, data)
 	if err != nil {
@@ -256,6 +287,11 @@ func (k *KoinosRPC) GetBlocksByHeight(ctx context.Context, blockID multihash.Mul
 		return nil, fmt.Errorf("%w GetBlocksByHeight, %s", p2perrors.ErrSerialization, err)
 	}
 
+	err = checkMessageSize(data)
+	if err != nil {
+		return nil, err
+	}
+
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPC(ctx, "application/octet-stream", BlockStoreRPC, data)
 	if err != nil {
@@ -298,6 +334,11 @@ func (k *KoinosRPC) GetChainID(ctx context.Context) (*chainrpc.GetChainIdRespons
 		return nil, fmt.Errorf("%w GetChainID, %s", p2perrors.ErrSerialization, err)
 	}
 
+	err = checkMessageSize(data)
+	if err != nil {
+		return nil, err
+	}
+
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPC(ctx, "application/octet-stream", ChainRPC, data)
 	if err != nil {
@@ -338,6 +379,11 @@ func (k *KoinosRPC) GetForkHeads(ctx context.Context) (*chainrpc.GetForkHeadsRes
 	data, err := proto.Marshal(args)
 	if err != nil {
 		return nil, fmt.Errorf("%w GetForkHeads, %s", p2perrors.ErrSerialization, err)
+	}
+
+	err = checkMessageSize(data)
+	if err != nil {
+		return nil, err
 	}
 
 	var responseBytes []byte
@@ -394,6 +440,11 @@ func (k *KoinosRPC) IsConnectedToBlockStore(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("%w IsConnectedToBlockStore, %s", p2perrors.ErrSerialization, err)
 	}
 
+	err = checkMessageSize(data)
+	if err != nil {
+		return false, err
+	}
+
 	var responseBytes []byte
 	responseBytes, err = k.mq.RPC(ctx, "application/octet-stream", BlockStoreRPC, data)
 	if err != nil {
@@ -424,6 +475,11 @@ func (k *KoinosRPC) IsConnectedToChain(ctx context.Context) (bool, error) {
 	data, err := proto.Marshal(args)
 	if err != nil {
 		return false, fmt.Errorf("%w IsConnectedToChain, %s", p2perrors.ErrSerialization, err)
+	}
+
+	err = checkMessageSize(data)
+	if err != nil {
+		return false, err
 	}
 
 	var responseBytes []byte
