@@ -38,6 +38,7 @@ const (
 	logLevelOption      = "log-level"
 	instanceIDOption    = "instance-id"
 	jobsOption          = "jobs"
+	versionOption       = "version"
 )
 
 const (
@@ -56,6 +57,15 @@ const (
 	logDir  = "logs"
 )
 
+// Version display values
+const (
+	DisplayAppName = "Koinos P2P"
+	Version        = "v1.0.0"
+)
+
+// Gets filled in by the linker
+var Commit string
+
 func main() {
 	// Seed the random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -69,18 +79,24 @@ func main() {
 
 	baseDirPtr := flag.StringP(baseDirOption, "d", baseDirDefault, "Koinos base directory")
 	amqp := flag.StringP(amqpOption, "a", "", "AMQP server URL")
-	addr := flag.StringP(listenOption, "l", "", "The multiaddress on which the node will listen")
+	addr := flag.StringP(listenOption, "L", "", "The multiaddress on which the node will listen")
 	seed := flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
 	peerAddresses := flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
 	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
 	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Block checkpoint in the form height:blockid (may specify multiple times)")
 	disableGossip := flag.BoolP(disableGossipOption, "g", disableGossipDefault, "Disable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode to always be enabled")
-	logLevel := flag.StringP(logLevelOption, "v", "", "The log filtering level (debug, info, warn, error)")
+	logLevel := flag.StringP(logLevelOption, "l", "", "The log filtering level (debug, info, warn, error)")
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
 	jobs := flag.IntP(jobsOption, "j", jobsDefault, "Number of RPC jobs to run")
+	version := flag.BoolP(versionOption, "v", false, "Print version and exit")
 
 	flag.Parse()
+
+	if *version {
+		fmt.Println(makeVersionString())
+		os.Exit(0)
+	}
 
 	baseDir, err := util.InitBaseDir(*baseDirPtr)
 	if err != nil {
@@ -111,6 +127,8 @@ func main() {
 		fmt.Printf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel)
 		os.Exit(1)
 	}
+
+	log.Info(makeVersionString())
 
 	if *jobs < 1 {
 		log.Errorf("Option '%v' must be greater than 0 (was %v)", jobsOption, *jobs)
@@ -198,4 +216,13 @@ func main() {
 	log.Info("Shutting down node...")
 	// Shut the node down
 	node.Close()
+}
+
+func makeVersionString() string {
+	commitString := ""
+	if len(Commit) >= 8 {
+		commitString = fmt.Sprintf("(%s)", Commit[0:8])
+	}
+
+	return fmt.Sprintf("%s %s %s", DisplayAppName, Version, commitString)
 }
