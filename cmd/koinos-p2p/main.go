@@ -219,5 +219,10 @@ func main() {
 }
 
 func makeVersionString() string {
-	return fmt.Sprintf("%s %s (%s)", DisplayAppName, Version, Commit[0:8])
+	commitString := ""
+	if len(Commit) >= 8 {
+		commitString = fmt.Sprintf("(%s)", Commit[0:8])
+	}
+
+	return fmt.Sprintf("%s %s %s", DisplayAppName, Version, commitString)
 }

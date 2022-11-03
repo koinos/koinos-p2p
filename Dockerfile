@@ -10,7 +10,7 @@ RUN apk update && \
         linux-headers
 
 RUN go get ./... && \
-    go build -o koinos_p2p cmd/koinos-p2p/main.go
+    go build -ldflags="-X main.Commit=$(git rev-parse HEAD)" -o koinos_p2p cmd/koinos-p2p/main.go
 
 FROM alpine:latest
 COPY --from=builder /koinos-p2p/koinos_p2p /usr/local/bin
