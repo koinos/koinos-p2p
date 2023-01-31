@@ -10,10 +10,10 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	util "github.com/koinos/koinos-util-golang"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	multiaddr "github.com/multiformats/go-multiaddr"
 )

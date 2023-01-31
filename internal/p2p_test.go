@@ -14,7 +14,7 @@ import (
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
 	"github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multihash"
 )
@@ -22,7 +22,6 @@ import (
 // TestRPC implements dummy blockchain RPC.
 //
 // Note:  This struct and all tests that use it will need to be massively redesigned to test forking.
-//
 type TestRPC struct {
 	ChainID          uint64
 	Height           uint64

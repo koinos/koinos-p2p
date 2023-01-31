@@ -7,8 +7,8 @@ import (
 
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
-	peer "github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multihash"
 	"google.golang.org/protobuf/proto"
 )
