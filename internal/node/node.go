@@ -32,6 +32,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	multiaddr "github.com/multiformats/go-multiaddr"
 
 	"google.golang.org/protobuf/proto"
@@ -100,7 +101,11 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		// Let this host use relays and advertise itself on relays if
 		// it finds it is behind NAT. Use libp2p.Relay(options...) to
 		// enable active relays and more.
-		libp2p.EnableAutoRelay(),
+		libp2p.EnableAutoRelay(
+			autorelay.WithStaticRelays(config.NodeOptions.InitialPeers),
+		),
+		// Enable NAT hole punching
+		libp2p.EnableHolePunching(),
 		// If you want to help other peers to figure out if they are behind
 		// NATs, you can launch the server-side of AutoNAT too (AutoRelay
 		// already runs the client)

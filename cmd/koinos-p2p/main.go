@@ -15,6 +15,8 @@ import (
 	"time"
 
 	libp2plog "github.com/ipfs/go-log"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
 
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
@@ -31,7 +33,6 @@ const (
 	listenOption        = "listen"
 	seedOption          = "seed"
 	peerOption          = "peer"
-	directOption        = "direct"
 	checkpointOption    = "checkpoint"
 	disableGossipOption = "disable-gossip"
 	forceGossipOption   = "force-gossip"
@@ -82,7 +83,6 @@ func main() {
 	addr := flag.StringP(listenOption, "L", "", "The multiaddress on which the node will listen")
 	seed := flag.StringP(seedOption, "s", "", "Seed string with which the node will generate an ID (A randomized seed will be generated if none is provided)")
 	peerAddresses := flag.StringSliceP(peerOption, "p", []string{}, "Address of a peer to which to connect (may specify multiple)")
-	directAddresses := flag.StringSliceP(directOption, "D", []string{}, "Address of a peer to connect using gossipsub.WithDirectPeers (may specify multiple) (should be reciprocal)")
 	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Block checkpoint in the form height:blockid (may specify multiple times)")
 	disableGossip := flag.BoolP(disableGossipOption, "g", disableGossipDefault, "Disable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode to always be enabled")
@@ -110,7 +110,6 @@ func main() {
 	*addr = util.GetStringOption(listenOption, listenDefault, *addr, yamlConfig.P2P, yamlConfig.Global)
 	*seed = util.GetStringOption(seedOption, seedDefault, *seed, yamlConfig.P2P, yamlConfig.Global)
 	*peerAddresses = util.GetStringSliceOption(peerOption, *peerAddresses, yamlConfig.P2P, yamlConfig.Global)
-	*directAddresses = util.GetStringSliceOption(directOption, *directAddresses, yamlConfig.P2P, yamlConfig.Global)
 	*checkpoints = util.GetStringSliceOption(checkpointOption, *checkpoints, yamlConfig.P2P, yamlConfig.Global)
 	*disableGossip = util.GetBoolOption(disableGossipOption, disableGossipDefault, *disableGossip, yamlConfig.P2P, yamlConfig.Global)
 	*forceGossip = util.GetBoolOption(forceGossipOption, forceGossipDefault, *forceGossip, yamlConfig.P2P, yamlConfig.Global)
@@ -140,8 +139,20 @@ func main() {
 
 	config := options.NewConfig()
 
-	config.NodeOptions.InitialPeers = *peerAddresses
-	config.NodeOptions.DirectPeers = *directAddresses
+	for _, peerStr := range *peerAddresses {
+		ma, err := multiaddr.NewMultiaddr(peerStr)
+
+		if err != nil {
+			log.Warnf("Error parsing peer address: %v", err)
+		}
+
+		addr, err := peer.AddrInfoFromP2pAddr(ma)
+		if err != nil {
+			log.Warnf("Error parsing peer address: %v", err)
+		}
+
+		config.NodeOptions.InitialPeers = append(config.NodeOptions.InitialPeers, *addr)
+	}
 
 	if *disableGossip {
 		config.GossipToggleOptions.AlwaysDisable = true
