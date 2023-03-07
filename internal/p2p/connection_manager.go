@@ -10,10 +10,10 @@ import (
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	util "github.com/koinos/koinos-util-golang"
 
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
@@ -74,7 +74,7 @@ func NewConnectionManager(
 	localRPC rpc.LocalRPC,
 	peerOpts *options.PeerConnectionOptions,
 	libProvider LastIrreversibleBlockProvider,
-	initialPeers []string,
+	initialPeers []peer.AddrInfo,
 	peerErrorChan chan<- PeerError,
 	applicator *Applicator) *ConnectionManager {
 
@@ -103,18 +103,8 @@ func NewConnectionManager(
 	}
 	log.Debug("Peer RPC Service successfully registered")
 
-	for _, peerStr := range initialPeers {
-		ma, err := multiaddr.NewMultiaddr(peerStr)
-		if err != nil {
-			log.Warnf("Error parsing peer address: %v", err)
-		}
-
-		addr, err := peer.AddrInfoFromP2pAddr(ma)
-		if err != nil {
-			log.Warnf("Error parsing peer address: %v", err)
-		}
-
-		connectionManager.initialPeers[addr.ID] = *addr
+	for _, peer := range initialPeers {
+		connectionManager.initialPeers[peer.ID] = peer
 	}
 
 	return &connectionManager
