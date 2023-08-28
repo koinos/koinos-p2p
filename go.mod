@@ -1,6 +1,6 @@
 module github.com/koinos/koinos-p2p
 
-go 1.15
+go 1.20
 
 require (
 	github.com/ipfs/go-log v1.0.5
