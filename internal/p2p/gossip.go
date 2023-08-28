@@ -15,6 +15,7 @@ import (
 	"github.com/koinos/koinos-proto-golang/koinos/protocol"
 	util "github.com/koinos/koinos-util-golang"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/protobuf/proto"
 )
@@ -310,8 +311,16 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 		} else {
 			log.Warnf("Gossiped block not applied from peer %v: %s", msg.ReceivedFrom, err)
 			go func() {
+				id := msg.ReceivedFrom
+
+				if errors.Is(err, p2perrors.ErrForkBomb) {
+					// Do not need to check errors because we already require messages to be signed
+					pubKey, _ := crypto.UnmarshalPublicKey(msg.Key)
+					id, _ = peer.IDFromPublicKey(pubKey)
+				}
+
 				select {
-				case kg.PeerErrorChan <- PeerError{id: msg.ReceivedFrom, err: err}:
+				case kg.PeerErrorChan <- PeerError{id: id, err: err}:
 				case <-ctx.Done():
 				}
 			}()
@@ -323,7 +332,6 @@ func (kg *KoinosGossip) validateBlock(ctx context.Context, pid peer.ID, msg *pub
 }
 
 func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub.Message) error {
-	log.Debug("Received block via gossip")
 	block := &protocol.Block{}
 	err := proto.Unmarshal(msg.Data, block)
 	if err != nil {
