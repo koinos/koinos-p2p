@@ -161,6 +161,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 				OpportunisticGraftThreshold: .1,
 			},
 		),
+		pubsub.WithMessageSignaturePolicy(pubsub.StrictSign),
 	)
 	if err != nil {
 		return nil, err
