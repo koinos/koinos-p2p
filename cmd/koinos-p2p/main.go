@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"os"
 	"os/signal"
 	"path"
@@ -12,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	libp2plog "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -68,9 +66,6 @@ const (
 var Commit string
 
 func main() {
-	// Seed the random number generator
-	rand.Seed(time.Now().UTC().UnixNano())
-
 	// Set libp2p log level
 	libp2plog.SetAllLoggers(libp2plog.LevelFatal)
 
