@@ -3,6 +3,7 @@ module github.com/koinos/koinos-p2p
 go 1.20
 
 require (
+	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e
 	github.com/ipfs/go-log v1.0.5
 	github.com/koinos/koinos-log-golang v1.0.0
 	github.com/koinos/koinos-mq-golang v1.0.0
@@ -20,6 +21,7 @@ require (
 )
 
 require (
+	filippo.io/bigmod v0.0.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.20.1-beta // indirect

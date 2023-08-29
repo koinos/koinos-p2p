@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"filippo.io/keygen"
+
 	log "github.com/koinos/koinos-log-golang"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
@@ -430,9 +432,16 @@ func seedStringToInt64(seed string) int64 {
 	return int64(binary.BigEndian.Uint64(sum[:8]))
 }
 
-func generatePrivateKey(seed string) (crypto.PrivKey, error) {
-	var r io.Reader
+func generateECDSAKeyPair(src io.Reader) (crypto.PrivKey, crypto.PubKey, error) {
+	priv, err := keygen.ECDSALegacy(crypto.ECDSACurve, src)
+	if err != nil {
+		return nil, nil, err
+	}
 
+	return crypto.ECDSAKeyPairFromKey(priv)
+}
+
+func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 	// If blank seed, generate a new randomized seed
 	if seed == "" {
 		seed = util.GenerateBase58ID(8)
@@ -441,9 +450,11 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 
 	// Convert the seed to int64 and construct the random source
 	iseed := seedStringToInt64(seed)
-	r = rand.New(rand.NewSource(iseed))
+	r := rand.New(rand.NewSource(iseed))
 
-	privateKey, _, err := crypto.GenerateECDSAKeyPair(r)
+	log.Infof("%v", r.Uint64())
+
+	privateKey, _, err := generateECDSAKeyPair(r)
 	if err != nil {
 		return nil, err
 	}
