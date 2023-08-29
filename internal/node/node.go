@@ -452,8 +452,6 @@ func generatePrivateKey(seed string) (crypto.PrivKey, error) {
 	iseed := seedStringToInt64(seed)
 	r := rand.New(rand.NewSource(iseed))
 
-	log.Infof("%v", r.Uint64())
-
 	privateKey, _, err := generateECDSAKeyPair(r)
 	if err != nil {
 		return nil, err
