@@ -61,7 +61,7 @@ const (
 // Version display values
 const (
 	DisplayAppName = "Koinos P2P"
-	Version        = "v1.0.1"
+	Version        = "v1.1.0"
 )
 
 // Gets filled in by the linker
@@ -83,7 +83,7 @@ func main() {
 	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Block checkpoint in the form height:blockid (may specify multiple times)")
 	disableGossip := flag.BoolP(disableGossipOption, "g", disableGossipDefault, "Disable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode to always be enabled")
-	logLevel := flag.StringP(logLevelOption, "l", "", "The log filtering level (debug, info, warn, error)")
+	logLevel := flag.StringP(logLevelOption, "l", "", "The log filtering level (debug, info, warning, error)")
 	logDir := flag.String(logDirOption, "", "The logging directory")
 	logColor := flag.Bool(logColorOption, logColorDefault, "Log color toggle")
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
@@ -124,7 +124,7 @@ func main() {
 
 	err = log.InitLogger(appName, *instanceID, *logLevel, *logDir, *logColor)
 	if err != nil {
-		fmt.Printf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel)
+		fmt.Printf("Invalid log-level: %s. Please choose one of: debug, info, warning, error", *logLevel)
 		os.Exit(1)
 	}
 
