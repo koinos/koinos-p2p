@@ -5,7 +5,7 @@ go 1.20
 require (
 	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e
 	github.com/ipfs/go-log v1.0.5
-	github.com/koinos/koinos-log-golang v1.0.0
+	github.com/koinos/koinos-log-golang v1.0.1-0.20231002172323-6250e0990208
 	github.com/koinos/koinos-mq-golang v1.0.0
 	github.com/koinos/koinos-proto-golang v1.0.0
 	github.com/koinos/koinos-util-golang v1.0.0

@@ -360,6 +360,8 @@ github.com/klauspost/crc32 v0.0.0-20161016154125-cb6bfca970f6/go.mod h1:+ZoRqAPR
 github.com/klauspost/pgzip v1.0.2-0.20170402124221-0bf5dcad4ada/go.mod h1:Ch1tH69qFZu15pkjo5kYi6mth2Zzwzt50oCQKQE9RUs=
 github.com/koinos/koinos-log-golang v1.0.0 h1:BlA8N2AOT3Xai5+ErvyIPz9RLHedLGfUxYnUAPRrzac=
 github.com/koinos/koinos-log-golang v1.0.0/go.mod h1:/dzAVdA+woySENUYwls8RT+5i87Rm4qoMZ4ctEQI8k0=
+github.com/koinos/koinos-log-golang v1.0.1-0.20231002172323-6250e0990208 h1:SFc+bKoAoyB2twNOftAzp7H7Qo3O5QZ7/oQwrDxdTmA=
+github.com/koinos/koinos-log-golang v1.0.1-0.20231002172323-6250e0990208/go.mod h1:/dzAVdA+woySENUYwls8RT+5i87Rm4qoMZ4ctEQI8k0=
 github.com/koinos/koinos-mq-golang v1.0.0 h1:zEslw0vsJN+Ki0WKZ/S2c+Tc7/BoEKOOyTGiVE0msmQ=
 github.com/koinos/koinos-mq-golang v1.0.0/go.mod h1:0tg4BPijVFyjZenhDGWNbWNq6X2pMwmllwA4tqEXEKI=
 github.com/koinos/koinos-proto-golang v1.0.0 h1:N8haj+tMRLc/a1j636wjryoaxW+aJwKKSdZ01CRJoOU=
