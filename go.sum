@@ -368,6 +368,8 @@ github.com/koinos/koinos-log-golang v1.0.1-0.20231003164610-91c29163a0b2 h1:5jag
 github.com/koinos/koinos-log-golang v1.0.1-0.20231003164610-91c29163a0b2/go.mod h1:/dzAVdA+woySENUYwls8RT+5i87Rm4qoMZ4ctEQI8k0=
 github.com/koinos/koinos-log-golang v1.0.1-0.20231003171121-262760d4bbb2 h1:YMekaIwuV8b8aAF6BbTRTPsLJmkuJZNVvXye/Dj1tbQ=
 github.com/koinos/koinos-log-golang v1.0.1-0.20231003171121-262760d4bbb2/go.mod h1:/dzAVdA+woySENUYwls8RT+5i87Rm4qoMZ4ctEQI8k0=
+github.com/koinos/koinos-log-golang/v2 v2.0.0 h1:fOFySSI9+cdmIol9W0a4LQ7Bss1sV1pqxh0JKVx2K3g=
+github.com/koinos/koinos-log-golang/v2 v2.0.0/go.mod h1:P4Xa5LX5Jt+KkzT3CuT9/i2yTrTaJVHN5jd51MM2Tmk=
 github.com/koinos/koinos-mq-golang v1.0.0 h1:zEslw0vsJN+Ki0WKZ/S2c+Tc7/BoEKOOyTGiVE0msmQ=
 github.com/koinos/koinos-mq-golang v1.0.0/go.mod h1:0tg4BPijVFyjZenhDGWNbWNq6X2pMwmllwA4tqEXEKI=
 github.com/koinos/koinos-proto-golang v1.0.0 h1:N8haj+tMRLc/a1j636wjryoaxW+aJwKKSdZ01CRJoOU=
