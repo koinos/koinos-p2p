@@ -16,7 +16,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 
-	log "github.com/koinos/koinos-log-golang"
+	log "github.com/koinos/koinos-log-golang/v2"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
@@ -35,6 +35,9 @@ const (
 	disableGossipOption = "disable-gossip"
 	forceGossipOption   = "force-gossip"
 	logLevelOption      = "log-level"
+	logDirOption        = "log-dir"
+	logColorOption      = "log-color"
+	logDatetimeOption   = "log-datetime"
 	instanceIDOption    = "instance-id"
 	jobsOption          = "jobs"
 	versionOption       = "version"
@@ -48,18 +51,19 @@ const (
 	disableGossipDefault = false
 	forceGossipDefault   = false
 	logLevelDefault      = "info"
+	logColorDefault      = true
+	logDatetimeDefault   = true
 	instanceIDDefault    = ""
 )
 
 const (
 	appName = "p2p"
-	logDir  = "logs"
 )
 
 // Version display values
 const (
 	DisplayAppName = "Koinos P2P"
-	Version        = "v1.0.1"
+	Version        = "v1.1.0"
 )
 
 // Gets filled in by the linker
@@ -81,7 +85,10 @@ func main() {
 	checkpoints := flag.StringSliceP(checkpointOption, "c", []string{}, "Block checkpoint in the form height:blockid (may specify multiple times)")
 	disableGossip := flag.BoolP(disableGossipOption, "g", disableGossipDefault, "Disable gossip mode")
 	forceGossip := flag.BoolP(forceGossipOption, "G", forceGossipDefault, "Force gossip mode to always be enabled")
-	logLevel := flag.StringP(logLevelOption, "l", "", "The log filtering level (debug, info, warn, error)")
+	logLevel := flag.StringP(logLevelOption, "l", "", "The log filtering level (debug, info, warning, error)")
+	logDir := flag.String(logDirOption, "", "The logging directory")
+	logColor := flag.Bool(logColorOption, logColorDefault, "Log color toggle")
+	logDatetime := flag.Bool(logDatetimeOption, logDatetimeDefault, "Log datetime on console toggle")
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
 	jobs := flag.IntP(jobsOption, "j", jobsDefault, "Number of RPC jobs to run")
 	version := flag.BoolP(versionOption, "v", false, "Print version and exit")
@@ -109,16 +116,19 @@ func main() {
 	*disableGossip = util.GetBoolOption(disableGossipOption, disableGossipDefault, *disableGossip, yamlConfig.P2P, yamlConfig.Global)
 	*forceGossip = util.GetBoolOption(forceGossipOption, forceGossipDefault, *forceGossip, yamlConfig.P2P, yamlConfig.Global)
 	*logLevel = util.GetStringOption(logLevelOption, logLevelDefault, *logLevel, yamlConfig.P2P, yamlConfig.Global)
+	*logDir = util.GetStringOption(logDirOption, *logDir, *logDir, yamlConfig.P2P, yamlConfig.Global)
+	*logColor = util.GetBoolOption(logColorOption, logColorDefault, *logColor, yamlConfig.P2P, yamlConfig.Global)
+	*logDatetime = util.GetBoolOption(logDatetimeOption, logDatetimeDefault, *logDatetime, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 	*jobs = util.GetIntOption(jobsOption, jobsDefault, *jobs, yamlConfig.P2P, yamlConfig.Global)
 
-	appID := fmt.Sprintf("%s.%s", appName, *instanceID)
+	if len(*logDir) > 0 && !path.IsAbs(*logDir) {
+		*logDir = path.Join(util.GetAppDir(baseDir, appName), *logDir)
+	}
 
-	// Initialize logger
-	logFilename := path.Join(util.GetAppDir(baseDir, appName), logDir, "p2p.log")
-	err = log.InitLogger(*logLevel, false, logFilename, appID)
+	err = log.InitLogger(appName, *instanceID, *logLevel, *logDir, *logColor, *logDatetime)
 	if err != nil {
-		fmt.Printf("Invalid log-level: %s. Please choose one of: debug, info, warn, error", *logLevel)
+		fmt.Printf("Invalid log-level: %s. Please choose one of: debug, info, warning, error", *logLevel)
 		os.Exit(1)
 	}
 
