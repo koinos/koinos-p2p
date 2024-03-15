@@ -20,6 +20,9 @@ var (
 	// ErrTransactionApplication represents any error applying a transaction to the mem pool
 	ErrTransactionApplication = errors.New("transaction application failed")
 
+	// ErrInvalidNonce represents when a transaction cannot be applied because of an invalid nonce
+	ErrInvalidNonce = errors.New("invalid nonce")
+
 	// ErrChainIDMismatch represents the peer has a different chain id
 	ErrChainIDMismatch = errors.New("chain id does not match peer's")
 

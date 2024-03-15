@@ -6,6 +6,7 @@ require (
 	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e
 	github.com/ipfs/go-log v1.0.5
 	github.com/koinos/koinos-log-golang v1.0.0
+	github.com/koinos/koinos-log-golang/v2 v2.0.0
 	github.com/koinos/koinos-mq-golang v1.0.0
 	github.com/koinos/koinos-proto-golang v1.0.0
 	github.com/koinos/koinos-util-golang v1.0.0
@@ -63,7 +64,6 @@ require (
 	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
-	github.com/koinos/koinos-log-golang/v2 v2.0.0 // indirect
 	github.com/koron/go-ssdp v0.0.4 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect

@@ -427,6 +427,9 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	}
 
 	if err := kg.applicator.ApplyTransaction(ctx, transaction); err != nil {
+		if errors.Is(err, p2perrors.ErrInvalidNonce) {
+			return fmt.Errorf("%w - %s, %v", p2perrors.ErrInvalidNonce, util.TransactionString(transaction), err.Error())
+		}
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrTransactionApplication, util.TransactionString(transaction), err.Error())
 	}
 

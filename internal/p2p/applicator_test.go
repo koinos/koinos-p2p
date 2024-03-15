@@ -19,6 +19,7 @@ type applicatorTestRPC struct {
 	blocksToFail     map[string]void
 	unlinkableBlocks map[string]void
 	head             []byte
+	invalidNonceTrxs map[string]void
 }
 
 func (b *applicatorTestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
@@ -43,7 +44,11 @@ func (b *applicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol.Bloc
 	return &chain.SubmitBlockResponse{}, nil
 }
 
-func (b *applicatorTestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
+func (b *applicatorTestRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
+	if _, ok := b.invalidNonceTrxs[string(trx.Id)]; ok {
+		return nil, p2perrors.ErrInvalidNonce
+	}
+
 	return &chain.SubmitTransactionResponse{}, nil
 }
 
@@ -81,6 +86,7 @@ func TestApplicator(t *testing.T) {
 		blocksToFail:     make(map[string]void),
 		unlinkableBlocks: make(map[string]void),
 		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
 	}
 
 	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
@@ -243,6 +249,7 @@ func TestApplicatorLimits(t *testing.T) {
 		blocksToFail:     make(map[string]void),
 		unlinkableBlocks: make(map[string]void),
 		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
 	}
 
 	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(10*time.Minute), options.ApplicatorOptions{MaxPendingBlocks: 5, MaxHeightDelta: 5})
@@ -319,4 +326,56 @@ func TestApplicatorLimits(t *testing.T) {
 		<-ch
 	}
 	<-testChan
+}
+
+func TestInvalidNonce(t *testing.T) {
+	ctx := context.Background()
+	rpc := applicatorTestRPC{
+		blocksToFail:     make(map[string]void),
+		unlinkableBlocks: make(map[string]void),
+		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
+	}
+
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(10*time.Minute), options.ApplicatorOptions{MaxPendingBlocks: 5, MaxHeightDelta: 5})
+	if err != nil {
+		t.Error(err)
+	}
+
+	rpc.invalidNonceTrxs[string([]byte{1})] = void{}
+
+	applicator.Start(ctx)
+
+	testChan1 := make(chan struct{})
+
+	go func() {
+		goodTrx := &protocol.Transaction{
+			Id: []byte{0},
+		}
+
+		err = applicator.ApplyTransaction(ctx, goodTrx)
+		if err != nil {
+			t.Error(err)
+		}
+
+		testChan1 <- struct{}{}
+	}()
+
+	testChan2 := make(chan struct{})
+
+	go func() {
+		badTrx := &protocol.Transaction{
+			Id: []byte{0},
+		}
+
+		err = applicator.ApplyTransaction(ctx, badTrx)
+		if err != p2perrors.ErrInvalidNonce {
+			t.Errorf("badTrx - ErrInvalidNonce expected but was not returned, was: %v", err)
+		}
+
+		testChan2 <- struct{}{}
+	}()
+
+	<-testChan1
+	<-testChan2
 }

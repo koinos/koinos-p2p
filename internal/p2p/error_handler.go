@@ -150,6 +150,8 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 	// Errors that are commonly expected during normal use or potential attack vectors
 	case errors.Is(err, p2perrors.ErrTransactionApplication):
 		return p.opts.TransactionApplicationErrorScore
+	case errors.Is(err, p2perrors.ErrInvalidNonce):
+		return p.opts.InvalidNonceErrorScore
 	case errors.Is(err, p2perrors.ErrBlockApplication):
 		return p.opts.BlockApplicationErrorScore
 	case errors.Is(err, p2perrors.ErrUnknownPreviousBlock):

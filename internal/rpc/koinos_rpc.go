@@ -204,6 +204,13 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transact
 	case *chainrpc.ChainResponse_SubmitTransaction:
 		response = t.SubmitTransaction
 	case *chainrpc.ChainResponse_Error:
+		eData := chainError{}
+		if jsonErr := json.Unmarshal([]byte(responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Data), &eData); jsonErr == nil {
+			if eData.Code == int64(chain.ErrorCode_invalid_nonce) {
+				err = p2perrors.ErrInvalidNonce
+				break
+			}
+		}
 		err = fmt.Errorf("%w ApplyTransaction, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
 	default:
 		err = fmt.Errorf("%w ApplyTransaction, unexpected chain rpc response", p2perrors.ErrLocalRPC)

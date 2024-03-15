@@ -17,6 +17,7 @@ const (
 	blockApplicationTimeoutErrorScoreDefault = 2500
 	maxPendingBlocksErrorScoreDefault        = 1000
 	transactionApplicationErrorScoreDefault  = 100
+	invalidNonceErrorScoreDefault            = 0
 	chainIDMismatchErrorScoreDefault         = errorScoreThresholdDefault * 2
 	chainNotConnectedErrorScoreDefault       = errorScoreThresholdDefault * 2
 	checkpointMismatchErrorScoreDefault      = errorScoreThresholdDefault * 2
@@ -44,6 +45,7 @@ type PeerErrorHandlerOptions struct {
 	BlockApplicationTimeoutErrorScore uint64
 	MaxPendingBlocksErrorScore        uint64
 	TransactionApplicationErrorScore  uint64
+	InvalidNonceErrorScore            uint64
 	ChainIDMismatchErrorScore         uint64
 	ChainNotConnectedErrorScore       uint64
 	CheckpointMismatchErrorScore      uint64
@@ -71,6 +73,7 @@ func NewPeerErrorHandlerOptions() *PeerErrorHandlerOptions {
 		BlockApplicationTimeoutErrorScore: blockApplicationTimeoutErrorScoreDefault,
 		MaxPendingBlocksErrorScore:        maxPendingBlocksErrorScoreDefault,
 		TransactionApplicationErrorScore:  transactionApplicationErrorScoreDefault,
+		InvalidNonceErrorScore:            invalidNonceErrorScoreDefault,
 		ChainIDMismatchErrorScore:         chainIDMismatchErrorScoreDefault,
 		ChainNotConnectedErrorScore:       chainNotConnectedErrorScoreDefault,
 		CheckpointMismatchErrorScore:      checkpointMismatchErrorScoreDefault,
