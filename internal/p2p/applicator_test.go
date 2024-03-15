@@ -329,7 +329,8 @@ func TestApplicatorLimits(t *testing.T) {
 }
 
 func TestInvalidNonce(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	rpc := applicatorTestRPC{
 		blocksToFail:     make(map[string]void),
 		unlinkableBlocks: make(map[string]void),
@@ -337,45 +338,30 @@ func TestInvalidNonce(t *testing.T) {
 		invalidNonceTrxs: make(map[string]void),
 	}
 
-	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(10*time.Minute), options.ApplicatorOptions{MaxPendingBlocks: 5, MaxHeightDelta: 5})
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
 	if err != nil {
 		t.Error(err)
 	}
 
-	rpc.invalidNonceTrxs[string([]byte{1})] = void{}
+	goodTrx := &protocol.Transaction{
+		Id: []byte{0},
+	}
+
+	badTrx := &protocol.Transaction{
+		Id: []byte{1},
+	}
+
+	rpc.invalidNonceTrxs[string(badTrx.Id)] = void{}
 
 	applicator.Start(ctx)
 
-	testChan1 := make(chan struct{})
+	err = applicator.ApplyTransaction(ctx, goodTrx)
+	if err != nil {
+		t.Error(err)
+	}
 
-	go func() {
-		goodTrx := &protocol.Transaction{
-			Id: []byte{0},
-		}
-
-		err = applicator.ApplyTransaction(ctx, goodTrx)
-		if err != nil {
-			t.Error(err)
-		}
-
-		testChan1 <- struct{}{}
-	}()
-
-	testChan2 := make(chan struct{})
-
-	go func() {
-		badTrx := &protocol.Transaction{
-			Id: []byte{0},
-		}
-
-		err = applicator.ApplyTransaction(ctx, badTrx)
-		if err != p2perrors.ErrInvalidNonce {
-			t.Errorf("badTrx - ErrInvalidNonce expected but was not returned, was: %v", err)
-		}
-
-		testChan2 <- struct{}{}
-	}()
-
-	<-testChan1
-	<-testChan2
+	err = applicator.ApplyTransaction(ctx, badTrx)
+	if err != p2perrors.ErrInvalidNonce {
+		t.Errorf("badTrx - ErrInvalidNonce expected but was not returned, was: %v", err)
+	}
 }
