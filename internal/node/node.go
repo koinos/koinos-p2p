@@ -274,7 +274,7 @@ func (n *KoinosP2PNode) handleRPC(rpcType string, data []byte) ([]byte, error) {
 	err := proto.Unmarshal(data, req)
 	if err != nil {
 		log.Warnf("Received malformed request: 0x%v", hex.EncodeToString(data))
-		eResp := prpc.ErrorResponse{Message: err.Error()}
+		eResp := prpc.ErrorStatus{Message: err.Error()}
 		rErr := rpcp2p.P2PResponse_Error{Error: &eResp}
 		resp.Response = &rErr
 	} else {
@@ -306,7 +306,7 @@ func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PRespons
 	}
 
 	if err != nil {
-		result := prpc.ErrorResponse{Message: err.Error()}
+		result := prpc.ErrorStatus{Message: err.Error()}
 		respVal := rpcp2p.P2PResponse_Error{Error: &result}
 		response.Response = &respVal
 	}
