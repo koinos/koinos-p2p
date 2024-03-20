@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -30,8 +29,14 @@ const (
 	maxMessageSize = 536870912
 )
 
-type chainError struct {
-	Code int64 `json:"code"`
+var blockErrorMap = map[chain.ErrorCode]error{
+	chain.ErrorCode_unknown_previous_block:    p2perrors.ErrUnknownPreviousBlock,
+	chain.ErrorCode_pre_irreversibility_block: p2perrors.ErrBlockIrreversibility,
+	chain.ErrorCode_block_state_error:         p2perrors.ErrBlockState,
+}
+
+var transactionErrorMap = map[chain.ErrorCode]error{
+	chain.ErrorCode_invalid_nonce: p2perrors.ErrInvalidNonce,
 }
 
 // KoinosRPC implements LocalRPC implementation by communicating with a local Koinos node via AMQP
@@ -141,17 +146,12 @@ func (k *KoinosRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*cha
 	case *chainrpc.ChainResponse_SubmitBlock:
 		response = t.SubmitBlock
 	case *chainrpc.ChainResponse_Error:
-		eData := chainError{}
-		if jsonErr := json.Unmarshal([]byte(responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Data), &eData); jsonErr == nil {
-			if eData.Code == int64(chain.ErrorCode_unknown_previous_block) {
-				err = p2perrors.ErrUnknownPreviousBlock
-				break
-			} else if eData.Code == int64(chain.ErrorCode_pre_irreversibility_block) {
-				err = p2perrors.ErrBlockIrreversibility
-				break
-			} else if eData.Code == int64(chain.ErrorCode_block_state_error) {
-				err = p2perrors.ErrBlockState
-				break
+		eDetails := chain.ErrorDetails{}
+		for _, detail := range responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Details {
+			if anyErr := detail.UnmarshalTo(&eDetails); anyErr == nil {
+				if err, ok := blockErrorMap[chain.ErrorCode(eDetails.Code)]; ok {
+					return nil, err
+				}
 			}
 		}
 		err = fmt.Errorf("%w ApplyBlock, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
@@ -204,11 +204,12 @@ func (k *KoinosRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transact
 	case *chainrpc.ChainResponse_SubmitTransaction:
 		response = t.SubmitTransaction
 	case *chainrpc.ChainResponse_Error:
-		eData := chainError{}
-		if jsonErr := json.Unmarshal([]byte(responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Data), &eData); jsonErr == nil {
-			if eData.Code == int64(chain.ErrorCode_invalid_nonce) {
-				err = p2perrors.ErrInvalidNonce
-				break
+		eDetails := chain.ErrorDetails{}
+		for _, detail := range responseVariant.Response.(*chainrpc.ChainResponse_Error).Error.Details {
+			if anyErr := detail.UnmarshalTo(&eDetails); anyErr == nil {
+				if err, ok := transactionErrorMap[chain.ErrorCode(eDetails.Code)]; ok {
+					return nil, err
+				}
 			}
 		}
 		err = fmt.Errorf("%w ApplyTransaction, chain rpc error, %s", p2perrors.ErrLocalRPC, string(t.Error.GetMessage()))
