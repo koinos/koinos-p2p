@@ -21,7 +21,7 @@ import (
 	"github.com/koinos/koinos-p2p/internal/node"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	util "github.com/koinos/koinos-util-golang"
+	util "github.com/koinos/koinos-util-golang/v2"
 	flag "github.com/spf13/pflag"
 )
 

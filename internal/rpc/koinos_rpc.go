@@ -9,13 +9,13 @@ import (
 
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
-	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
-	"github.com/koinos/koinos-proto-golang/koinos/canonical"
-	"github.com/koinos/koinos-proto-golang/koinos/chain"
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
-	"github.com/koinos/koinos-proto-golang/koinos/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
-	chainrpc "github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/broadcast"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/canonical"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/chain"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/rpc"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/rpc/block_store"
+	chainrpc "github.com/koinos/koinos-proto-golang/v2/koinos/rpc/chain"
 	"github.com/multiformats/go-multihash"
 )
 

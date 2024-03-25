@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/koinos/koinos-log-golang"
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	log "github.com/koinos/koinos-log-golang/v2"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
 )
 
 type void struct{}

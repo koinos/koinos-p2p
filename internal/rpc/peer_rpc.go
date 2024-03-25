@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	peer "github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multihash"

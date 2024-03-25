@@ -3,7 +3,7 @@ package rpc
 import (
 	"context"
 
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
 	"github.com/multiformats/go-multihash"
 )
 
