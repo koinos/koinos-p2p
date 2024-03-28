@@ -17,7 +17,7 @@ jobs:
       install:
         - sudo gem install coveralls-lcov
         - go install github.com/jandelgado/gcov2lcov@latest
-        - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.45.2
+        - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
         - go get ./...
       script:
         - go build -ldflags="-X main.Commit=$(git rev-parse HEAD)" cmd/koinos-p2p/main.go
@@ -38,7 +38,7 @@ jobs:
         - docker
       env:
         - TAG=`if [ $TRAVIS_BRANCH == "master" ]; then echo -n latest; else echo -n $TRAVIS_BRANCH; fi`
-        - CHAIN_TAG=$TAG
+        - P2P_TAG=$TAG
       before_install:
         - sudo systemctl stop docker.service && sudo systemctl stop docker.socket
         - sudo apt-get install ca-certificates curl
