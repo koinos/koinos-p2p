@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/koinos/koinos-log-golang"
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 )
 

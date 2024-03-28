@@ -14,16 +14,16 @@ import (
 
 	"filippo.io/keygen"
 
-	log "github.com/koinos/koinos-log-golang"
+	log "github.com/koinos/koinos-log-golang/v2"
 	koinosmq "github.com/koinos/koinos-mq-golang"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2p"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos"
-	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
-	prpc "github.com/koinos/koinos-proto-golang/koinos/rpc"
-	rpcp2p "github.com/koinos/koinos-proto-golang/koinos/rpc/p2p"
-	util "github.com/koinos/koinos-util-golang"
+	"github.com/koinos/koinos-proto-golang/v2/koinos"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/broadcast"
+	prpc "github.com/koinos/koinos-proto-golang/v2/koinos/rpc"
+	rpcp2p "github.com/koinos/koinos-proto-golang/v2/koinos/rpc/p2p"
+	util "github.com/koinos/koinos-util-golang/v2"
 
 	libp2p "github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -274,7 +274,7 @@ func (n *KoinosP2PNode) handleRPC(rpcType string, data []byte) ([]byte, error) {
 	err := proto.Unmarshal(data, req)
 	if err != nil {
 		log.Warnf("Received malformed request: 0x%v", hex.EncodeToString(data))
-		eResp := prpc.ErrorResponse{Message: err.Error()}
+		eResp := prpc.ErrorStatus{Message: err.Error()}
 		rErr := rpcp2p.P2PResponse_Error{Error: &eResp}
 		resp.Response = &rErr
 	} else {
@@ -306,7 +306,7 @@ func (n *KoinosP2PNode) handleRequest(req *rpcp2p.P2PRequest) *rpcp2p.P2PRespons
 	}
 
 	if err != nil {
-		result := prpc.ErrorResponse{Message: err.Error()}
+		result := prpc.ErrorStatus{Message: err.Error()}
 		respVal := rpcp2p.P2PResponse_Error{Error: &result}
 		response.Response = &respVal
 	}

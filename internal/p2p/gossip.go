@@ -8,12 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	log "github.com/koinos/koinos-log-golang"
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	"github.com/koinos/koinos-proto-golang/koinos/canonical"
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
-	util "github.com/koinos/koinos-util-golang"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/canonical"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
+	util "github.com/koinos/koinos-util-golang/v2"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -427,6 +427,9 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 	}
 
 	if err := kg.applicator.ApplyTransaction(ctx, transaction); err != nil {
+		if errors.Is(err, p2perrors.ErrInvalidNonce) {
+			return fmt.Errorf("%w - %s, %v", p2perrors.ErrInvalidNonce, util.TransactionString(transaction), err.Error())
+		}
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrTransactionApplication, util.TransactionString(transaction), err.Error())
 	}
 

@@ -3,9 +3,9 @@ package rpc
 import (
 	"context"
 
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
-	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
-	"github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/rpc/block_store"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/rpc/chain"
 	"github.com/multiformats/go-multihash"
 )
 

@@ -7,11 +7,11 @@ import (
 
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
-	"github.com/koinos/koinos-proto-golang/koinos"
-	"github.com/koinos/koinos-proto-golang/koinos/broadcast"
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
-	"github.com/koinos/koinos-proto-golang/koinos/rpc/block_store"
-	"github.com/koinos/koinos-proto-golang/koinos/rpc/chain"
+	"github.com/koinos/koinos-proto-golang/v2/koinos"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/broadcast"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/rpc/block_store"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/rpc/chain"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -19,6 +19,7 @@ type applicatorTestRPC struct {
 	blocksToFail     map[string]void
 	unlinkableBlocks map[string]void
 	head             []byte
+	invalidNonceTrxs map[string]void
 }
 
 func (b *applicatorTestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
@@ -43,7 +44,11 @@ func (b *applicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol.Bloc
 	return &chain.SubmitBlockResponse{}, nil
 }
 
-func (b *applicatorTestRPC) ApplyTransaction(ctx context.Context, block *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
+func (b *applicatorTestRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
+	if _, ok := b.invalidNonceTrxs[string(trx.Id)]; ok {
+		return nil, p2perrors.ErrInvalidNonce
+	}
+
 	return &chain.SubmitTransactionResponse{}, nil
 }
 
@@ -81,6 +86,7 @@ func TestApplicator(t *testing.T) {
 		blocksToFail:     make(map[string]void),
 		unlinkableBlocks: make(map[string]void),
 		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
 	}
 
 	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
@@ -243,6 +249,7 @@ func TestApplicatorLimits(t *testing.T) {
 		blocksToFail:     make(map[string]void),
 		unlinkableBlocks: make(map[string]void),
 		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
 	}
 
 	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(10*time.Minute), options.ApplicatorOptions{MaxPendingBlocks: 5, MaxHeightDelta: 5})
@@ -319,4 +326,42 @@ func TestApplicatorLimits(t *testing.T) {
 		<-ch
 	}
 	<-testChan
+}
+
+func TestInvalidNonce(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rpc := applicatorTestRPC{
+		blocksToFail:     make(map[string]void),
+		unlinkableBlocks: make(map[string]void),
+		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
+	}
+
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
+	if err != nil {
+		t.Error(err)
+	}
+
+	goodTrx := &protocol.Transaction{
+		Id: []byte{0},
+	}
+
+	badTrx := &protocol.Transaction{
+		Id: []byte{1},
+	}
+
+	rpc.invalidNonceTrxs[string(badTrx.Id)] = void{}
+
+	applicator.Start(ctx)
+
+	err = applicator.ApplyTransaction(ctx, goodTrx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = applicator.ApplyTransaction(ctx, badTrx)
+	if err != p2perrors.ErrInvalidNonce {
+		t.Errorf("badTrx - ErrInvalidNonce expected but was not returned, was: %v", err)
+	}
 }

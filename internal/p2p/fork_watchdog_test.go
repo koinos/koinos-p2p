@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
-	"github.com/koinos/koinos-proto-golang/koinos/protocol"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
 )
 
 func TestForkWatchdog(t *testing.T) {
