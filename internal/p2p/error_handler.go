@@ -130,7 +130,9 @@ func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
 			}
 		}
 
-		log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[ipAddr].score)
+		if !errors.Is(peerErr.err, p2perrors.ErrChainIDMismatch) {
+			log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[ipAddr].score)
+		}
 
 		if p.errorScores[ipAddr].score >= p.opts.ErrorScoreThreshold {
 			go func() {

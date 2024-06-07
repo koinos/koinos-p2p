@@ -50,7 +50,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 	defer cancelPeerGetChainID()
 	peerChainID, err := p.peerRPC.GetChainID(rpcContext)
 	if err != nil {
-		return err
+		return p2perrors.ErrChainIDMismatch
 	}
 
 	if !bytes.Equal(myChainID.ChainId, peerChainID) {
