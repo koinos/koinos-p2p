@@ -166,7 +166,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 	pid := msg.conn.RemotePeer()
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), pid)
 
-	log.Infof("Connected to peer: %s", s)
+	log.Debugf("Connected to peer: %s", s)
 
 	if _, ok := c.connectedPeers[pid]; !ok {
 		childCtx, cancel := context.WithCancel(ctx)
@@ -200,16 +200,16 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 	}
 
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
-	log.Infof("Disconnected from peer: %s", s)
+	log.Debugf("Disconnected from peer: %s", s)
 
 	if addr, ok := c.initialPeers[pid]; ok {
 		go func() {
 			sleepTimeSeconds := 1
 			for {
-				log.Infof("Attempting to connect to peer %v", addr.ID)
+				log.Infof("Attempting to connect to seed %v", addr.ID)
 				err := c.host.Connect(ctx, addr)
 				if err != nil {
-					log.Infof("Error connecting to peer %v: %s", addr.ID, err)
+					log.Infof("Error connecting to seed %v: %s", addr.ID, err)
 				} else {
 					return
 				}
