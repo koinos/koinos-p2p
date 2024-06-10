@@ -8,7 +8,6 @@ import (
 	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/rpc"
-	util "github.com/koinos/koinos-util-golang/v2"
 
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -41,6 +40,11 @@ type numConnectionsMessage struct {
 	returnChan chan<- int
 }
 
+type isConnectedMessage struct {
+	id         peer.ID
+	returnChan chan<- bool
+}
+
 type peerConnectionContext struct {
 	peer   *PeerConnection
 	conn   network.Conn
@@ -66,6 +70,7 @@ type ConnectionManager struct {
 	peerErrorChan        chan<- PeerError
 	peerAddressChan      chan *peerAddressMessage
 	numConnectionsChan   chan *numConnectionsMessage
+	isConnectedChan      chan *isConnectedMessage
 }
 
 // NewConnectionManager creates a new PeerReconnectManager object
@@ -93,6 +98,7 @@ func NewConnectionManager(
 		peerErrorChan:        peerErrorChan,
 		peerAddressChan:      make(chan *peerAddressMessage),
 		numConnectionsChan:   make(chan *numConnectionsMessage),
+		isConnectedChan:      make(chan *isConnectedMessage),
 	}
 
 	log.Debug("Registering Peer RPC Service")
@@ -162,6 +168,19 @@ func (c *ConnectionManager) GetNumConnections(ctx context.Context) int {
 	}
 }
 
+func (c *ConnectionManager) IsConnected(ctx context.Context, pid peer.ID) bool {
+	returnChan := make(chan bool)
+
+	c.isConnectedChan <- &isConnectedMessage{pid, returnChan}
+
+	select {
+	case connected := <-returnChan:
+		return connected
+	case <-ctx.Done():
+		return false
+	}
+}
+
 func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
 	pid := msg.conn.RemotePeer()
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), pid)
@@ -201,24 +220,6 @@ func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connecti
 
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), msg.conn.RemotePeer())
 	log.Debugf("Disconnected from peer: %s", s)
-
-	if addr, ok := c.initialPeers[pid]; ok {
-		go func() {
-			sleepTimeSeconds := 1
-			for {
-				log.Infof("Attempting to connect to seed %v", addr.ID)
-				err := c.host.Connect(ctx, addr)
-				if err != nil {
-					log.Infof("Error connecting to seed %v: %s", addr.ID, err)
-				} else {
-					return
-				}
-
-				time.Sleep(time.Duration(sleepTimeSeconds) * time.Second)
-				sleepTimeSeconds = min(maxSleepBackoff, sleepTimeSeconds*2)
-			}
-		}()
-	}
 }
 
 func (c *ConnectionManager) handleGetPeerAddress(ctx context.Context, msg *peerAddressMessage) {
@@ -240,34 +241,37 @@ func (c *ConnectionManager) handleGetNumConnections(ctx context.Context, msg *nu
 	}
 }
 
+func (c *ConnectionManager) handleIsConnected(ctx context.Context, msg *isConnectedMessage) {
+	_, connected := c.connectedPeers[msg.id]
+
+	select {
+	case msg.returnChan <- connected:
+	case <-ctx.Done():
+	}
+}
+
 func (c *ConnectionManager) connectInitialPeers(ctx context.Context) {
-	newlyConnectedPeers := make(map[peer.ID]util.Void)
 	peersToConnect := make(map[peer.ID]peer.AddrInfo)
-	sleepTimeSeconds := 1
+	sleepTimeSeconds := 10
 
 	for k, v := range c.initialPeers {
 		peersToConnect[k] = v
 	}
 
-	for len(peersToConnect) > 0 {
+	for {
 		for peer, addr := range c.initialPeers {
-			log.Infof("Attempting to connect to peer %v", peer)
-			err := c.host.Connect(ctx, addr)
-			if err != nil {
-				log.Infof("Error connecting to peer %v: %s", peer, err)
-			} else {
-				newlyConnectedPeers[peer] = util.Void{}
+			if !c.IsConnected(ctx, peer) {
+				log.Infof("Attempting to connect to seed %v", peer)
+				if err := c.host.Connect(ctx, addr); err != nil {
+					log.Infof("Error connecting to seed %v: %s", peer, err)
+				}
 			}
 		}
 
-		for peer := range newlyConnectedPeers {
-			delete(peersToConnect, peer)
+		select {
+		case <-time.After(time.Duration(sleepTimeSeconds) * time.Second):
+		case <-ctx.Done():
 		}
-
-		newlyConnectedPeers = make(map[peer.ID]util.Void)
-
-		time.Sleep(time.Duration(sleepTimeSeconds) * time.Second)
-		sleepTimeSeconds = min(maxSleepBackoff, sleepTimeSeconds*2)
 	}
 }
 
@@ -282,6 +286,8 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 			c.handleGetPeerAddress(ctx, peerAddrMsg)
 		case numConnectionsMsg := <-c.numConnectionsChan:
 			c.handleGetNumConnections(ctx, numConnectionsMsg)
+		case isConnectedMsg := <-c.isConnectedChan:
+			c.handleIsConnected(ctx, isConnectedMsg)
 
 		case <-ctx.Done():
 			for _, conn := range c.connectedPeers {
