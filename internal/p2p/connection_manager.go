@@ -17,15 +17,6 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 )
 
-const maxSleepBackoff = 30
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 type connectionMessage struct {
 	net  network.Network
 	conn network.Conn
@@ -208,7 +199,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 	}
 }
 
-func (c *ConnectionManager) handleDisconnected(ctx context.Context, msg connectionMessage) {
+func (c *ConnectionManager) handleDisconnected(msg connectionMessage) {
 	pid := msg.conn.RemotePeer()
 
 	if peerConn, ok := c.connectedPeers[pid]; ok {
@@ -281,7 +272,7 @@ func (c *ConnectionManager) managerLoop(ctx context.Context) {
 		case connMsg := <-c.peerConnectedChan:
 			c.handleConnected(ctx, connMsg)
 		case connMsg := <-c.peerDisconnectedChan:
-			c.handleDisconnected(ctx, connMsg)
+			c.handleDisconnected(connMsg)
 		case peerAddrMsg := <-c.peerAddressChan:
 			c.handleGetPeerAddress(ctx, peerAddrMsg)
 		case numConnectionsMsg := <-c.numConnectionsChan:
