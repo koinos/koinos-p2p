@@ -64,8 +64,6 @@ const (
 	gossipIWantFollowupTime  = 3 * time.Second
 	gossipHistoryLength      = 5
 	gossipHistoryGossip      = 3
-	koinosProtocolPrefix     = "koinos/p2p/"
-	koinosProtocolVersion    = "1.0.0"
 )
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
@@ -115,7 +113,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		// performance issues.
 		libp2p.EnableNATService(),
 		libp2p.ConnectionGater(node.PeerErrorHandler),
-		libp2p.ProtocolVersion(koinosProtocolPrefix + koinosProtocolVersion),
+		libp2p.ProtocolVersion(p2p.KoinosProtocolVersionString()),
 	}
 
 	host, err := libp2p.New(options...)
@@ -194,6 +192,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.ConnectionManager = p2p.NewConnectionManager(
 		node.Host,
 		node.localRPC,
+		&config.ConnectionManagerOptions,
 		&config.PeerConnectionOptions,
 		node,
 		node.Options.InitialPeers,

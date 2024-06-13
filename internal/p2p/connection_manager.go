@@ -2,11 +2,15 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
+	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
@@ -49,6 +53,7 @@ type ConnectionManager struct {
 	client *gorpc.Client
 
 	localRPC    rpc.LocalRPC
+	opts        *options.ConnectionManagerOptions
 	peerOpts    *options.PeerConnectionOptions
 	libProvider LastIrreversibleBlockProvider
 	applicator  *Applicator
@@ -68,6 +73,7 @@ type ConnectionManager struct {
 func NewConnectionManager(
 	host host.Host,
 	localRPC rpc.LocalRPC,
+	managerOpts *options.ConnectionManagerOptions,
 	peerOpts *options.PeerConnectionOptions,
 	libProvider LastIrreversibleBlockProvider,
 	initialPeers []peer.AddrInfo,
@@ -79,6 +85,7 @@ func NewConnectionManager(
 		client:               gorpc.NewClient(host, rpc.PeerRPCID),
 		server:               gorpc.NewServer(host, rpc.PeerRPCID),
 		localRPC:             localRPC,
+		opts:                 managerOpts,
 		peerOpts:             peerOpts,
 		libProvider:          libProvider,
 		applicator:           applicator,
@@ -172,6 +179,52 @@ func (c *ConnectionManager) IsConnected(ctx context.Context, pid peer.ID) bool {
 	}
 }
 
+func (c *ConnectionManager) readProtocolVersion(pid peer.ID) (string, error) {
+	peerVersion, err := c.host.Peerstore().Get(pid, "ProtocolVersion")
+	if err != nil {
+		return "", err
+	}
+
+	switch peerVersion := peerVersion.(type) {
+	case string:
+		return peerVersion, nil
+	default:
+		return "", p2perrors.ErrProtocolMissing
+	}
+}
+
+func (c *ConnectionManager) GetProtocolVersion(ctx context.Context, pid peer.ID) (*semver.Version, error) {
+	versionCtx, cancel := context.WithTimeout(ctx, c.opts.ProtocolVersionTimeout)
+	defer cancel()
+
+	for {
+		versionString, err := c.readProtocolVersion(pid)
+		if err != nil {
+			if errors.Is(err, p2perrors.ErrProtocolMismatch) {
+				return nil, err
+			}
+		} else if len(versionString) > 0 {
+			if !strings.HasPrefix(versionString, koinosProtocolPrefix) {
+				return nil, p2perrors.ErrProtocolMismatch
+			}
+
+			parts := strings.Split(versionString, "/")
+			version, err := semver.NewVersion(parts[len(parts)-1])
+			if err != nil {
+				return nil, p2perrors.ErrProtocolMismatch
+			}
+
+			return version, nil
+		}
+
+		select {
+		case <-time.After(c.opts.ProtocolVersionRetryTime):
+		case <-versionCtx.Done():
+			return nil, p2perrors.ErrProtocolMissing
+		}
+	}
+}
+
 func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionMessage) {
 	pid := msg.conn.RemotePeer()
 	s := fmt.Sprintf("%s/p2p/%s", msg.conn.RemoteMultiaddr(), pid)
@@ -189,6 +242,7 @@ func (c *ConnectionManager) handleConnected(ctx context.Context, msg connectionM
 				c.peerErrorChan,
 				c.peerOpts,
 				c.applicator,
+				c,
 			),
 			conn:   msg.conn,
 			cancel: cancel,

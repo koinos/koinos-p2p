@@ -130,7 +130,7 @@ func (p *PeerErrorHandler) handleError(ctx context.Context, peerErr PeerError) {
 			}
 		}
 
-		if !errors.Is(peerErr.err, p2perrors.ErrChainIDMismatch) {
+		if !errors.Is(peerErr.err, p2perrors.ErrChainIDMismatch) && !errors.Is(peerErr.err, p2perrors.ErrProtocolMismatch) {
 			log.Infof("Encountered peer error: %s, %s. Current error score: %v", peerErr.id, peerErr.err.Error(), p.errorScores[ipAddr].score)
 		}
 
@@ -182,6 +182,8 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 		return p.opts.ChainNotConnectedErrorScore
 	case errors.Is(err, p2perrors.ErrCheckpointMismatch):
 		return p.opts.CheckpointMismatchErrorScore
+	case errors.Is(err, p2perrors.ErrProtocolMismatch):
+		return p.opts.ProtocolMismatchErrorScore
 
 	// Errors that should only originate from the local process or local node
 	case errors.Is(err, p2perrors.ErrLocalRPC):

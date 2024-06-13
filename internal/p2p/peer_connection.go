@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
@@ -20,16 +21,18 @@ type signalRequestBlocks struct{}
 // PeerConnection handles the sync portion of a connection to a peer
 type PeerConnection struct {
 	id       peer.ID
+	version  *semver.Version
 	isSynced bool
 	opts     *options.PeerConnectionOptions
 
 	requestBlockChan chan signalRequestBlocks
 
-	libProvider   LastIrreversibleBlockProvider
-	localRPC      rpc.LocalRPC
-	peerRPC       rpc.RemoteRPC
-	applicator    *Applicator
-	peerErrorChan chan<- PeerError
+	libProvider     LastIrreversibleBlockProvider
+	localRPC        rpc.LocalRPC
+	peerRPC         rpc.RemoteRPC
+	applicator      *Applicator
+	peerErrorChan   chan<- PeerError
+	versionProvider ProtocolVersionProvider
 }
 
 func (p *PeerConnection) requestBlocks() {
@@ -37,6 +40,19 @@ func (p *PeerConnection) requestBlocks() {
 }
 
 func (p *PeerConnection) handshake(ctx context.Context) error {
+	// Check Peer's protocol version
+	version, err := p.versionProvider.GetProtocolVersion(ctx, p.id)
+	if err == nil {
+		p.version = version
+	} else {
+		// TODO: Remove to reject when protocol is missing
+		if errors.Is(err, p2perrors.ErrProtocolMissing) {
+			p.version = semver.New(0, 0, 0, "", "")
+		} else {
+			return err
+		}
+	}
+
 	// Get my chain id
 	rpcContext, cancelLocalGetChainID := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
 	defer cancelLocalGetChainID()
@@ -244,7 +260,8 @@ func NewPeerConnection(
 	peerRPC rpc.RemoteRPC,
 	peerErrorChan chan<- PeerError,
 	opts *options.PeerConnectionOptions,
-	applicator *Applicator) *PeerConnection {
+	applicator *Applicator,
+	versionProvider ProtocolVersionProvider) *PeerConnection {
 	return &PeerConnection{
 		id:               id,
 		isSynced:         false,
@@ -255,5 +272,6 @@ func NewPeerConnection(
 		peerRPC:          peerRPC,
 		applicator:       applicator,
 		peerErrorChan:    peerErrorChan,
+		versionProvider:  versionProvider,
 	}
 }

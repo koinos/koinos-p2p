@@ -64,4 +64,10 @@ var (
 
 	// ErrBlockState represents when chain cannot create a new block state node
 	ErrBlockState = errors.New("could not create new block state node")
+
+	// ErrProtocolMismatch represents when a peer's protocol version does match ours
+	ErrProtocolMismatch = errors.New("protocol version mismatch")
+
+	// ErrProtocolMissing represents when a peer's protocol version is missing
+	ErrProtocolMissing = errors.New("protocol version is missing")
 )
