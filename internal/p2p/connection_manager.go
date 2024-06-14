@@ -189,7 +189,7 @@ func (c *ConnectionManager) readProtocolVersion(pid peer.ID) (string, error) {
 	case string:
 		return peerVersion, nil
 	default:
-		return "", p2perrors.ErrProtocolMissing
+		return "", p2perrors.ErrProtocolMismatch
 	}
 }
 
