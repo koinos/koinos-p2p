@@ -53,6 +53,7 @@ jobs:
         - sudo apt-get update
       install:
         - sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        - sudo systemctl start docker.service && sudo systemctl start docker.socket
         - git clone https://github.com/koinos/koinos-integration-tests.git
         - pushd koinos-integration-tests
         - go get ./...
