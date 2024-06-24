@@ -28,6 +28,7 @@ const (
 	processRequestTimeoutErrorScoreDefault   = 0
 	forkBombErrorScoreDefault                = errorScoreThresholdDefault * 2
 	maxHeightErrorScoreDefault               = blockApplicationErrorScoreDefault
+	protocolMistmatchErrorScoreDefault       = errorScoreThresholdDefault * 2
 	unknownErrorScoreDefault                 = blockApplicationErrorScoreDefault
 )
 
@@ -56,6 +57,7 @@ type PeerErrorHandlerOptions struct {
 	ProcessRequestTimeoutErrorScore   uint64
 	ForkBombErrorScore                uint64
 	MaxHeightErrorScore               uint64
+	ProtocolMismatchErrorScore        uint64
 	UnknownErrorScore                 uint64
 }
 
@@ -84,6 +86,7 @@ func NewPeerErrorHandlerOptions() *PeerErrorHandlerOptions {
 		ProcessRequestTimeoutErrorScore:   processRequestTimeoutErrorScoreDefault,
 		ForkBombErrorScore:                forkBombErrorScoreDefault,
 		MaxHeightErrorScore:               maxHeightErrorScoreDefault,
+		ProtocolMismatchErrorScore:        protocolMistmatchErrorScoreDefault,
 		UnknownErrorScore:                 unknownErrorScoreDefault,
 	}
 }

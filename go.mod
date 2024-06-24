@@ -22,6 +22,7 @@ require (
 
 require (
 	filippo.io/bigmod v0.0.1 // indirect
+	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.20.1-beta // indirect
