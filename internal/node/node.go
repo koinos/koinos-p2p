@@ -94,11 +94,6 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		libp2p.Identity(privateKey),
 		// Attempt to open ports using uPNP for NATed hosts.
 		libp2p.NATPortMap(),
-		// Let this host use the DHT to find other hosts
-		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
-			idht, err = dht.New(ctx, h)
-			return idht, err
-		}),
 		// Let this host use relays and advertise itself on relays if
 		// it finds it is behind NAT. Use libp2p.Relay(options...) to
 		// enable active relays and more.
@@ -114,6 +109,13 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		libp2p.EnableNATService(),
 		libp2p.ConnectionGater(node.PeerErrorHandler),
 		libp2p.ProtocolVersion(p2p.KoinosProtocolVersionString()),
+	}
+
+	if config.NodeOptions.DHTRouting {
+		options = append(options, libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
+			idht, err = dht.New(ctx, h)
+			return idht, err
+		}))
 	}
 
 	host, err := libp2p.New(options...)

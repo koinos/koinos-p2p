@@ -41,6 +41,7 @@ const (
 	instanceIDOption    = "instance-id"
 	jobsOption          = "jobs"
 	versionOption       = "version"
+	DHTRoutingOption    = "dht-routing"
 )
 
 const (
@@ -54,6 +55,7 @@ const (
 	logColorDefault      = true
 	logDatetimeDefault   = true
 	instanceIDDefault    = ""
+	DHTRoutingDefault    = false
 )
 
 const (
@@ -92,6 +94,7 @@ func main() {
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
 	jobs := flag.IntP(jobsOption, "j", jobsDefault, "Number of RPC jobs to run")
 	version := flag.BoolP(versionOption, "v", false, "Print version and exit")
+	DHTRouting := flag.Bool(DHTRoutingOption, DHTRoutingDefault, "Disables DHT routing")
 
 	flag.Parse()
 
@@ -121,6 +124,7 @@ func main() {
 	*logDatetime = util.GetBoolOption(logDatetimeOption, logDatetimeDefault, *logDatetime, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 	*jobs = util.GetIntOption(jobsOption, jobsDefault, *jobs, yamlConfig.P2P, yamlConfig.Global)
+	*DHTRouting = util.GetBoolOption(DHTRoutingOption, DHTRoutingDefault, *DHTRouting, yamlConfig.P2P, yamlConfig.Global)
 
 	if len(*logDir) > 0 && !path.IsAbs(*logDir) {
 		*logDir = path.Join(util.GetAppDir(baseDir, appName), *logDir)
@@ -164,6 +168,9 @@ func main() {
 	}
 	if *forceGossip {
 		config.GossipToggleOptions.AlwaysEnable = true
+	}
+	if *DHTRouting {
+		config.NodeOptions.DHTRouting = true
 	}
 
 	for _, checkpoint := range *checkpoints {
