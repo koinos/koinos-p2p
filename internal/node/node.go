@@ -35,6 +35,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	multiaddr "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -111,7 +112,14 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 		libp2p.ProtocolVersion(p2p.KoinosProtocolVersionString()),
 	}
 
-	if config.NodeOptions.DHTRouting {
+	if !config.NodeOptions.DHTLocalDiscovery {
+		options = append(options, libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
+			idht, err = dht.New(ctx, h, dht.AddressFilter(func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+				return multiaddr.FilterAddrs(addrs, manet.IsPublicAddr)
+			}))
+			return idht, err
+		}))
+	} else {
 		options = append(options, libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 			idht, err = dht.New(ctx, h)
 			return idht, err
