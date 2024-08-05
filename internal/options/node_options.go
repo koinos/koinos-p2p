@@ -9,12 +9,16 @@ type NodeOptions struct {
 
 	// Force gossip mode on startup
 	ForceGossip bool
+
+	// DHT local peer discovery
+	DHTLocalDiscovery bool
 }
 
 // NewNodeOptions creates a NodeOptions object which controls how p2p works
 func NewNodeOptions() *NodeOptions {
 	return &NodeOptions{
-		InitialPeers: make([]peer.AddrInfo, 0),
-		ForceGossip:  false,
+		InitialPeers:      make([]peer.AddrInfo, 0),
+		ForceGossip:       false,
+		DHTLocalDiscovery: false,
 	}
 }

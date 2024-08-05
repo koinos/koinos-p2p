@@ -26,34 +26,36 @@ import (
 )
 
 const (
-	baseDirOption       = "basedir"
-	amqpOption          = "amqp"
-	listenOption        = "listen"
-	seedOption          = "seed"
-	peerOption          = "peer"
-	checkpointOption    = "checkpoint"
-	disableGossipOption = "disable-gossip"
-	forceGossipOption   = "force-gossip"
-	logLevelOption      = "log-level"
-	logDirOption        = "log-dir"
-	logColorOption      = "log-color"
-	logDatetimeOption   = "log-datetime"
-	instanceIDOption    = "instance-id"
-	jobsOption          = "jobs"
-	versionOption       = "version"
+	baseDirOption           = "basedir"
+	amqpOption              = "amqp"
+	listenOption            = "listen"
+	seedOption              = "seed"
+	peerOption              = "peer"
+	checkpointOption        = "checkpoint"
+	disableGossipOption     = "disable-gossip"
+	forceGossipOption       = "force-gossip"
+	logLevelOption          = "log-level"
+	logDirOption            = "log-dir"
+	logColorOption          = "log-color"
+	logDatetimeOption       = "log-datetime"
+	instanceIDOption        = "instance-id"
+	jobsOption              = "jobs"
+	versionOption           = "version"
+	dhtLocalDiscoveryOption = "dht-local-discovery"
 )
 
 const (
-	baseDirDefault       = ".koinos"
-	amqpDefault          = "amqp://guest:guest@localhost:5672/"
-	listenDefault        = "/ip4/127.0.0.1/tcp/8888"
-	seedDefault          = ""
-	disableGossipDefault = false
-	forceGossipDefault   = false
-	logLevelDefault      = "info"
-	logColorDefault      = true
-	logDatetimeDefault   = true
-	instanceIDDefault    = ""
+	baseDirDefault           = ".koinos"
+	amqpDefault              = "amqp://guest:guest@localhost:5672/"
+	listenDefault            = "/ip4/127.0.0.1/tcp/8888"
+	seedDefault              = ""
+	disableGossipDefault     = false
+	forceGossipDefault       = false
+	logLevelDefault          = "info"
+	logColorDefault          = true
+	logDatetimeDefault       = true
+	instanceIDDefault        = ""
+	dhtLocalDiscoveryDefault = false
 )
 
 const (
@@ -92,6 +94,7 @@ func main() {
 	instanceID := flag.StringP(instanceIDOption, "i", instanceIDDefault, "The instance ID to identify this node")
 	jobs := flag.IntP(jobsOption, "j", jobsDefault, "Number of RPC jobs to run")
 	version := flag.BoolP(versionOption, "v", false, "Print version and exit")
+	dhtLocalDiscovery := flag.Bool(dhtLocalDiscoveryOption, dhtLocalDiscoveryDefault, "Enables local peer discovery")
 
 	flag.Parse()
 
@@ -121,6 +124,7 @@ func main() {
 	*logDatetime = util.GetBoolOption(logDatetimeOption, logDatetimeDefault, *logDatetime, yamlConfig.P2P, yamlConfig.Global)
 	*instanceID = util.GetStringOption(instanceIDOption, util.GenerateBase58ID(5), *instanceID, yamlConfig.P2P, yamlConfig.Global)
 	*jobs = util.GetIntOption(jobsOption, jobsDefault, *jobs, yamlConfig.P2P, yamlConfig.Global)
+	*dhtLocalDiscovery = util.GetBoolOption(dhtLocalDiscoveryOption, dhtLocalDiscoveryDefault, *dhtLocalDiscovery, yamlConfig.P2P, yamlConfig.Global)
 
 	if len(*logDir) > 0 && !path.IsAbs(*logDir) {
 		*logDir = path.Join(util.GetAppDir(baseDir, appName), *logDir)
@@ -164,6 +168,9 @@ func main() {
 	}
 	if *forceGossip {
 		config.GossipToggleOptions.AlwaysEnable = true
+	}
+	if *dhtLocalDiscovery {
+		config.NodeOptions.DHTLocalDiscovery = true
 	}
 
 	for _, checkpoint := range *checkpoints {
