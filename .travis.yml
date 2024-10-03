@@ -17,7 +17,7 @@ jobs:
       install:
         - sudo gem install coveralls-lcov
         - go install github.com/jandelgado/gcov2lcov@latest
-        - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
+        - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
         - go get ./...
       script:
         - go build -ldflags="-X main.Commit=$(git rev-parse HEAD)" cmd/koinos-p2p/main.go
