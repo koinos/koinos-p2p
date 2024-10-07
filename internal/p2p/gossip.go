@@ -130,7 +130,7 @@ func readMessages(ctx context.Context, ch chan<- []byte, sub *pubsub.Subscriptio
 	//
 	for {
 		msg, err := sub.Next(ctx)
-		if err != nil && !errors.Is(context.DeadlineExceeded, err) {
+		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			log.Warnf("Error getting message for topic %s: %s", topicName, err)
 			return
 		}
