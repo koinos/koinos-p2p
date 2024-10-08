@@ -33,8 +33,6 @@ type PeerConnection struct {
 	applicator      *Applicator
 	peerErrorChan   chan<- PeerError
 	versionProvider ProtocolVersionProvider
-
-	cancel *context.CancelFunc
 }
 
 func (p *PeerConnection) requestBlocks(ctx context.Context) {
