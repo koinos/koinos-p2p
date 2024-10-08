@@ -33,10 +33,15 @@ type PeerConnection struct {
 	applicator      *Applicator
 	peerErrorChan   chan<- PeerError
 	versionProvider ProtocolVersionProvider
+
+	cancel *context.CancelFunc
 }
 
-func (p *PeerConnection) requestBlocks() {
-	p.requestBlockChan <- signalRequestBlocks{}
+func (p *PeerConnection) requestBlocks(ctx context.Context) {
+	select {
+	case p.requestBlockChan <- signalRequestBlocks{}:
+	case <-ctx.Done():
+	}
 }
 
 func (p *PeerConnection) handshake(ctx context.Context) error {
@@ -206,7 +211,14 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 		case <-p.requestBlockChan:
 			err := p.handleRequestBlocks(ctx)
 			if err != nil {
-				go time.AfterFunc(time.Second, p.requestBlocks)
+				go func() {
+					select {
+					case <-time.After(time.Second):
+						p.requestBlocks(ctx)
+					case <-ctx.Done():
+					}
+				}()
+
 				go func() {
 					select {
 					case p.peerErrorChan <- PeerError{id: p.id, err: err}:
@@ -215,9 +227,15 @@ func (p *PeerConnection) connectionLoop(ctx context.Context) {
 				}()
 			} else {
 				if p.isSynced {
-					go time.AfterFunc(p.opts.SyncedPingTime, p.requestBlocks)
+					go func() {
+						select {
+						case <-time.After(p.opts.SyncedPingTime):
+							p.requestBlocks(ctx)
+						case <-ctx.Done():
+						}
+					}()
 				} else {
-					go p.requestBlocks()
+					go p.requestBlocks(ctx)
 				}
 			}
 		}
@@ -240,7 +258,7 @@ func (p *PeerConnection) Start(ctx context.Context) {
 				}()
 			} else {
 				go p.connectionLoop(ctx)
-				go p.requestBlocks()
+				go p.requestBlocks(ctx)
 				return
 			}
 			select {

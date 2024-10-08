@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/koinos/koinos-log-golang/v2"
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/canonical"
@@ -159,7 +160,8 @@ type KoinosGossip struct {
 	myPeerID      peer.ID
 	libProvider   LastIrreversibleBlockProvider
 	applicator    *Applicator
-	reportCancel  *context.CancelFunc
+	opts          options.GossipOptions
+	gossipCancel  *context.CancelFunc
 	recentBlocks  uint32
 	recentTrxs    uint32
 }
@@ -172,7 +174,8 @@ func NewKoinosGossip(
 	peerErrorChan chan<- PeerError,
 	id peer.ID,
 	libProvider LastIrreversibleBlockProvider,
-	applicator *Applicator) *KoinosGossip {
+	applicator *Applicator,
+	opts options.GossipOptions) *KoinosGossip {
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
@@ -185,6 +188,7 @@ func NewKoinosGossip(
 		myPeerID:      id,
 		libProvider:   libProvider,
 		applicator:    applicator,
+		opts:          opts,
 	}
 
 	return &kg
@@ -208,10 +212,10 @@ func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
 // StartGossip enables gossip of blocks and transactions
 func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 	log.Info("Starting gossip mode")
-	kg.startBlockGossip(ctx)
-	kg.startTransactionGossip(ctx)
-	reportCtx, reportCancel := context.WithCancel(ctx)
-	kg.reportCancel = &reportCancel
+	gossipCtx, gossipCancel := context.WithCancel(ctx)
+	kg.gossipCancel = &gossipCancel
+	kg.startBlockGossip(gossipCtx)
+	kg.startTransactionGossip(gossipCtx)
 
 	go func() {
 		for {
@@ -223,7 +227,7 @@ func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 				if numBlocks > 0 || numTrxs > 0 {
 					log.Infof("Recently gossiped %v block(s) and %v transaction(s)", numBlocks, numTrxs)
 				}
-			case <-reportCtx.Done():
+			case <-gossipCtx.Done():
 				return
 			}
 		}
@@ -235,9 +239,9 @@ func (kg *KoinosGossip) StopGossip() {
 	log.Info("Stopping gossip mode")
 	kg.block.Stop()
 	kg.transaction.Stop()
-	if kg.reportCancel != nil {
-		(*kg.reportCancel)()
-		kg.reportCancel = nil
+	if kg.gossipCancel != nil {
+		(*kg.gossipCancel)()
+		kg.gossipCancel = nil
 	}
 }
 
@@ -361,8 +365,10 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 
 	log.Debugf("Pushing gossip block - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
 
-	// TODO: Fix nil argument
-	if err := kg.applicator.ApplyBlock(ctx, block); err != nil {
+	applicatorContext, cancelApplyBlock := context.WithTimeout(ctx, kg.opts.BlockTimeout)
+	defer cancelApplyBlock()
+
+	if err := kg.applicator.ApplyBlock(applicatorContext, block); err != nil {
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrBlockApplication, util.BlockString(block), err.Error())
 	}
 
@@ -426,7 +432,10 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 		return fmt.Errorf("%w, gossiped transaction missing id", p2perrors.ErrDeserialization)
 	}
 
-	if err := kg.applicator.ApplyTransaction(ctx, transaction); err != nil {
+	applicatorContext, cancelApplyBlock := context.WithTimeout(ctx, kg.opts.TransactionTimeout)
+	defer cancelApplyBlock()
+
+	if err := kg.applicator.ApplyTransaction(applicatorContext, transaction); err != nil {
 		if errors.Is(err, p2perrors.ErrInvalidNonce) {
 			return fmt.Errorf("%w - %s, %v", p2perrors.ErrInvalidNonce, util.TransactionString(transaction), err.Error())
 		}
