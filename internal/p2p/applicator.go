@@ -2,15 +2,18 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"sync/atomic"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/broadcast"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
+	util "github.com/koinos/koinos-util-golang/v2"
 )
 
 type blockEntry struct {
@@ -132,6 +135,7 @@ func (b *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) 
 }
 
 func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
+	log.Infof("Adding block entry, ID: %s", hex.EncodeToString(entry.block.Id))
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
@@ -159,6 +163,7 @@ func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
 }
 
 func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
+	log.Infof("Removing block entry, ID: %s", hex.EncodeToString([]byte(id)))
 	if entry, ok := b.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
 			select {
@@ -192,6 +197,7 @@ func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
 }
 
 func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Block) {
+	log.Infof("Requesting application for block, ID: %s", hex.EncodeToString(block.Id))
 	// If there is already a pending application of the block, return
 	if _, ok := b.pendingBlocks[string(block.Id)]; ok {
 		return
@@ -249,6 +255,7 @@ func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 }
 
 func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
+	log.Infof("Handling new block, ID: %s", hex.EncodeToString(entry.block.Id))
 	var err error
 
 	if entry.block.Header.Height > b.highestBlock+b.opts.MaxHeightDelta {
@@ -283,6 +290,7 @@ func (b *Applicator) checkChildren(ctx context.Context, blockID string) {
 }
 
 func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
+	log.Infof("Handling fork heads, LIB: %s", util.BlockTopologyString(forkHeads.LastIrreversibleBlock))
 	oldLib := b.lib
 	atomic.StoreUint64(&b.lib, forkHeads.LastIrreversibleBlock.Height)
 
@@ -309,6 +317,7 @@ func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 }
 
 func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
+	log.Infof("Handle broadcast, ID: %s", hex.EncodeToString(blockAccept.Block.Id))
 	b.transactionCache.CheckBlock(blockAccept.Block)
 
 	// It is not possible for a block with a new highest height to not be head, so this check is sufficient
