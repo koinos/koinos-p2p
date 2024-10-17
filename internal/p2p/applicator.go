@@ -448,6 +448,8 @@ func (b *Applicator) handleNewTransaction(ctx context.Context, entry *transactio
 
 	if len(b.transactionsById) >= int(b.opts.MaxPendingTransactions) {
 		err = p2perrors.ErrMaxPendingTransactions
+	} else {
+		b.addTransactionEntry(ctx, entry)
 	}
 
 	if err != nil {
