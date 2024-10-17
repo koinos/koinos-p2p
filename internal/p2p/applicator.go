@@ -12,8 +12,10 @@ import (
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/broadcast"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/chain"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
 	util "github.com/koinos/koinos-util-golang/v2"
+	"google.golang.org/protobuf/proto"
 )
 
 type blockEntry struct {
@@ -32,10 +34,20 @@ type blockApplicationStatus struct {
 	err   error
 }
 
-type transactionApplicatorRequest struct {
+type transactionEntry struct {
+	transaction *protocol.Transaction
+	errChans    []chan<- error
+}
+
+type transactionApplicationRequest struct {
 	trx     *protocol.Transaction
 	errChan chan<- error
 	ctx     context.Context
+}
+
+type transactionApplicationStatus struct {
+	transaction *protocol.Transaction
+	err         error
 }
 
 // Applicator manages block application to avoid duplicate application and premature application
@@ -53,12 +65,20 @@ type Applicator struct {
 	blocksByHeight   map[uint64]map[string]void
 	pendingBlocks    map[string]void
 
-	newBlockChan         chan *blockEntry
-	forkHeadsChan        chan *broadcast.ForkHeads
-	blockBroadcastChan   chan *broadcast.BlockAccepted
-	applyBlockChan       chan *blockApplicationRequest
-	blockStatusChan      chan *blockApplicationStatus
-	applyTransactionChan chan *transactionApplicatorRequest
+	transactionsById         map[string]*transactionEntry
+	transactionsByPayeeNonce map[string]map[string]void
+	pendingTransactions      map[string]void
+
+	newBlockChan             chan *blockEntry
+	newTransactionChan       chan *transactionEntry
+	forkHeadsChan            chan *broadcast.ForkHeads
+	blockBroadcastChan       chan *broadcast.BlockAccepted
+	transactionBroadcastChan chan *broadcast.TransactionAccepted
+	blockStatusChan          chan *blockApplicationStatus
+	transactionStatusChan    chan *transactionApplicationStatus
+	removeTransactionChan    chan string
+	applyBlockChan           chan *blockApplicationRequest
+	applyTransactionChan     chan *transactionApplicationRequest
 
 	opts options.ApplicatorOptions
 }
@@ -71,22 +91,29 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 	}
 
 	return &Applicator{
-		rpc:                  rpc,
-		highestBlock:         headInfo.HeadTopology.Height,
-		lib:                  headInfo.LastIrreversibleBlock,
-		transactionCache:     cache,
-		forkWatchdog:         NewForkWatchdog(),
-		blocksById:           make(map[string]*blockEntry),
-		blocksByPrevious:     make(map[string]map[string]void),
-		blocksByHeight:       make(map[uint64]map[string]void),
-		pendingBlocks:        make(map[string]void),
-		newBlockChan:         make(chan *blockEntry, 10),
-		forkHeadsChan:        make(chan *broadcast.ForkHeads, 10),
-		blockBroadcastChan:   make(chan *broadcast.BlockAccepted, 10),
-		applyBlockChan:       make(chan *blockApplicationRequest, 10),
-		blockStatusChan:      make(chan *blockApplicationStatus, 10),
-		applyTransactionChan: make(chan *transactionApplicatorRequest, 10),
-		opts:                 opts,
+		rpc:                      rpc,
+		highestBlock:             headInfo.HeadTopology.Height,
+		lib:                      headInfo.LastIrreversibleBlock,
+		transactionCache:         cache,
+		forkWatchdog:             NewForkWatchdog(),
+		blocksById:               make(map[string]*blockEntry),
+		blocksByPrevious:         make(map[string]map[string]void),
+		blocksByHeight:           make(map[uint64]map[string]void),
+		pendingBlocks:            make(map[string]void),
+		transactionsById:         make(map[string]*transactionEntry),
+		transactionsByPayeeNonce: make(map[string]map[string]void),
+		pendingTransactions:      make(map[string]void),
+		newBlockChan:             make(chan *blockEntry, 10),
+		newTransactionChan:       make(chan *transactionEntry, 10),
+		forkHeadsChan:            make(chan *broadcast.ForkHeads, 10),
+		blockBroadcastChan:       make(chan *broadcast.BlockAccepted, 10),
+		transactionBroadcastChan: make(chan *broadcast.TransactionAccepted, 10),
+		blockStatusChan:          make(chan *blockApplicationStatus, 10),
+		transactionStatusChan:    make(chan *transactionApplicationStatus, 10),
+		removeTransactionChan:    make(chan string, 10),
+		applyTransactionChan:     make(chan *transactionApplicationRequest, 10),
+		applyBlockChan:           make(chan *blockApplicationRequest, 10),
+		opts:                     opts,
 	}, nil
 }
 
@@ -104,23 +131,21 @@ func (b *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 	select {
 	case err := <-errChan:
 		return err
-
 	case <-ctx.Done():
 		return p2perrors.ErrBlockApplicationTimeout
 	}
 }
 
-func (b *Applicator) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) error {
+func (b *Applicator) ApplyTransaction(ctx context.Context, transaction *protocol.Transaction) error {
 	errChan := make(chan error, 1)
 
-	b.applyTransactionChan <- &transactionApplicatorRequest{trx, errChan, ctx}
+	b.newTransactionChan <- &transactionEntry{transaction: transaction, errChans: []chan<- error{errChan}}
 
 	select {
 	case err := <-errChan:
 		return err
-
 	case <-ctx.Done():
-		return ctx.Err()
+		return p2perrors.ErrTransactionApplicationTimeout
 	}
 }
 
@@ -134,7 +159,11 @@ func (b *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) 
 	b.blockBroadcastChan <- blockAccept
 }
 
-func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
+func (b *Applicator) HandleTransactionAccepted(transactionAccept *broadcast.TransactionAccepted) {
+	b.transactionBroadcastChan <- transactionAccept
+}
+
+func (b *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 	log.Infof("Adding block entry, ID: %s", hex.EncodeToString(entry.block.Id))
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
@@ -158,17 +187,79 @@ func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
 	b.blocksByHeight[height][id] = void{}
 
 	if entry.block.Header.Height <= b.highestBlock+1 {
-		b.requestApplication(ctx, entry.block)
+		b.requestBlockApplication(ctx, entry.block)
 	}
 }
 
-func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
+func (b *Applicator) addTransactionEntry(ctx context.Context, entry *transactionEntry) {
+	log.Infof("Adding transaction entry, ID %s", hex.EncodeToString(entry.transaction.Id))
+	id := string(entry.transaction.Id)
+
+	// If the transaction is already known, add the error channels and return
+	if oldEntry, ok := b.transactionsById[id]; ok {
+		oldEntry.errChans = append(oldEntry.errChans, entry.errChans...)
+		return
+	} else {
+		b.transactionsById[id] = entry
+	}
+
+	// Get the payee from the transaction and append the nonce
+	payee := string(entry.transaction.Header.Payer)
+	if entry.transaction.Header.Payee != nil {
+		payee = string(entry.transaction.Header.Payee)
+	}
+
+	payeeNonce := payee + string(entry.transaction.Header.Nonce)
+
+	// Record the transaction by the payee and the nonce
+	if _, ok := b.transactionsByPayeeNonce[payeeNonce]; !ok {
+		b.transactionsByPayeeNonce[payeeNonce] = make(map[string]void)
+	}
+	b.transactionsByPayeeNonce[payeeNonce][id] = void{}
+
+	// Automatically expire the transaction after 30 seconds
+	go func() {
+		select {
+		case <-time.After(30 * time.Second):
+			select {
+			case b.transactionStatusChan <- &transactionApplicationStatus{entry.transaction, p2perrors.ErrTransactionApplicationTimeout}:
+			case <-ctx.Done():
+			}
+		case <-ctx.Done():
+		}
+	}()
+
+	// Decrement the nonce by one to get the previous nonce
+	nonce := &chain.ValueType{}
+	err := proto.Unmarshal(entry.transaction.Header.Nonce, nonce)
+	if err != nil {
+		return
+	}
+
+	nonceValue := nonce.GetUint64Value() - 1
+	nonce.Kind = &chain.ValueType_Uint64Value{Uint64Value: nonceValue}
+	prevNonce, err := proto.Marshal(nonce)
+	if err != nil {
+		return
+	}
+
+	prevPayeeNonce := payee + string(prevNonce)
+
+	// If we know the previous nonce transaction exists, do not try application right now
+	if _, ok := b.transactionsByPayeeNonce[prevPayeeNonce]; ok {
+		return
+	}
+
+	b.requestTransactionApplication(ctx, entry.transaction)
+}
+
+func (b *Applicator) removeBlockEntry(ctx context.Context, id string, err error) {
 	log.Infof("Removing block entry, ID: %s", hex.EncodeToString([]byte(id)))
 	if entry, ok := b.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
+			defer close(ch)
 			select {
 			case ch <- err:
-				close(ch)
 			case <-ctx.Done():
 			}
 		}
@@ -196,7 +287,36 @@ func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
 	}
 }
 
-func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Block) {
+func (b *Applicator) removeTransactionEntry(ctx context.Context, id string, err error) {
+	if entry, ok := b.transactionsById[id]; ok {
+		for _, ch := range entry.errChans {
+			defer close(ch)
+			select {
+			case ch <- err:
+			case <-ctx.Done():
+			}
+		}
+
+		delete(b.transactionsById, id)
+
+		payee := string(entry.transaction.Header.Payer)
+		if entry.transaction.Header.Payee != nil {
+			payee = string(entry.transaction.Header.Payee)
+		}
+
+		payeeNonce := payee + string(entry.transaction.Header.Nonce)
+
+		if transactions, ok := b.transactionsByPayeeNonce[payeeNonce]; ok {
+			delete(transactions, id)
+
+			if len(transactions) == 0 {
+				delete(b.transactionsByPayeeNonce, payeeNonce)
+			}
+		}
+	}
+}
+
+func (b *Applicator) requestBlockApplication(ctx context.Context, block *protocol.Block) {
 	log.Infof("Requesting application for block, ID: %s", hex.EncodeToString(block.Id))
 	// If there is already a pending application of the block, return
 	if _, ok := b.pendingBlocks[string(block.Id)]; ok {
@@ -222,23 +342,57 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 			select {
 			case <-timerCtx.Done():
 			case <-delayCtx.Done():
-				b.blockStatusChan <- &blockApplicationStatus{
+				select {
+				case b.blockStatusChan <- &blockApplicationStatus{
 					block: block,
 					err:   ctx.Err(),
+				}:
+				case <-ctx.Done():
 				}
+
 				return
 			}
 		}
 
-		b.applyBlockChan <- &blockApplicationRequest{block, errChan, ctx}
+		select {
+		case b.applyBlockChan <- &blockApplicationRequest{block, errChan, ctx}:
+		case <-ctx.Done():
+			return
+		}
 
 		select {
 		case err := <-errChan:
-			b.blockStatusChan <- &blockApplicationStatus{
-				block: block,
-				err:   err,
+			select {
+			case b.blockStatusChan <- &blockApplicationStatus{block, err}:
+			case <-ctx.Done():
 			}
+		case <-ctx.Done():
+		}
+	}()
+}
 
+func (b *Applicator) requestTransactionApplication(ctx context.Context, transaction *protocol.Transaction) {
+	if _, ok := b.pendingTransactions[string(transaction.Id)]; ok {
+		return
+	}
+
+	b.pendingTransactions[string(transaction.Id)] = void{}
+
+	go func() {
+		errChan := make(chan error, 1)
+
+		select {
+		case b.applyTransactionChan <- &transactionApplicationRequest{transaction, errChan, ctx}:
+		case <-ctx.Done():
+			return
+		}
+
+		select {
+		case err := <-errChan:
+			select {
+			case b.transactionStatusChan <- &transactionApplicationStatus{transaction, err}:
+			case <-ctx.Done():
+			}
 		case <-ctx.Done():
 		}
 	}()
@@ -248,10 +402,20 @@ func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 	delete(b.pendingBlocks, string(status.block.Id))
 
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
-		b.requestApplication(ctx, status.block)
+		b.requestBlockApplication(ctx, status.block)
 	} else if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
-		b.removeEntry(ctx, string(status.block.Id), status.err)
+		b.removeBlockEntry(ctx, string(status.block.Id), status.err)
 	}
+}
+
+func (b *Applicator) handleTransactionStatus(ctx context.Context, status *transactionApplicationStatus) {
+	delete(b.pendingTransactions, string(status.transaction.Id))
+
+	if status.err != nil && errors.Is(status.err, p2perrors.ErrInvalidNonce) {
+		return
+	}
+
+	b.removeTransactionEntry(ctx, string(status.transaction.Id), status.err)
 }
 
 func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
@@ -265,25 +429,74 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	} else if entry.block.Header.Height <= b.lib {
 		err = p2perrors.ErrBlockIrreversibility
 	} else {
-		b.addEntry(ctx, entry)
+		b.addBlockEntry(ctx, entry)
 	}
 
 	if err != nil {
 		for _, ch := range entry.errChans {
+			defer close(ch)
 			select {
 			case ch <- err:
-				close(ch)
 			case <-ctx.Done():
 			}
 		}
 	}
 }
 
-func (b *Applicator) checkChildren(ctx context.Context, blockID string) {
+func (b *Applicator) handleNewTransaction(ctx context.Context, entry *transactionEntry) {
+	var err error
+
+	if len(b.transactionsById) >= int(b.opts.MaxPendingTransactions) {
+		err = p2perrors.ErrMaxPendingTransactions
+	}
+
+	if err != nil {
+		for _, ch := range entry.errChans {
+			defer close(ch)
+			select {
+			case ch <- err:
+			case <-ctx.Done():
+			}
+		}
+	}
+}
+
+func (b *Applicator) checkBlockChildren(ctx context.Context, blockID string) {
 	if children, ok := b.blocksByPrevious[string(blockID)]; ok {
 		for id := range children {
 			if entry, ok := b.blocksById[id]; ok {
-				b.requestApplication(ctx, entry.block)
+				b.requestBlockApplication(ctx, entry.block)
+			}
+		}
+	}
+}
+
+func (b *Applicator) checkTransactionChildren(ctx context.Context, transaction *protocol.Transaction) {
+	payee := string(transaction.Header.Payer)
+	if transaction.Header.Payee != nil {
+		payee = string(transaction.Header.Payee)
+	}
+
+	// Increment the nonce by one to get the next nonce
+	nonce := &chain.ValueType{}
+	err := proto.Unmarshal(transaction.Header.Nonce, nonce)
+	if err != nil {
+		return
+	}
+
+	nonceValue := nonce.GetUint64Value() + 1
+	nonce.Kind = &chain.ValueType_Uint64Value{Uint64Value: nonceValue}
+	nextNonce, err := proto.Marshal(nonce)
+	if err != nil {
+		return
+	}
+
+	nextPayeeNonce := payee + string(nextNonce)
+
+	if children, ok := b.transactionsByPayeeNonce[nextPayeeNonce]; ok {
+		for id := range children {
+			if entry, ok := b.transactionsById[id]; ok {
+				b.requestTransactionApplication(ctx, entry.transaction)
 			}
 		}
 	}
@@ -297,7 +510,7 @@ func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 	b.forkWatchdog.Purge(forkHeads.LastIrreversibleBlock.Height)
 
 	for _, head := range forkHeads.Heads {
-		b.checkChildren(ctx, string(head.Id))
+		b.checkBlockChildren(ctx, string(head.Id))
 	}
 
 	// Blocks at or before LIB are automatically rejected, so all entries have height
@@ -310,7 +523,7 @@ func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 	for h := oldLib + 1; h <= forkHeads.LastIrreversibleBlock.Height; h++ {
 		if ids, ok := b.blocksByHeight[h]; ok {
 			for id := range ids {
-				b.removeEntry(ctx, id, p2perrors.ErrBlockIrreversibility)
+				b.removeBlockEntry(ctx, id, p2perrors.ErrBlockIrreversibility)
 			}
 		}
 	}
@@ -325,7 +538,15 @@ func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 		b.highestBlock = blockAccept.Block.Header.Height
 	}
 
-	b.checkChildren(ctx, string(blockAccept.Block.Id))
+	b.checkBlockChildren(ctx, string(blockAccept.Block.Id))
+
+	for _, transaction := range blockAccept.Block.Transactions {
+		b.checkTransactionChildren(ctx, transaction)
+	}
+}
+
+func (b *Applicator) handleTransactionBroadcast(ctx context.Context, transactionAccept *broadcast.TransactionAccepted) {
+	b.checkTransactionChildren(ctx, transactionAccept.Transaction)
 }
 
 func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
@@ -340,7 +561,7 @@ func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
 	close(request.errChan)
 }
 
-func (b *Applicator) handleApplyTransaction(request *transactionApplicatorRequest) {
+func (b *Applicator) handleApplyTransaction(request *transactionApplicationRequest) {
 	var err error
 	if b.transactionCache.CheckTransactions(request.trx) == 0 {
 		_, err = b.rpc.ApplyTransaction(request.ctx, request.trx)
@@ -354,14 +575,22 @@ func (b *Applicator) Start(ctx context.Context) {
 	go func() {
 		for {
 			select {
-			case status := <-b.blockStatusChan:
-				b.handleBlockStatus(ctx, status)
 			case entry := <-b.newBlockChan:
 				b.handleNewBlock(ctx, entry)
+			case status := <-b.blockStatusChan:
+				b.handleBlockStatus(ctx, status)
+
+			case entry := <-b.newTransactionChan:
+				b.handleNewTransaction(ctx, entry)
+			case status := <-b.transactionStatusChan:
+				b.handleTransactionStatus(ctx, status)
+
 			case forkHeads := <-b.forkHeadsChan:
 				b.handleForkHeads(ctx, forkHeads)
 			case blockBroadcast := <-b.blockBroadcastChan:
 				b.handleBlockBroadcast(ctx, blockBroadcast)
+			case transactionBroadcast := <-b.transactionBroadcastChan:
+				b.handleTransactionBroadcast(ctx, transactionBroadcast)
 
 			case <-ctx.Done():
 				return
