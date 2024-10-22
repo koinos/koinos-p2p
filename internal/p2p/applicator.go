@@ -142,20 +142,19 @@ func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
 
 	if oldEntry, ok := b.blocksById[id]; ok {
 		oldEntry.errChans = append(oldEntry.errChans, entry.errChans...)
-		return
 	} else {
 		b.blocksById[id] = entry
-	}
 
-	if _, ok := b.blocksByPrevious[previousId]; !ok {
-		b.blocksByPrevious[previousId] = make(map[string]void)
-	}
-	b.blocksByPrevious[string(entry.block.Header.Previous)][id] = void{}
+		if _, ok := b.blocksByPrevious[previousId]; !ok {
+			b.blocksByPrevious[previousId] = make(map[string]void)
+		}
+		b.blocksByPrevious[string(entry.block.Header.Previous)][id] = void{}
 
-	if _, ok := b.blocksByHeight[height]; !ok {
-		b.blocksByHeight[height] = make(map[string]void)
+		if _, ok := b.blocksByHeight[height]; !ok {
+			b.blocksByHeight[height] = make(map[string]void)
+		}
+		b.blocksByHeight[height][id] = void{}
 	}
-	b.blocksByHeight[height][id] = void{}
 
 	if entry.block.Header.Height <= b.highestBlock+1 {
 		b.requestApplication(ctx, entry.block)
@@ -265,8 +264,6 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 		err = p2perrors.ErrMaxPendingBlocks
 	} else if entry.block.Header.Height <= b.lib {
 		err = p2perrors.ErrBlockIrreversibility
-	} else {
-		b.addEntry(ctx, entry)
 	}
 
 	if err != nil {
@@ -277,6 +274,8 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 			case <-ctx.Done():
 			}
 		}
+	} else {
+		b.addEntry(ctx, entry)
 	}
 }
 
