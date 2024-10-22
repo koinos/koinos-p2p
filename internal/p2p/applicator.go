@@ -230,6 +230,7 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 			}
 		}
 
+		log.Infof("Sending application request for block, ID: %s", hex.EncodeToString(block.Id))
 		b.applyBlockChan <- &blockApplicationRequest{block, errChan, ctx}
 
 		select {
@@ -245,6 +246,7 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 }
 
 func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
+	log.Infof("Handle status for block, ID: %s", hex.EncodeToString(status.block.Id))
 	delete(b.pendingBlocks, string(status.block.Id))
 
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
@@ -329,6 +331,7 @@ func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 }
 
 func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
+	log.Infof("Calling chain.apply_block for block, ID: %s", request.block.Id)
 	var err error
 	if request.block.Header.Height <= atomic.LoadUint64(&b.lib) {
 		err = p2perrors.ErrBlockIrreversibility
