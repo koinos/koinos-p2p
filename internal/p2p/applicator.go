@@ -214,18 +214,9 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 		blockTime := time.Unix(int64(block.Header.Timestamp/1000), int64(block.Header.Timestamp%1000))
 
 		if blockTime.After(applicationThreshold) {
-			delayCtx, delayCancel := context.WithTimeout(ctx, b.opts.DelayTimeout)
-			defer delayCancel()
-			timerCtx, timerCancel := context.WithTimeout(ctx, blockTime.Sub(applicationThreshold))
-			defer timerCancel()
-
 			select {
-			case <-timerCtx.Done():
-			case <-delayCtx.Done():
-				b.blockStatusChan <- &blockApplicationStatus{
-					block: block,
-					err:   ctx.Err(),
-				}
+			case <-time.After(time.Until(blockTime.Add(-b.opts.DelayThreshold))):
+			case <-ctx.Done():
 				return
 			}
 		}
