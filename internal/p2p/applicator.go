@@ -222,7 +222,11 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 		}
 
 		log.Infof("Sending application request for block, ID: %s", hex.EncodeToString(block.Id))
-		b.applyBlockChan <- &blockApplicationRequest{block, errChan, ctx}
+		select {
+		case b.applyBlockChan <- &blockApplicationRequest{block, errChan, ctx}:
+		case <-ctx.Done():
+			return
+		}
 
 		select {
 		case err := <-errChan:
@@ -230,7 +234,6 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 				block: block,
 				err:   err,
 			}
-
 		case <-ctx.Done():
 		}
 	}()
