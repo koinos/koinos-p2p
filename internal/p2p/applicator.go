@@ -214,6 +214,11 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 		blockTime := time.Unix(int64(block.Header.Timestamp/1000), int64(block.Header.Timestamp%1000))
 
 		if blockTime.After(applicationThreshold) {
+			log.Infof("Waiting to apply block, ID: %s, Height: %s, Time: %s, Application Threshold: %s",
+				hex.EncodeToString(block.Id),
+				block.Header.Height,
+				block.Header.Timestamp,
+				blockTime.Add(-b.opts.DelayThreshold))
 			select {
 			case <-time.After(time.Until(blockTime.Add(-b.opts.DelayThreshold))):
 			case <-ctx.Done():
