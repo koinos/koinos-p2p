@@ -348,13 +348,13 @@ func TestDelayBlock(t *testing.T) {
 		Header: &protocol.BlockHeader{
 			Height:    1,
 			Previous:  []byte{0},
-			Timestamp: uint64(time.Now().Add(5 * time.Second).UnixMilli()),
+			Timestamp: uint64(time.Now().Add(6 * time.Second).UnixMilli()),
 		},
 	}
 
 	applicator.Start(ctx)
 
-	timer, timerCancel := context.WithTimeout(ctx, 5*time.Second)
+	timer, timerCancel := context.WithTimeout(ctx, 6*time.Second)
 	defer timerCancel()
 
 	go func() {
