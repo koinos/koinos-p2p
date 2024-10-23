@@ -328,6 +328,50 @@ func TestApplicatorLimits(t *testing.T) {
 	<-testChan
 }
 
+func TestDelayBlock(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rpc := applicatorTestRPC{
+		blocksToFail:     make(map[string]void),
+		unlinkableBlocks: make(map[string]void),
+		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
+	}
+
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
+	if err != nil {
+		t.Error(err)
+	}
+
+	block := &protocol.Block{
+		Id: []byte{0x01},
+		Header: &protocol.BlockHeader{
+			Height:    1,
+			Previous:  []byte{0},
+			Timestamp: uint64(time.Now().Add(5 * time.Second).UnixMilli()),
+		},
+	}
+
+	applicator.Start(ctx)
+
+	timer, timerCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer timerCancel()
+
+	go func() {
+		select {
+		case <-timer.Done():
+			t.Error("block not applied in time")
+		case <-ctx.Done():
+		}
+	}()
+
+	err = applicator.ApplyBlock(ctx, block)
+
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestInvalidNonce(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
