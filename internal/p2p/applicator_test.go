@@ -370,6 +370,8 @@ func TestDelayBlock(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	cancel()
 }
 
 func TestInvalidNonce(t *testing.T) {
