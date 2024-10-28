@@ -330,7 +330,7 @@ func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 }
 
 func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
-	log.Infof("Calling chain.apply_block for block, ID: %s", request.block.Id)
+	log.Infof("Calling chain.apply_block for block, ID: %s", hex.EncodeToString(request.block.Id))
 	var err error
 	if request.block.Header.Height <= atomic.LoadUint64(&b.lib) {
 		err = p2perrors.ErrBlockIrreversibility
