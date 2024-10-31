@@ -337,18 +337,29 @@ func (b *Applicator) handleApplyTransaction(request *transactionApplicatorReques
 func (b *Applicator) Start(ctx context.Context) {
 	go func() {
 		for {
+			// Prioritize status related messages first
 			select {
 			case status := <-b.blockStatusChan:
 				b.handleBlockStatus(ctx, status)
-			case entry := <-b.newBlockChan:
-				b.handleNewBlock(ctx, entry)
 			case forkHeads := <-b.forkHeadsChan:
 				b.handleForkHeads(ctx, forkHeads)
 			case blockBroadcast := <-b.blockBroadcastChan:
 				b.handleBlockBroadcast(ctx, blockBroadcast)
 
-			case <-ctx.Done():
-				return
+			default:
+				select {
+				case entry := <-b.newBlockChan:
+					b.handleNewBlock(ctx, entry)
+				case status := <-b.blockStatusChan:
+					b.handleBlockStatus(ctx, status)
+				case forkHeads := <-b.forkHeadsChan:
+					b.handleForkHeads(ctx, forkHeads)
+				case blockBroadcast := <-b.blockBroadcastChan:
+					b.handleBlockBroadcast(ctx, blockBroadcast)
+
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
