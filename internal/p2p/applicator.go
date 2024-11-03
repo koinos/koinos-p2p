@@ -2,7 +2,9 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -187,6 +189,7 @@ func (b *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 }
 
 func (b *Applicator) addTransactionEntry(ctx context.Context, entry *transactionEntry) {
+	fmt.Printf("Adding transaction %s\n", hex.EncodeToString(entry.transaction.Id))
 	id := string(entry.transaction.Id)
 
 	// If the transaction is already known, add the error channels and return
@@ -281,6 +284,7 @@ func (b *Applicator) removeBlockEntry(ctx context.Context, id string, err error)
 }
 
 func (b *Applicator) removeTransactionEntry(ctx context.Context, id string, err error) {
+	fmt.Printf("Removing transaction %s\n", hex.EncodeToString([]byte(id)))
 	if entry, ok := b.transactionsById[id]; ok {
 		for _, ch := range entry.errChans {
 			defer close(ch)

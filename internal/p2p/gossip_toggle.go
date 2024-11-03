@@ -81,8 +81,8 @@ func (g *GossipToggle) Start(ctx context.Context) {
 				t := time.Unix(0, int64(g.headTime)*int64(1000000) /* Conversion to nanoseconds */)
 				g.headMutex.Unlock()
 
-				// We disable gossip when we are 30 seconds behind the current time
-				if time.Since(t) <= 45*time.Second {
+				// We disable gossip when we are sufficiently behind the current time
+				if time.Since(t) <= g.opts.HeadDelayThreshold {
 					if !g.enabled {
 						g.gossipEnabler.EnableGossip(ctx, true)
 						g.enabledMutex.Lock()

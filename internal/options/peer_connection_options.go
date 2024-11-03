@@ -20,7 +20,7 @@ const (
 	blockRequestTimeoutDefault   = time.Second * time.Duration(blockRequestBatchSizeDefault*0.3) // Roughly calculated considering 30Mbps minimum upload speed and 1MB blocks
 	handshakeRetryTimeDefault    = time.Second * 6
 	syncedBlockDeltaDefault      = 5
-	syncedPingTimeDefault        = time.Second * 10
+	syncedPingTimeDefault        = time.Second * 15
 )
 
 // PeerConnectionOptions are options for PeerConnection
