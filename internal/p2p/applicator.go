@@ -131,7 +131,7 @@ func (b *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) 
 	b.blockBroadcastChan <- blockAccept
 }
 
-func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
+func (b *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
@@ -157,7 +157,7 @@ func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
 	}
 }
 
-func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
+func (b *Applicator) removeBlockEntry(ctx context.Context, id string, err error) {
 	if entry, ok := b.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
 			select {
@@ -245,7 +245,7 @@ func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
 		b.requestBlockApplication(ctx, status.block, false)
 	} else if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
-		b.removeEntry(ctx, string(status.block.Id), status.err)
+		b.removeBlockEntry(ctx, string(status.block.Id), status.err)
 	}
 }
 
@@ -269,7 +269,7 @@ func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 			}
 		}
 	} else {
-		b.addEntry(ctx, entry)
+		b.addBlockEntry(ctx, entry)
 	}
 }
 
@@ -277,7 +277,8 @@ func (b *Applicator) checkChildren(ctx context.Context, blockID string) {
 	if children, ok := b.blocksByPrevious[string(blockID)]; ok {
 		for id := range children {
 			if entry, ok := b.blocksById[id]; ok {
-				b.requestBlockApplication(ctx, entry.block, true)
+				force := time.Since(time.UnixMilli(int64(entry.block.Header.Timestamp))) < b.opts.ForceChildRequestThreshold
+				b.requestBlockApplication(ctx, entry.block, force)
 			}
 		}
 	}
@@ -303,7 +304,7 @@ func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 	for h := oldLib + 1; h <= forkHeads.LastIrreversibleBlock.Height; h++ {
 		if ids, ok := b.blocksByHeight[h]; ok {
 			for id := range ids {
-				b.removeEntry(ctx, id, p2perrors.ErrBlockIrreversibility)
+				b.removeBlockEntry(ctx, id, p2perrors.ErrBlockIrreversibility)
 			}
 		}
 	}
