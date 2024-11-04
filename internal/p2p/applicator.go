@@ -29,7 +29,7 @@ type blockApplicationStatus struct {
 	err   error
 }
 
-type transactionApplicatorRequest struct {
+type transactionApplicationRequest struct {
 	trx     *protocol.Transaction
 	errChan chan<- error
 	ctx     context.Context
@@ -48,14 +48,14 @@ type Applicator struct {
 	blocksById       map[string]*blockEntry
 	blocksByPrevious map[string]map[string]void
 	blocksByHeight   map[uint64]map[string]void
-	pendingBlocks    map[string]void
+	pendingBlocks    map[string]int32
 
 	newBlockChan         chan *blockEntry
 	forkHeadsChan        chan *broadcast.ForkHeads
 	blockBroadcastChan   chan *broadcast.BlockAccepted
 	applyBlockChan       chan *blockApplicationRequest
 	blockStatusChan      chan *blockApplicationStatus
-	applyTransactionChan chan *transactionApplicatorRequest
+	applyTransactionChan chan *transactionApplicationRequest
 
 	opts options.ApplicatorOptions
 }
@@ -76,13 +76,13 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 		blocksById:           make(map[string]*blockEntry),
 		blocksByPrevious:     make(map[string]map[string]void),
 		blocksByHeight:       make(map[uint64]map[string]void),
-		pendingBlocks:        make(map[string]void),
+		pendingBlocks:        make(map[string]int32),
 		newBlockChan:         make(chan *blockEntry, 10),
 		forkHeadsChan:        make(chan *broadcast.ForkHeads, 10),
 		blockBroadcastChan:   make(chan *broadcast.BlockAccepted, 10),
-		applyBlockChan:       make(chan *blockApplicationRequest, 10),
 		blockStatusChan:      make(chan *blockApplicationStatus, 10),
-		applyTransactionChan: make(chan *transactionApplicatorRequest, 10),
+		applyTransactionChan: make(chan *transactionApplicationRequest, 10),
+		applyBlockChan:       make(chan *blockApplicationRequest, 10),
 		opts:                 opts,
 	}, nil
 }
@@ -110,7 +110,7 @@ func (b *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 func (b *Applicator) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) error {
 	errChan := make(chan error, 1)
 
-	b.applyTransactionChan <- &transactionApplicatorRequest{trx, errChan, ctx}
+	b.applyTransactionChan <- &transactionApplicationRequest{trx, errChan, ctx}
 
 	select {
 	case err := <-errChan:
@@ -153,7 +153,7 @@ func (b *Applicator) addEntry(ctx context.Context, entry *blockEntry) {
 	}
 
 	if entry.block.Header.Height <= b.highestBlock+1 {
-		b.requestApplication(ctx, entry.block)
+		b.requestBlockApplication(ctx, entry.block, false)
 	}
 }
 
@@ -190,13 +190,17 @@ func (b *Applicator) removeEntry(ctx context.Context, id string, err error) {
 	}
 }
 
-func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Block) {
+func (b *Applicator) requestBlockApplication(ctx context.Context, block *protocol.Block, force bool) {
 	// If there is already a pending application of the block, return
 	if _, ok := b.pendingBlocks[string(block.Id)]; ok {
-		return
+		if force {
+			b.pendingBlocks[string(block.Id)]++
+		} else {
+			return
+		}
+	} else {
+		b.pendingBlocks[string(block.Id)] = 1
 	}
-
-	b.pendingBlocks[string(block.Id)] = void{}
 
 	go func() {
 		errChan := make(chan error, 1)
@@ -232,10 +236,14 @@ func (b *Applicator) requestApplication(ctx context.Context, block *protocol.Blo
 }
 
 func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
-	delete(b.pendingBlocks, string(status.block.Id))
+	b.pendingBlocks[string(status.block.Id)]--
+
+	if b.pendingBlocks[string(status.block.Id)] <= 0 {
+		delete(b.pendingBlocks, string(status.block.Id))
+	}
 
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
-		b.requestApplication(ctx, status.block)
+		b.requestBlockApplication(ctx, status.block, false)
 	} else if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
 		b.removeEntry(ctx, string(status.block.Id), status.err)
 	}
@@ -269,7 +277,7 @@ func (b *Applicator) checkChildren(ctx context.Context, blockID string) {
 	if children, ok := b.blocksByPrevious[string(blockID)]; ok {
 		for id := range children {
 			if entry, ok := b.blocksById[id]; ok {
-				b.requestApplication(ctx, entry.block)
+				b.requestBlockApplication(ctx, entry.block, true)
 			}
 		}
 	}
@@ -324,7 +332,7 @@ func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
 	close(request.errChan)
 }
 
-func (b *Applicator) handleApplyTransaction(request *transactionApplicatorRequest) {
+func (b *Applicator) handleApplyTransaction(request *transactionApplicationRequest) {
 	var err error
 	if b.transactionCache.CheckTransactions(request.trx) == 0 {
 		_, err = b.rpc.ApplyTransaction(request.ctx, request.trx)
