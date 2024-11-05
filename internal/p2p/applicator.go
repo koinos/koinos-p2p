@@ -214,7 +214,7 @@ func (b *Applicator) addTransactionEntry(ctx context.Context, entry *transaction
 	// Automatically expire the transaction after 30 seconds
 	go func() {
 		select {
-		case <-time.After(30 * time.Second):
+		case <-time.After(b.opts.TransactionExpiration):
 			select {
 			case b.transactionStatusChan <- &transactionApplicationStatus{entry.transaction, p2perrors.ErrTransactionApplicationTimeout}:
 			case <-ctx.Done():
@@ -552,6 +552,10 @@ func (b *Applicator) handleApplyTransaction(request *transactionApplicationReque
 	var err error
 	if b.transactionCache.CheckTransactions(request.trx) == 0 {
 		_, err = b.rpc.ApplyTransaction(request.ctx, request.trx)
+
+		if err == nil {
+			b.transactionCache.AddTransactions(request.trx)
+		}
 	}
 
 	request.errChan <- err
@@ -565,6 +569,8 @@ func (b *Applicator) Start(ctx context.Context) {
 			select {
 			case status := <-b.blockStatusChan:
 				b.handleBlockStatus(ctx, status)
+			case status := <-b.transactionStatusChan:
+				b.handleTransactionStatus(ctx, status)
 			case forkHeads := <-b.forkHeadsChan:
 				b.handleForkHeads(ctx, forkHeads)
 			case blockBroadcast := <-b.blockBroadcastChan:
@@ -574,18 +580,21 @@ func (b *Applicator) Start(ctx context.Context) {
 
 			default:
 				select {
-				case entry := <-b.newBlockChan:
-					b.handleNewBlock(ctx, entry)
 				case status := <-b.blockStatusChan:
 					b.handleBlockStatus(ctx, status)
-				case entry := <-b.newTransactionChan:
-					b.handleNewTransaction(ctx, entry)
 				case status := <-b.transactionStatusChan:
 					b.handleTransactionStatus(ctx, status)
 				case forkHeads := <-b.forkHeadsChan:
 					b.handleForkHeads(ctx, forkHeads)
 				case blockBroadcast := <-b.blockBroadcastChan:
 					b.handleBlockBroadcast(ctx, blockBroadcast)
+				case transactionBroadcast := <-b.transactionBroadcastChan:
+					b.handleTransactionBroadcast(ctx, transactionBroadcast)
+
+				case entry := <-b.newBlockChan:
+					b.handleNewBlock(ctx, entry)
+				case entry := <-b.newTransactionChan:
+					b.handleNewTransaction(ctx, entry)
 
 				case <-ctx.Done():
 					return
