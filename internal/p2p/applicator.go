@@ -60,7 +60,7 @@ type Applicator struct {
 	blocksById       map[string]*blockEntry
 	blocksByPrevious map[string]map[string]void
 	blocksByHeight   map[uint64]map[string]void
-	pendingBlocks    map[string]void
+	pendingBlocks    map[string]int32
 
 	transactionsById         map[string]*transactionEntry
 	transactionsByPayeeNonce map[string]map[string]void
@@ -96,7 +96,7 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 		blocksById:               make(map[string]*blockEntry),
 		blocksByPrevious:         make(map[string]map[string]void),
 		blocksByHeight:           make(map[uint64]map[string]void),
-		pendingBlocks:            make(map[string]void),
+		pendingBlocks:            make(map[string]int32),
 		transactionsById:         make(map[string]*transactionEntry),
 		transactionsByPayeeNonce: make(map[string]map[string]void),
 		pendingTransactions:      make(map[string]void),
@@ -182,7 +182,7 @@ func (b *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 	}
 
 	if entry.block.Header.Height <= b.highestBlock+1 {
-		b.requestBlockApplication(ctx, entry.block)
+		b.requestBlockApplication(ctx, entry.block, false)
 	}
 }
 
@@ -309,13 +309,17 @@ func (b *Applicator) removeTransactionEntry(ctx context.Context, id string, err 
 	}
 }
 
-func (b *Applicator) requestBlockApplication(ctx context.Context, block *protocol.Block) {
+func (b *Applicator) requestBlockApplication(ctx context.Context, block *protocol.Block, force bool) {
 	// If there is already a pending application of the block, return
 	if _, ok := b.pendingBlocks[string(block.Id)]; ok {
-		return
+		if force {
+			b.pendingBlocks[string(block.Id)]++
+		} else {
+			return
+		}
+	} else {
+		b.pendingBlocks[string(block.Id)] = 1
 	}
-
-	b.pendingBlocks[string(block.Id)] = void{}
 
 	go func() {
 		errChan := make(chan error, 1)
@@ -378,10 +382,14 @@ func (b *Applicator) requestTransactionApplication(ctx context.Context, transact
 }
 
 func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
-	delete(b.pendingBlocks, string(status.block.Id))
+	b.pendingBlocks[string(status.block.Id)]--
+
+	if b.pendingBlocks[string(status.block.Id)] <= 0 {
+		delete(b.pendingBlocks, string(status.block.Id))
+	}
 
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
-		b.requestBlockApplication(ctx, status.block)
+		b.requestBlockApplication(ctx, status.block, false)
 	} else if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
 		b.removeBlockEntry(ctx, string(status.block.Id), status.err)
 	}
@@ -445,7 +453,8 @@ func (b *Applicator) checkBlockChildren(ctx context.Context, blockID string) {
 	if children, ok := b.blocksByPrevious[string(blockID)]; ok {
 		for id := range children {
 			if entry, ok := b.blocksById[id]; ok {
-				b.requestBlockApplication(ctx, entry.block)
+				force := time.Since(time.UnixMilli(int64(entry.block.Header.Timestamp))) < b.opts.ForceChildRequestThreshold
+				b.requestBlockApplication(ctx, entry.block, force)
 			}
 		}
 	}
