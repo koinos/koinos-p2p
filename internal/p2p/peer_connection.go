@@ -164,8 +164,10 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 			return err
 		}
 
-		for startRequestBlock < peerHeadHeight {
-			stepSize := uint64(math.Round(float64(peerHeadHeight-startRequestBlock) / 2))
+		headHeight := uint64(math.Min(float64(myHeadBlock.HeadTopology.Height), float64(peerHeadHeight)))
+
+		for startRequestBlock < headHeight {
+			stepSize := uint64(math.Round(float64(headHeight-startRequestBlock) / 2))
 			newStart := startRequestBlock + stepSize
 
 			localRpcContext, cancelLocalGetBlocksByHeight := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
