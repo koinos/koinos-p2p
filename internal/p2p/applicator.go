@@ -220,9 +220,8 @@ func (b *Applicator) handleBlockRequest(ctx context.Context, request *blockAppli
 				case <-ctx.Done():
 				}
 			}()
-		} else {
-			return
 		}
+		return
 	}
 
 	b.pendingBlocks[string(request.block.Id)] = void{}
