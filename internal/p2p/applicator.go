@@ -19,6 +19,11 @@ type blockEntry struct {
 }
 
 type blockApplicationRequest struct {
+	block *protocol.Block
+	force bool
+}
+
+type applyBlockRequest struct {
 	block   *protocol.Block
 	errChan chan<- error
 	ctx     context.Context
@@ -29,7 +34,7 @@ type blockApplicationStatus struct {
 	err   error
 }
 
-type transactionApplicationRequest struct {
+type applyTransactionRequest struct {
 	trx     *protocol.Transaction
 	errChan chan<- error
 	ctx     context.Context
@@ -48,14 +53,15 @@ type Applicator struct {
 	blocksById       map[string]*blockEntry
 	blocksByPrevious map[string]map[string]void
 	blocksByHeight   map[uint64]map[string]void
-	pendingBlocks    map[string]int32
+	pendingBlocks    map[string]void
 
 	newBlockChan         chan *blockEntry
 	forkHeadsChan        chan *broadcast.ForkHeads
 	blockBroadcastChan   chan *broadcast.BlockAccepted
-	applyBlockChan       chan *blockApplicationRequest
+	requestBlockChan     chan *blockApplicationRequest
+	applyBlockChan       chan *applyBlockRequest
 	blockStatusChan      chan *blockApplicationStatus
-	applyTransactionChan chan *transactionApplicationRequest
+	applyTransactionChan chan *applyTransactionRequest
 
 	opts options.ApplicatorOptions
 }
@@ -76,13 +82,14 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 		blocksById:           make(map[string]*blockEntry),
 		blocksByPrevious:     make(map[string]map[string]void),
 		blocksByHeight:       make(map[uint64]map[string]void),
-		pendingBlocks:        make(map[string]int32),
+		pendingBlocks:        make(map[string]void),
 		newBlockChan:         make(chan *blockEntry, 10),
 		forkHeadsChan:        make(chan *broadcast.ForkHeads, 10),
 		blockBroadcastChan:   make(chan *broadcast.BlockAccepted, 10),
+		requestBlockChan:     make(chan *blockApplicationRequest, 10),
 		blockStatusChan:      make(chan *blockApplicationStatus, 10),
-		applyTransactionChan: make(chan *transactionApplicationRequest, 10),
-		applyBlockChan:       make(chan *blockApplicationRequest, 10),
+		applyTransactionChan: make(chan *applyTransactionRequest, 10),
+		applyBlockChan:       make(chan *applyBlockRequest, 10),
 		opts:                 opts,
 	}, nil
 }
@@ -110,7 +117,7 @@ func (b *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 func (b *Applicator) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) error {
 	errChan := make(chan error, 1)
 
-	b.applyTransactionChan <- &transactionApplicationRequest{trx, errChan, ctx}
+	b.applyTransactionChan <- &applyTransactionRequest{trx, errChan, ctx}
 
 	select {
 	case err := <-errChan:
@@ -191,16 +198,34 @@ func (b *Applicator) removeBlockEntry(ctx context.Context, id string, err error)
 }
 
 func (b *Applicator) requestBlockApplication(ctx context.Context, block *protocol.Block, force bool) {
+	go func() {
+		select {
+		case b.requestBlockChan <- &blockApplicationRequest{
+			block: block,
+			force: force,
+		}:
+		case <-ctx.Done():
+		}
+	}()
+}
+
+func (b *Applicator) handleBlockRequest(ctx context.Context, request *blockApplicationRequest) {
 	// If there is already a pending application of the block, return
-	if _, ok := b.pendingBlocks[string(block.Id)]; ok {
-		if force {
-			b.pendingBlocks[string(block.Id)]++
+	if _, ok := b.pendingBlocks[string(request.block.Id)]; ok {
+		if request.force {
+			go func() {
+				select {
+				case <-time.After(time.Millisecond * 50):
+					b.requestBlockApplication(ctx, request.block, request.force)
+				case <-ctx.Done():
+				}
+			}()
 		} else {
 			return
 		}
-	} else {
-		b.pendingBlocks[string(block.Id)] = 1
 	}
+
+	b.pendingBlocks[string(request.block.Id)] = void{}
 
 	go func() {
 		errChan := make(chan error, 1)
@@ -208,7 +233,7 @@ func (b *Applicator) requestBlockApplication(ctx context.Context, block *protoco
 		// If block is more than 4 seconds in the future, do not apply it until
 		// it is less than 4 seconds in the future.
 		applicationThreshold := time.Now().Add(b.opts.DelayThreshold)
-		blockTime := time.Unix(int64(block.Header.Timestamp/1000), int64(block.Header.Timestamp%1000))
+		blockTime := time.Unix(int64(request.block.Header.Timestamp/1000), int64(request.block.Header.Timestamp%1000))
 
 		if blockTime.After(applicationThreshold) {
 			select {
@@ -219,7 +244,7 @@ func (b *Applicator) requestBlockApplication(ctx context.Context, block *protoco
 		}
 
 		select {
-		case b.applyBlockChan <- &blockApplicationRequest{block, errChan, ctx}:
+		case b.applyBlockChan <- &applyBlockRequest{request.block, errChan, ctx}:
 		case <-ctx.Done():
 			return
 		}
@@ -227,7 +252,7 @@ func (b *Applicator) requestBlockApplication(ctx context.Context, block *protoco
 		select {
 		case err := <-errChan:
 			b.blockStatusChan <- &blockApplicationStatus{
-				block: block,
+				block: request.block,
 				err:   err,
 			}
 		case <-ctx.Done():
@@ -236,11 +261,7 @@ func (b *Applicator) requestBlockApplication(ctx context.Context, block *protoco
 }
 
 func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
-	b.pendingBlocks[string(status.block.Id)]--
-
-	if b.pendingBlocks[string(status.block.Id)] <= 0 {
-		delete(b.pendingBlocks, string(status.block.Id))
-	}
+	delete(b.pendingBlocks, string(status.block.Id))
 
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
 		b.requestBlockApplication(ctx, status.block, false)
@@ -321,7 +342,7 @@ func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 	b.checkChildren(ctx, string(blockAccept.Block.Id))
 }
 
-func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
+func (b *Applicator) handleApplyBlock(request *applyBlockRequest) {
 	var err error
 	if request.block.Header.Height <= atomic.LoadUint64(&b.lib) {
 		err = p2perrors.ErrBlockIrreversibility
@@ -333,7 +354,7 @@ func (b *Applicator) handleApplyBlock(request *blockApplicationRequest) {
 	close(request.errChan)
 }
 
-func (b *Applicator) handleApplyTransaction(request *transactionApplicationRequest) {
+func (b *Applicator) handleApplyTransaction(request *applyTransactionRequest) {
 	var err error
 	if b.transactionCache.CheckTransactions(request.trx) == 0 {
 		_, err = b.rpc.ApplyTransaction(request.ctx, request.trx)
@@ -365,6 +386,8 @@ func (b *Applicator) Start(ctx context.Context) {
 					b.handleForkHeads(ctx, forkHeads)
 				case blockBroadcast := <-b.blockBroadcastChan:
 					b.handleBlockBroadcast(ctx, blockBroadcast)
+				case applicationRequest := <-b.requestBlockChan:
+					b.handleBlockRequest(ctx, applicationRequest)
 
 				case <-ctx.Done():
 					return
