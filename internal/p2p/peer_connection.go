@@ -203,6 +203,11 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 		blocksToRequest = p.opts.BlockRequestBatchSize
 	}
 
+	if blocksToRequest == 0 {
+		p.isSynced = true
+		return nil
+	}
+
 	// Request blocks
 	if blocksToRequest == p.opts.BlockRequestBatchSize {
 		log.Infof("Requesting blocks %v-%v from peer %s", startRequestBlock+1, startRequestBlock+1+blocksToRequest, p.id)
@@ -243,7 +248,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// We will consider ourselves as syncing if we have more than 5 blocks to sync
-	p.isSynced = len(blocks) == 0 || peerHeadHeight-blocks[len(blocks)-1].Header.Height < p.opts.SyncedBlockDelta
+	p.isSynced = peerHeadHeight-blocks[len(blocks)-1].Header.Height < p.opts.SyncedBlockDelta
 
 	return nil
 }
