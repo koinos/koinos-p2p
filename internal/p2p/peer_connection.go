@@ -243,7 +243,7 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 	}
 
 	// We will consider ourselves as syncing if we have more than 5 blocks to sync
-	p.isSynced = peerHeadHeight-blocks[len(blocks)-1].Header.Height < p.opts.SyncedBlockDelta
+	p.isSynced = len(blocks) == 0 || peerHeadHeight-blocks[len(blocks)-1].Header.Height < p.opts.SyncedBlockDelta
 
 	return nil
 }
