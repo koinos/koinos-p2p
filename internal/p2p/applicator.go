@@ -2,10 +2,12 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"sync/atomic"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -213,6 +215,7 @@ func (b *Applicator) handleBlockRequest(ctx context.Context, request *blockAppli
 	// If there is already a pending application of the block, return
 	if _, ok := b.pendingBlocks[string(request.block.Id)]; ok {
 		if request.force {
+			log.Infof("Waiting to apply block: 0x%s", hex.EncodeToString(request.block.Id))
 			go func() {
 				select {
 				case <-time.After(time.Millisecond * 50):
@@ -223,6 +226,8 @@ func (b *Applicator) handleBlockRequest(ctx context.Context, request *blockAppli
 		}
 		return
 	}
+
+	log.Infof("Applying block: 0x%s", hex.EncodeToString(request.block.Id))
 
 	b.pendingBlocks[string(request.block.Id)] = void{}
 
@@ -346,8 +351,11 @@ func (b *Applicator) handleApplyBlock(request *applyBlockRequest) {
 	if request.block.Header.Height <= atomic.LoadUint64(&b.lib) {
 		err = p2perrors.ErrBlockIrreversibility
 	} else {
+		log.Infof("Sending chain.apply_block for 0x%s", hex.EncodeToString(request.block.Id))
 		_, err = b.rpc.ApplyBlock(request.ctx, request.block)
 	}
+
+	log.Infof("Response chain.apply_block for 0x%s", hex.EncodeToString(request.block.Id))
 
 	request.errChan <- err
 	close(request.errChan)
