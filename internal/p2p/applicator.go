@@ -520,6 +520,14 @@ func (a *Applicator) checkTransactionChildren(ctx context.Context, transaction *
 }
 
 func (a *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.ForkHeads) {
+	heads := ""
+
+	for _, head := range forkHeads.Heads {
+		heads += " 0x" + hex.EncodeToString(head.Id)
+	}
+
+	log.Infof("Fork Heads: %v", heads)
+
 	oldLib := a.lib
 	atomic.StoreUint64(&a.lib, forkHeads.LastIrreversibleBlock.Height)
 
@@ -546,6 +554,7 @@ func (a *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 }
 
 func (a *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
+	log.Infof("Handle broadcast: 0x%s", hex.EncodeToString(blockAccept.Block.Id))
 	a.transactionCache.CheckBlock(blockAccept.Block)
 
 	// It is not possible for a block with a new highest height to not be head, so this check is sufficient
