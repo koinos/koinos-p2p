@@ -2,10 +2,12 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"sync/atomic"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -21,6 +23,11 @@ type blockEntry struct {
 }
 
 type blockApplicationRequest struct {
+	block *protocol.Block
+	force bool
+}
+
+type applyBlockRequest struct {
 	block   *protocol.Block
 	errChan chan<- error
 	ctx     context.Context
@@ -36,7 +43,7 @@ type transactionEntry struct {
 	errChans    []chan<- error
 }
 
-type transactionApplicationRequest struct {
+type applyTransactionRequest struct {
 	trx     *protocol.Transaction
 	errChan chan<- error
 	ctx     context.Context
@@ -60,7 +67,7 @@ type Applicator struct {
 	blocksById       map[string]*blockEntry
 	blocksByPrevious map[string]map[string]void
 	blocksByHeight   map[uint64]map[string]void
-	pendingBlocks    map[string]int32
+	pendingBlocks    map[string]void
 
 	transactionsById         map[string]*transactionEntry
 	transactionsByPayeeNonce map[string]map[string]void
@@ -74,8 +81,9 @@ type Applicator struct {
 	blockStatusChan          chan *blockApplicationStatus
 	transactionStatusChan    chan *transactionApplicationStatus
 	removeTransactionChan    chan string
-	applyBlockChan           chan *blockApplicationRequest
-	applyTransactionChan     chan *transactionApplicationRequest
+	requestBlockChan         chan *blockApplicationRequest
+	applyBlockChan           chan *applyBlockRequest
+	applyTransactionChan     chan *applyTransactionRequest
 
 	opts options.ApplicatorOptions
 }
@@ -96,7 +104,7 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 		blocksById:               make(map[string]*blockEntry),
 		blocksByPrevious:         make(map[string]map[string]void),
 		blocksByHeight:           make(map[uint64]map[string]void),
-		pendingBlocks:            make(map[string]int32),
+		pendingBlocks:            make(map[string]void),
 		transactionsById:         make(map[string]*transactionEntry),
 		transactionsByPayeeNonce: make(map[string]map[string]void),
 		pendingTransactions:      make(map[string]void),
@@ -105,11 +113,12 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 		forkHeadsChan:            make(chan *broadcast.ForkHeads, 10),
 		blockBroadcastChan:       make(chan *broadcast.BlockAccepted, 10),
 		transactionBroadcastChan: make(chan *broadcast.TransactionAccepted, 10),
+		requestBlockChan:         make(chan *blockApplicationRequest, 10),
 		blockStatusChan:          make(chan *blockApplicationStatus, 10),
 		transactionStatusChan:    make(chan *transactionApplicationStatus, 10),
 		removeTransactionChan:    make(chan string, 10),
-		applyTransactionChan:     make(chan *transactionApplicationRequest, 10),
-		applyBlockChan:           make(chan *blockApplicationRequest, 10),
+		applyTransactionChan:     make(chan *applyTransactionRequest, 10),
+		applyBlockChan:           make(chan *applyBlockRequest, 10),
 		opts:                     opts,
 	}, nil
 }
@@ -309,17 +318,37 @@ func (a *Applicator) removeTransactionEntry(ctx context.Context, id string, err 
 	}
 }
 
-func (a *Applicator) requestBlockApplication(ctx context.Context, block *protocol.Block, force bool) {
-	// If there is already a pending application of the block, return
-	if _, ok := a.pendingBlocks[string(block.Id)]; ok {
-		if force {
-			a.pendingBlocks[string(block.Id)]++
-		} else {
-			return
+func (b *Applicator) requestBlockApplication(ctx context.Context, block *protocol.Block, force bool) {
+	go func() {
+		select {
+		case b.requestBlockChan <- &blockApplicationRequest{
+			block: block,
+			force: force,
+		}:
+		case <-ctx.Done():
 		}
-	} else {
-		a.pendingBlocks[string(block.Id)] = 1
+	}()
+}
+
+func (a *Applicator) handleBlockRequest(ctx context.Context, request *blockApplicationRequest) {
+	// If there is already a pending application of the block, return
+	if _, ok := a.pendingBlocks[string(request.block.Id)]; ok {
+		if request.force {
+			log.Infof("Waiting to apply block: 0x%s", hex.EncodeToString(request.block.Id))
+			go func() {
+				select {
+				case <-time.After(time.Millisecond * 50):
+					a.requestBlockApplication(ctx, request.block, request.force)
+				case <-ctx.Done():
+				}
+			}()
+		}
+		return
 	}
+
+	log.Infof("Applying block: 0x%s", hex.EncodeToString(request.block.Id))
+
+	a.pendingBlocks[string(request.block.Id)] = void{}
 
 	go func() {
 		errChan := make(chan error, 1)
@@ -327,7 +356,7 @@ func (a *Applicator) requestBlockApplication(ctx context.Context, block *protoco
 		// If block is more than 4 seconds in the future, do not apply it until
 		// it is less than 4 seconds in the future.
 		applicationThreshold := time.Now().Add(a.opts.DelayThreshold)
-		blockTime := time.Unix(int64(block.Header.Timestamp/1000), int64(block.Header.Timestamp%1000))
+		blockTime := time.Unix(int64(request.block.Header.Timestamp/1000), int64(request.block.Header.Timestamp%1000))
 
 		if blockTime.After(applicationThreshold) {
 			select {
@@ -338,7 +367,7 @@ func (a *Applicator) requestBlockApplication(ctx context.Context, block *protoco
 		}
 
 		select {
-		case a.applyBlockChan <- &blockApplicationRequest{block, errChan, ctx}:
+		case a.applyBlockChan <- &applyBlockRequest{request.block, errChan, ctx}:
 		case <-ctx.Done():
 			return
 		}
@@ -346,7 +375,10 @@ func (a *Applicator) requestBlockApplication(ctx context.Context, block *protoco
 		select {
 		case err := <-errChan:
 			select {
-			case a.blockStatusChan <- &blockApplicationStatus{block, err}:
+			case a.blockStatusChan <- &blockApplicationStatus{
+				block: request.block,
+				err:   err,
+			}:
 			case <-ctx.Done():
 			}
 		case <-ctx.Done():
@@ -365,7 +397,7 @@ func (a *Applicator) requestTransactionApplication(ctx context.Context, transact
 		errChan := make(chan error, 1)
 
 		select {
-		case a.applyTransactionChan <- &transactionApplicationRequest{transaction, errChan, ctx}:
+		case a.applyTransactionChan <- &applyTransactionRequest{transaction, errChan, ctx}:
 		case <-ctx.Done():
 			return
 		}
@@ -382,11 +414,7 @@ func (a *Applicator) requestTransactionApplication(ctx context.Context, transact
 }
 
 func (a *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
-	a.pendingBlocks[string(status.block.Id)]--
-
-	if a.pendingBlocks[string(status.block.Id)] <= 0 {
-		delete(a.pendingBlocks, string(status.block.Id))
-	}
+	delete(a.pendingBlocks, string(status.block.Id))
 
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
 		a.requestBlockApplication(ctx, status.block, false)
@@ -536,19 +564,22 @@ func (a *Applicator) handleTransactionBroadcast(ctx context.Context, transaction
 	a.checkTransactionChildren(ctx, transactionAccept.Transaction)
 }
 
-func (a *Applicator) handleApplyBlock(request *blockApplicationRequest) {
+func (a *Applicator) handleApplyBlock(request *applyBlockRequest) {
 	var err error
 	if request.block.Header.Height <= atomic.LoadUint64(&a.lib) {
 		err = p2perrors.ErrBlockIrreversibility
 	} else {
+		log.Infof("Sending chain.apply_block for 0x%s", hex.EncodeToString(request.block.Id))
 		_, err = a.rpc.ApplyBlock(request.ctx, request.block)
 	}
+
+	log.Infof("Response chain.apply_block for 0x%s", hex.EncodeToString(request.block.Id))
 
 	request.errChan <- err
 	close(request.errChan)
 }
 
-func (a *Applicator) handleApplyTransaction(request *transactionApplicationRequest) {
+func (a *Applicator) handleApplyTransaction(request *applyTransactionRequest) {
 	var err error
 	if a.transactionCache.CheckTransactions(request.trx) == 0 {
 		_, err = a.rpc.ApplyTransaction(request.ctx, request.trx)
@@ -595,6 +626,8 @@ func (a *Applicator) Start(ctx context.Context) {
 					a.handleNewBlock(ctx, entry)
 				case entry := <-a.newTransactionChan:
 					a.handleNewTransaction(ctx, entry)
+				case applicationRequest := <-a.requestBlockChan:
+					a.handleBlockRequest(ctx, applicationRequest)
 
 				case <-ctx.Done():
 					return
