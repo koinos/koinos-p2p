@@ -137,10 +137,12 @@ func (b *Applicator) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
 
 // HandleBlockBroadcast handles a block broadcast
 func (b *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) {
+	log.Infof("HandleBlockBroadcast for 0x%s", hex.EncodeToString(blockAccept.Block.Id))
 	b.blockBroadcastChan <- blockAccept
 }
 
 func (b *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
+	log.Infof("addBlockEntry for 0x%s", hex.EncodeToString(entry.block.Id))
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
@@ -176,6 +178,7 @@ func (b *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 }
 
 func (b *Applicator) removeBlockEntry(ctx context.Context, id string, err error) {
+	log.Infof("removeBlockEntry for 0x%s", hex.EncodeToString([]byte(id)))
 	if entry, ok := b.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
 			select {
@@ -209,6 +212,7 @@ func (b *Applicator) removeBlockEntry(ctx context.Context, id string, err error)
 }
 
 func (b *Applicator) requestBlockApplication(ctx context.Context, block *protocol.Block, force bool) {
+	log.Infof("requestBlockApplication for 0x%s", hex.EncodeToString(block.Id))
 	go func() {
 		select {
 		case b.requestBlockChan <- &blockApplicationRequest{
@@ -221,6 +225,7 @@ func (b *Applicator) requestBlockApplication(ctx context.Context, block *protoco
 }
 
 func (b *Applicator) handleBlockRequest(ctx context.Context, request *blockApplicationRequest) {
+	log.Infof("handleBlockRequest for 0x%s", hex.EncodeToString(request.block.Id))
 	// If there is already a pending application of the block, return
 	if _, ok := b.pendingBlocks[string(request.block.Id)]; ok {
 		if request.force {
@@ -274,6 +279,7 @@ func (b *Applicator) handleBlockRequest(ctx context.Context, request *blockAppli
 }
 
 func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
+	log.Infof("handleBlockStatus for 0x%s", hex.EncodeToString(status.block.Id))
 	delete(b.pendingBlocks, string(status.block.Id))
 
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
@@ -284,6 +290,7 @@ func (b *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 }
 
 func (b *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
+	log.Infof("handleNewBlock for 0x%s", hex.EncodeToString(entry.block.Id))
 	var err error
 
 	if entry.block.Header.Height > b.highestBlock+b.opts.MaxHeightDelta {
@@ -345,6 +352,7 @@ func (b *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 }
 
 func (b *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
+	log.Infof("handleBlockBroadcast for 0x%s", hex.EncodeToString(blockAccept.Block.Id))
 	b.transactionCache.CheckBlock(blockAccept.Block)
 
 	// It is not possible for a block with a new highest height to not be head, so this check is sufficient
