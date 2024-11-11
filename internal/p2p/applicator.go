@@ -159,9 +159,18 @@ func (b *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 		b.blocksByHeight[height][id] = void{}
 	}
 
-	if entry.block.Header.Height <= b.highestBlock+1 {
-		b.requestBlockApplication(ctx, entry.block, false)
+	// If the block is greater than the highest block we have seen plus one,
+	// we know we cannot apply it, wait.
+	if entry.block.Header.Height > b.highestBlock+1 {
+		return
 	}
+
+	// If the parent block is currently being applied, we cannot apply it, wait.
+	if _, ok := b.pendingBlocks[string(entry.block.Header.Previous)]; ok {
+		return
+	}
+
+	b.requestBlockApplication(ctx, entry.block, false)
 }
 
 func (b *Applicator) removeBlockEntry(ctx context.Context, id string, err error) {
