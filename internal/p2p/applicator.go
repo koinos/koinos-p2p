@@ -159,7 +159,7 @@ func (a *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 	}
 }
 
-func (a *Applicator) removeEntry(ctx context.Context, id string, err error) {
+func (a *Applicator) removeBlockEntry(ctx context.Context, id string, err error) {
 	if entry, ok := a.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
 			select {
@@ -245,7 +245,7 @@ func (a *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
 		a.requestBlockApplication(ctx, status.block)
 	} else if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
-		a.removeEntry(ctx, string(status.block.Id), status.err)
+		a.removeBlockEntry(ctx, string(status.block.Id), status.err)
 	}
 }
 
@@ -303,7 +303,7 @@ func (a *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 	for h := oldLib + 1; h <= forkHeads.LastIrreversibleBlock.Height; h++ {
 		if ids, ok := a.blocksByHeight[h]; ok {
 			for id := range ids {
-				a.removeEntry(ctx, id, p2perrors.ErrBlockIrreversibility)
+				a.removeBlockEntry(ctx, id, p2perrors.ErrBlockIrreversibility)
 			}
 		}
 	}
