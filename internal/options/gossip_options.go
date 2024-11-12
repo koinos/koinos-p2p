@@ -3,7 +3,7 @@ package options
 import "time"
 
 const (
-	blockTimeoutDefault       = 2 * time.Second
+	blockTimeoutDefault       = 12 * time.Second
 	transactionTimeoutDefault = 1 * time.Second
 )
 

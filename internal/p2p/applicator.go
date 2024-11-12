@@ -372,7 +372,11 @@ func (b *Applicator) handleApplyBlock(request *applyBlockRequest) {
 		_, err = b.rpc.ApplyBlock(request.ctx, request.block)
 	}
 
-	log.Infof("Response chain.apply_block for 0x%s", hex.EncodeToString(request.block.Id))
+	if err != nil {
+		log.Infof("Response chain.apply_block for 0x%s with error %e", hex.EncodeToString(request.block.Id), err)
+	} else {
+		log.Infof("Response chain.apply_block for 0x%s", hex.EncodeToString(request.block.Id))
+	}
 
 	request.errChan <- err
 	close(request.errChan)
