@@ -20,7 +20,7 @@ const (
 	blockRequestTimeoutDefault   = time.Second * time.Duration(blockRequestBatchSizeDefault*0.3) // Roughly calculated considering 30Mbps minimum upload speed and 1MB blocks
 	handshakeRetryTimeDefault    = time.Second * 6
 	syncedBlockDeltaDefault      = 5
-	syncedPingTimeDefault        = time.Second * 10
+	syncedSleepTimeDefault       = time.Second * 10
 )
 
 // PeerConnectionOptions are options for PeerConnection
@@ -33,7 +33,7 @@ type PeerConnectionOptions struct {
 	BlockRequestTimeout   time.Duration
 	HandshakeRetryTime    time.Duration
 	SyncedBlockDelta      uint64
-	SyncedPingTime        time.Duration
+	SyncedSleepTime       time.Duration
 }
 
 // NewPeerConnectionOptions returns default initialized PeerConnectionOptions
@@ -47,6 +47,6 @@ func NewPeerConnectionOptions() *PeerConnectionOptions {
 		BlockRequestTimeout:   blockRequestTimeoutDefault,
 		HandshakeRetryTime:    handshakeRetryTimeDefault,
 		SyncedBlockDelta:      syncedBlockDeltaDefault,
-		SyncedPingTime:        syncedPingTimeDefault,
+		SyncedSleepTime:       syncedSleepTimeDefault,
 	}
 }

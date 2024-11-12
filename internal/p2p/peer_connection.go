@@ -16,8 +16,6 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
-type signalRequestBlocks struct{}
-
 // PeerConnection handles the sync portion of a connection to a peer
 type PeerConnection struct {
 	id       peer.ID
@@ -25,18 +23,12 @@ type PeerConnection struct {
 	isSynced bool
 	opts     *options.PeerConnectionOptions
 
-	requestBlockChan chan signalRequestBlocks
-
 	libProvider     LastIrreversibleBlockProvider
 	localRPC        rpc.LocalRPC
 	peerRPC         rpc.RemoteRPC
 	applicator      *Applicator
 	peerErrorChan   chan<- PeerError
 	versionProvider ProtocolVersionProvider
-}
-
-func (p *PeerConnection) requestBlocks() {
-	p.requestBlockChan <- signalRequestBlocks{}
 }
 
 func (p *PeerConnection) handshake(ctx context.Context) error {
@@ -97,7 +89,7 @@ func (p *PeerConnection) handshake(ctx context.Context) error {
 	return nil
 }
 
-func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
+func (p *PeerConnection) requestSyncBlocks(ctx context.Context) error {
 	// Get my last irreversible block
 	lib := p.libProvider.GetLastIrreversibleBlock()
 
@@ -200,26 +192,28 @@ func (p *PeerConnection) handleRequestBlocks(ctx context.Context) error {
 
 func (p *PeerConnection) connectionLoop(ctx context.Context) {
 	for {
+		// Request sync blocks.
+		// If there is an error, report it
+		err := p.requestSyncBlocks(ctx)
+		if err != nil {
+			select {
+			case p.peerErrorChan <- PeerError{id: p.id, err: err}:
+			case <-ctx.Done():
+				return
+			}
+		}
+
+		// Get sleep time if we are synced or not
+		sleepTime := time.Second
+		if p.isSynced {
+			sleepTime = p.opts.SyncedSleepTime
+		}
+
+		// Sleep and then repeat
 		select {
+		case <-time.After(sleepTime):
 		case <-ctx.Done():
 			return
-		case <-p.requestBlockChan:
-			err := p.handleRequestBlocks(ctx)
-			if err != nil {
-				go time.AfterFunc(time.Second, p.requestBlocks)
-				go func() {
-					select {
-					case p.peerErrorChan <- PeerError{id: p.id, err: err}:
-					case <-ctx.Done():
-					}
-				}()
-			} else {
-				if p.isSynced {
-					go time.AfterFunc(p.opts.SyncedPingTime, p.requestBlocks)
-				} else {
-					go p.requestBlocks()
-				}
-			}
 		}
 	}
 }
@@ -240,7 +234,6 @@ func (p *PeerConnection) Start(ctx context.Context) {
 				}()
 			} else {
 				go p.connectionLoop(ctx)
-				go p.requestBlocks()
 				return
 			}
 			select {
@@ -263,15 +256,14 @@ func NewPeerConnection(
 	applicator *Applicator,
 	versionProvider ProtocolVersionProvider) *PeerConnection {
 	return &PeerConnection{
-		id:               id,
-		isSynced:         false,
-		opts:             opts,
-		requestBlockChan: make(chan signalRequestBlocks),
-		libProvider:      libProvider,
-		localRPC:         localRPC,
-		peerRPC:          peerRPC,
-		applicator:       applicator,
-		peerErrorChan:    peerErrorChan,
-		versionProvider:  versionProvider,
+		id:              id,
+		isSynced:        false,
+		opts:            opts,
+		libProvider:     libProvider,
+		localRPC:        localRPC,
+		peerRPC:         peerRPC,
+		applicator:      applicator,
+		peerErrorChan:   peerErrorChan,
+		versionProvider: versionProvider,
 	}
 }
