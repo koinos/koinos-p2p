@@ -27,7 +27,7 @@ jobs:
         - gcov2lcov -infile=internal.out -outfile=internal.info
         - gcov2lcov -infile=node.out -outfile=node.info
         - gcov2lcov -infile=p2p.out -outfile=p2p.info
-        - golangci-lint run --timeout=2m ./...
+        - golangci-lint run --timeout=4m ./...
       after_success:
         - coveralls-lcov --repo-token "$COVERALLS_REPO_TOKEN" --service-name travis-pro coverage.info
 
