@@ -159,7 +159,7 @@ type KoinosGossip struct {
 	myPeerID      peer.ID
 	libProvider   LastIrreversibleBlockProvider
 	applicator    *Applicator
-	reportCancel  *context.CancelFunc
+	gossipCancel  *context.CancelFunc
 	recentBlocks  uint32
 	recentTrxs    uint32
 }
@@ -208,10 +208,10 @@ func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
 // StartGossip enables gossip of blocks and transactions
 func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 	log.Info("Starting gossip mode")
-	kg.startBlockGossip(ctx)
-	kg.startTransactionGossip(ctx)
-	reportCtx, reportCancel := context.WithCancel(ctx)
-	kg.reportCancel = &reportCancel
+	gossipCtx, gossipCancel := context.WithCancel(ctx)
+	kg.gossipCancel = &gossipCancel
+	kg.startBlockGossip(gossipCtx)
+	kg.startTransactionGossip(gossipCtx)
 
 	go func() {
 		for {
@@ -223,7 +223,7 @@ func (kg *KoinosGossip) StartGossip(ctx context.Context) {
 				if numBlocks > 0 || numTrxs > 0 {
 					log.Infof("Recently gossiped %v block(s) and %v transaction(s)", numBlocks, numTrxs)
 				}
-			case <-reportCtx.Done():
+			case <-gossipCtx.Done():
 				return
 			}
 		}
@@ -235,9 +235,9 @@ func (kg *KoinosGossip) StopGossip() {
 	log.Info("Stopping gossip mode")
 	kg.block.Stop()
 	kg.transaction.Stop()
-	if kg.reportCancel != nil {
-		(*kg.reportCancel)()
-		kg.reportCancel = nil
+	if kg.gossipCancel != nil {
+		(*kg.gossipCancel)()
+		kg.gossipCancel = nil
 	}
 }
 
@@ -254,7 +254,7 @@ func (kg *KoinosGossip) PublishTransaction(ctx context.Context, transaction *pro
 
 		log.Debugf("Publishing transaction - %s", util.TransactionString(transaction))
 		atomic.AddUint32(&kg.recentTrxs, 1)
-		kg.transaction.PublishMessage(context.Background(), binary)
+		kg.transaction.PublishMessage(ctx, binary)
 	}
 
 	return nil
@@ -273,7 +273,7 @@ func (kg *KoinosGossip) PublishBlock(ctx context.Context, block *protocol.Block)
 
 		log.Debugf("Publishing block - %s", util.BlockString(block))
 		atomic.AddUint32(&kg.recentBlocks, 1)
-		kg.block.PublishMessage(context.Background(), binary)
+		kg.block.PublishMessage(ctx, binary)
 	}
 
 	return nil
