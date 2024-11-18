@@ -247,13 +247,15 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
-	log.Debug("Received koinos.mempool.accept broadcast")
-	trxBroadcast := &broadcast.MempoolAccepted{}
+	log.Debug("Received koinos.chain.transaction_accepted")
+	trxBroadcast := &broadcast.TransactionAccepted{}
 	err := proto.Unmarshal(data, trxBroadcast)
 	if err != nil {
 		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", err.Error())
 		return
 	}
+
+	n.Applicator.HandleTransactionBroadcast(trxBroadcast)
 
 	// If gossip is enabled publish the transaction
 	err = n.Gossip.PublishTransaction(context.Background(), trxBroadcast.Transaction)
