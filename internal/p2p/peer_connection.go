@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -140,19 +141,70 @@ func (p *PeerConnection) requestSyncBlocks(ctx context.Context) error {
 		}
 	}
 
-	blocksToRequest := peerHeadHeight - lib.Height
+	startRequestBlock := lib.Height
+
+	// If we are synced, try and narrow the range of blocks we may need.
+	// With a 60 block irreversibility, this will loop a maximum of 6 times
+	if p.isSynced {
+		localRpcContext, cancelLocalGetHeadBlock := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
+		defer cancelLocalGetHeadBlock()
+		myHeadBlock, err := p.localRPC.GetHeadBlock(localRpcContext)
+		if err != nil {
+			return err
+		}
+
+		headHeight := uint64(math.Min(float64(myHeadBlock.HeadTopology.Height), float64(peerHeadHeight)))
+
+		for startRequestBlock < headHeight {
+			stepSize := uint64(math.Round(float64(headHeight-startRequestBlock) / 2))
+			newStart := startRequestBlock + stepSize
+
+			localRpcContext, cancelLocalGetBlocksByHeight := context.WithTimeout(ctx, p.opts.LocalRPCTimeout)
+			defer cancelLocalGetBlocksByHeight()
+			localBlocks, err := p.localRPC.GetBlocksByHeight(localRpcContext, myHeadBlock.HeadTopology.Id, newStart, 1)
+			if err != nil {
+				return err
+			}
+			if len(localBlocks.BlockItems) != 1 {
+				return fmt.Errorf("%w: unexpected number of block items returned", p2perrors.ErrLocalRPC)
+			}
+
+			peerRpcContext, cancelPeerGetBlocksByHeight := context.WithTimeout(ctx, p.opts.RemoteRPCTimeout)
+			defer cancelPeerGetBlocksByHeight()
+			peerBlocks, err := p.peerRPC.GetBlocks(peerRpcContext, peerHeadID, newStart, 1)
+			if err != nil {
+				return err
+			}
+			if len(peerBlocks) != 1 {
+				return fmt.Errorf("%w: unexpected number of block items returned", p2perrors.ErrLocalRPC)
+			}
+
+			if bytes.Equal(peerBlocks[0].Id, localBlocks.BlockItems[0].BlockId) {
+				startRequestBlock = newStart
+			} else {
+				break
+			}
+		}
+	}
+
+	blocksToRequest := peerHeadHeight - startRequestBlock
 	if blocksToRequest > p.opts.BlockRequestBatchSize {
 		blocksToRequest = p.opts.BlockRequestBatchSize
 	}
 
+	if blocksToRequest == 0 {
+		p.isSynced = true
+		return nil
+	}
+
 	// Request blocks
 	if blocksToRequest == p.opts.BlockRequestBatchSize {
-		log.Infof("Requesting blocks %v-%v from peer %s", lib.Height+1, lib.Height+1+blocksToRequest, p.id)
+		log.Infof("Requesting blocks %v-%v from peer %s", startRequestBlock+1, startRequestBlock+1+blocksToRequest, p.id)
 	}
 
 	rpcContext, cancelGetBlocks := context.WithTimeout(ctx, p.opts.BlockRequestTimeout)
 	defer cancelGetBlocks()
-	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, lib.Height+1, uint32(blocksToRequest))
+	blocks, err := p.peerRPC.GetBlocks(rpcContext, peerHeadID, startRequestBlock+1, uint32(blocksToRequest))
 	if err != nil {
 		return err
 	}
