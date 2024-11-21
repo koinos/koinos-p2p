@@ -363,7 +363,7 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 		return p2perrors.ErrBlockIrreversibility
 	}
 
-	log.Debugf("Pushing gossip block - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
+	log.Infof("Pushing gossip block - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
 
 	applyBlockContext, cancelApplyBlock := context.WithTimeout(ctx, kg.opts.BlockTimeout)
 	defer cancelApplyBlock()

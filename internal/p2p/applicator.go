@@ -106,13 +106,23 @@ func (a *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 
 	errChan := make(chan error, 1)
 
+	log.Infof("Pushing block entry for block ID: 0x%s", hex.EncodeToString(block.Id))
+
 	a.newBlockChan <- &blockEntry{block: block, errChans: []chan<- error{errChan}}
+
+	log.Infof("Pushed block entry for block ID: 0x%s", hex.EncodeToString(block.Id))
 
 	select {
 	case err := <-errChan:
+		if err != nil {
+			log.Infof("Block entry error for block ID: 0x%s, %e", hex.EncodeToString(block.Id), err)
+		} else {
+			log.Infof("Block entry complete for block ID: 0x%s", hex.EncodeToString(block.Id))
+		}
 		return err
 
 	case <-ctx.Done():
+		log.Infof("Block entry timed out for block ID: 0x%s", hex.EncodeToString(block.Id))
 		return p2perrors.ErrBlockApplicationTimeout
 	}
 }
@@ -142,6 +152,7 @@ func (a *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) 
 }
 
 func (a *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
+	log.Infof("addBlockEntry for block ID: 0x%s", hex.EncodeToString(entry.block.Id))
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
@@ -177,6 +188,7 @@ func (a *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 }
 
 func (a *Applicator) removeBlockEntry(ctx context.Context, id string, err error) {
+	log.Infof("removeBlockEntry for block ID: 0x%s", hex.EncodeToString([]byte(id)))
 	if entry, ok := a.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
 			select {
@@ -210,6 +222,7 @@ func (a *Applicator) removeBlockEntry(ctx context.Context, id string, err error)
 }
 
 func (a *Applicator) tryBlockApplication(ctx context.Context, block *protocol.Block, force bool) {
+	log.Infof("tryBlockApplication for block ID: 0x%s", hex.EncodeToString(block.Id))
 	go func() {
 		select {
 		case a.tryBlockChan <- &tryBlockApplicationRequest{
@@ -223,9 +236,11 @@ func (a *Applicator) tryBlockApplication(ctx context.Context, block *protocol.Bl
 
 func (a *Applicator) handleTryBlockApplication(ctx context.Context, request *tryBlockApplicationRequest) {
 	// If there is already a pending application of the block, return
+	log.Infof("handleTryBlockApplication for block ID: 0x%s", hex.EncodeToString(request.block.Id))
 	if _, ok := a.pendingBlocks[string(request.block.Id)]; ok {
 		if request.force {
 			go func() {
+				log.Infof("delaying application for block ID: 0x%s", hex.EncodeToString(request.block.Id))
 				select {
 				case <-time.After(a.opts.ForceApplicationRetryDelay):
 					a.tryBlockApplication(ctx, request.block, request.force)
@@ -240,6 +255,7 @@ func (a *Applicator) handleTryBlockApplication(ctx context.Context, request *try
 	a.pendingBlocks[string(request.block.Id)] = void{}
 
 	go func() {
+		log.Infof("sending application request for block ID: 0x%s", hex.EncodeToString(request.block.Id))
 		errChan := make(chan error, 1)
 
 		// If block is more than 4 seconds in the future, do not apply it until
@@ -294,6 +310,8 @@ func (a *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 
 func (a *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 	var err error
+
+	log.Infof("handleNewBlock for block ID: 0x%s", hex.EncodeToString(entry.block.Id))
 
 	if entry.block.Header.Height > a.highestBlock+a.opts.MaxHeightDelta {
 		err = p2perrors.ErrMaxHeight
