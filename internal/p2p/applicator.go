@@ -2,10 +2,12 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"sync/atomic"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -367,7 +369,14 @@ func (a *Applicator) handleApplyBlock(request *applyBlockRequest) {
 	if request.block.Header.Height <= atomic.LoadUint64(&a.lib) {
 		err = p2perrors.ErrBlockIrreversibility
 	} else {
+		log.Infof("Requesting application for block ID: 0x%s", hex.EncodeToString(request.block.Id))
 		_, err = a.rpc.ApplyBlock(request.ctx, request.block)
+	}
+
+	if err != nil {
+		log.Infof("Error for block ID: 0x%s, %e", hex.EncodeToString(request.block.Id), err)
+	} else {
+		log.Infof("Response for block ID: 0x%s", hex.EncodeToString(request.block.Id))
 	}
 
 	request.errChan <- err
