@@ -286,6 +286,11 @@ func (a *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
 		a.tryBlockApplication(ctx, status.block, false)
 	} else if status.err == nil || !errors.Is(status.err, p2perrors.ErrUnknownPreviousBlock) {
+
+		if status.err == nil {
+			a.checkBlockChildren(ctx, string(status.block.Id))
+		}
+
 		a.removeBlockEntry(ctx, string(status.block.Id), status.err)
 	}
 }
