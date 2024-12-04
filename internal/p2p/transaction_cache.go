@@ -52,6 +52,43 @@ func (txc *TransactionCache) addTransactionItem(item *TransactionCacheItem) {
 	log.Debugf("Items currently in transaction cache: %d", len(txc.transactionItems))
 }
 
+func (txc *TransactionCache) checkTransaction(transaction *protocol.Transaction, addToCache bool) int {
+	id := string(transaction.Id)
+	// Check if the transaction is in the cache
+	if _, ok := txc.transactionMap[id]; ok {
+		return 1
+	} else if addToCache {
+		// Insert into the cache
+		txc.addTransactionItem(&TransactionCacheItem{
+			transactionID: string(id),
+			timeAdded:     time.Now(),
+		})
+	}
+
+	return 0
+}
+
+// AddTransactions adds transactions to the cache and returns the number of transactions
+// that were in the cache
+func (txc *TransactionCache) AddTransactions(transactions ...*protocol.Transaction) int {
+	// Lock this entire function
+	txc.mu.Lock()
+	defer txc.mu.Unlock()
+
+	now := time.Now()
+
+	// First prune the transactions
+	txc.pruneTransactions(now)
+
+	count := 0
+	for _, trx := range transactions {
+		count +=
+			txc.checkTransaction(trx, true)
+	}
+
+	return count
+}
+
 // CheckTransactions returns the number of transactions that are in the cache
 func (txc *TransactionCache) CheckTransactions(transactions ...*protocol.Transaction) int {
 	// Lock this entire function
@@ -64,19 +101,9 @@ func (txc *TransactionCache) CheckTransactions(transactions ...*protocol.Transac
 	txc.pruneTransactions(now)
 
 	count := 0
-	for _, tx := range transactions {
-		id := string(tx.Id)
-		// Check if the transaction is in the cache
-		if _, ok := txc.transactionMap[id]; ok {
-			// Increase count if present
-			count++
-		} else {
-			// Insert into the cache if not present
-			txc.addTransactionItem(&TransactionCacheItem{
-				transactionID: string(id),
-				timeAdded:     now,
-			})
-		}
+	for _, trx := range transactions {
+		count +=
+			txc.checkTransaction(trx, false)
 	}
 
 	return count
@@ -84,7 +111,7 @@ func (txc *TransactionCache) CheckTransactions(transactions ...*protocol.Transac
 
 // CheckBlock is a helper function to check transactions in a block
 func (txc *TransactionCache) CheckBlock(block *protocol.Block) int {
-	return txc.CheckTransactions(block.Transactions...)
+	return txc.AddTransactions(block.Transactions...)
 }
 
 func (txc *TransactionCache) pruneTransactions(pruneTime time.Time) {
