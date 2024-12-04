@@ -8,6 +8,7 @@ type Config struct {
 	GossipToggleOptions      GossipToggleOptions
 	ApplicatorOptions        ApplicatorOptions
 	ConnectionManagerOptions ConnectionManagerOptions
+	GossipOptions            GossipOptions
 }
 
 // NewConfig creates a new Config
@@ -19,6 +20,7 @@ func NewConfig() *Config {
 		GossipToggleOptions:      *NewGossipToggleOptions(),
 		ApplicatorOptions:        *NewApplicatorOptions(),
 		ConnectionManagerOptions: *NewConnectionManagerOptions(),
+		GossipOptions:            *NewGossipOptions(),
 	}
 	return &config
 }

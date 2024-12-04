@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/koinos/koinos-log-golang/v2"
+	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/canonical"
@@ -159,6 +160,7 @@ type KoinosGossip struct {
 	myPeerID      peer.ID
 	libProvider   LastIrreversibleBlockProvider
 	applicator    *Applicator
+	opts          options.GossipOptions
 	gossipCancel  *context.CancelFunc
 	recentBlocks  uint32
 	recentTrxs    uint32
@@ -172,7 +174,8 @@ func NewKoinosGossip(
 	peerErrorChan chan<- PeerError,
 	id peer.ID,
 	libProvider LastIrreversibleBlockProvider,
-	applicator *Applicator) *KoinosGossip {
+	applicator *Applicator,
+	opts options.GossipOptions) *KoinosGossip {
 
 	block := NewGossipManager(ps, peerErrorChan, BlockTopicName)
 	transaction := NewGossipManager(ps, peerErrorChan, TransactionTopicName)
@@ -185,6 +188,7 @@ func NewKoinosGossip(
 		myPeerID:      id,
 		libProvider:   libProvider,
 		applicator:    applicator,
+		opts:          opts,
 	}
 
 	return &kg
@@ -361,8 +365,10 @@ func (kg *KoinosGossip) applyBlock(ctx context.Context, pid peer.ID, msg *pubsub
 
 	log.Debugf("Pushing gossip block - %s from peer %v", util.BlockString(block), msg.ReceivedFrom)
 
-	// TODO: Fix nil argument
-	if err := kg.applicator.ApplyBlock(ctx, block); err != nil {
+	applyBlockContext, cancelApplyBlock := context.WithTimeout(ctx, kg.opts.BlockTimeout)
+	defer cancelApplyBlock()
+
+	if err := kg.applicator.ApplyBlock(applyBlockContext, block); err != nil {
 		return fmt.Errorf("%w - %s, %v", p2perrors.ErrBlockApplication, util.BlockString(block), err.Error())
 	}
 
@@ -426,7 +432,10 @@ func (kg *KoinosGossip) applyTransaction(ctx context.Context, pid peer.ID, msg *
 		return fmt.Errorf("%w, gossiped transaction missing id", p2perrors.ErrDeserialization)
 	}
 
-	if err := kg.applicator.ApplyTransaction(ctx, transaction); err != nil {
+	applyTransactionContext, cancelApplyTransaction := context.WithTimeout(ctx, kg.opts.TransactionTimeout)
+	defer cancelApplyTransaction()
+
+	if err := kg.applicator.ApplyTransaction(applyTransactionContext, transaction); err != nil {
 		if errors.Is(err, p2perrors.ErrInvalidNonce) {
 			return fmt.Errorf("%w - %s, %v", p2perrors.ErrInvalidNonce, util.TransactionString(transaction), err.Error())
 		}
