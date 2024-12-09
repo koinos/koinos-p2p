@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -409,5 +410,123 @@ func TestInvalidNonce(t *testing.T) {
 	err = applicator.ApplyTransaction(ctx, badTrx)
 	if err != p2perrors.ErrInvalidNonce {
 		t.Errorf("badTrx - ErrInvalidNonce expected but was not returned, was: %v", err)
+	}
+}
+
+func TestValidateBlock(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	rpc := applicatorTestRPC{
+		blocksToFail:     make(map[string]void),
+		unlinkableBlocks: make(map[string]void),
+		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
+	}
+
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
+	if err != nil {
+		t.Error(err)
+	}
+
+	block := &protocol.Block{
+		Id: []byte{0x01},
+		Header: &protocol.BlockHeader{
+			Height:   1,
+			Previous: []byte{0},
+		},
+	}
+
+	err = applicator.validateBlock(block)
+	if err != nil {
+		t.Error(err)
+	}
+
+	block.Header.Previous = nil
+	err = applicator.validateBlock(block)
+	if err == nil {
+		t.Error("validateBlock should fail with a nil previous block")
+	} else if !errors.Is(err, p2perrors.ErrInvalidBlock) {
+		t.Errorf("expected validateBlock to return ErrInvalidBlock, was: %e", err)
+	}
+
+	block.Header.Previous = []byte{0}
+	block.Id = nil
+	if err == nil {
+		t.Error("validateBlock should fail with a nil block id")
+	} else if !errors.Is(err, p2perrors.ErrInvalidBlock) {
+		t.Errorf("expected validateBlock to return ErrInvalidBlock, was: %e", err)
+	}
+
+	block.Id = []byte{0x01}
+	block.Header = nil
+	if err == nil {
+		t.Error("validateBlock should fail with a nil header")
+	} else if !errors.Is(err, p2perrors.ErrInvalidBlock) {
+		t.Errorf("expected validateBlock to return ErrInvalidBlock, was: %e", err)
+	}
+}
+
+func TestValidateTransaction(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	rpc := applicatorTestRPC{
+		blocksToFail:     make(map[string]void),
+		unlinkableBlocks: make(map[string]void),
+		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
+	}
+
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
+	if err != nil {
+		t.Error(err)
+	}
+
+	trx := &protocol.Transaction{
+		Id: []byte{0},
+		Header: &protocol.TransactionHeader{
+			Payer: []byte{0},
+			Nonce: []byte{0},
+		},
+	}
+
+	err = applicator.validateTransaction(trx)
+	if err != nil {
+		t.Error(err)
+	}
+
+	trx.Id = nil
+	err = applicator.validateTransaction(trx)
+	if err == nil {
+		t.Error("validateTransaction should fail with a nil transaction id")
+	} else if !errors.Is(err, p2perrors.ErrInvalidTransaction) {
+		t.Errorf("expected validateTransaction to return ErrInvalidTransaction, was: %e", err)
+	}
+
+	trx.Id = []byte{0}
+	trx.Header.Payer = nil
+	err = applicator.validateTransaction(trx)
+	if err == nil {
+		t.Error("validateTransaction should fail with a nil transaction id")
+	} else if !errors.Is(err, p2perrors.ErrInvalidTransaction) {
+		t.Errorf("expected validateTransaction to return ErrInvalidTransaction, was: %e", err)
+	}
+
+	trx.Header.Payer = []byte{0}
+	trx.Header.Nonce = nil
+	err = applicator.validateTransaction(trx)
+	if err == nil {
+		t.Error("validateTransaction should fail with a nil transaction nonce")
+	} else if !errors.Is(err, p2perrors.ErrInvalidTransaction) {
+		t.Errorf("expected validateTransaction to return ErrInvalidTransaction, was: %e", err)
+	}
+
+	trx.Header = nil
+	err = applicator.validateTransaction(trx)
+	if err == nil {
+		t.Error("validateTransaction should fail with a nil transaction header")
+	} else if !errors.Is(err, p2perrors.ErrInvalidTransaction) {
+		t.Errorf("expected validateTransaction to return ErrInvalidTransaction, was: %e", err)
 	}
 }
