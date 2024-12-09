@@ -392,10 +392,18 @@ func TestInvalidNonce(t *testing.T) {
 
 	goodTrx := &protocol.Transaction{
 		Id: []byte{0},
+		Header: &protocol.TransactionHeader{
+			Payer: []byte{0},
+			Nonce: []byte{0},
+		},
 	}
 
 	badTrx := &protocol.Transaction{
 		Id: []byte{1},
+		Header: &protocol.TransactionHeader{
+			Payer: []byte{0},
+			Nonce: []byte{0},
+		},
 	}
 
 	rpc.invalidNonceTrxs[string(badTrx.Id)] = void{}
