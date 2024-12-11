@@ -2,10 +2,12 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"sync/atomic"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -102,6 +104,8 @@ func (a *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 		return err
 	}
 
+	log.Infof("ApplyBlock: 0x%s", hex.EncodeToString(block.Id))
+
 	errChan := make(chan error, 1)
 
 	a.newBlockChan <- &blockEntry{block: block, errChans: []chan<- error{errChan}}
@@ -136,10 +140,13 @@ func (a *Applicator) HandleForkHeads(forkHeads *broadcast.ForkHeads) {
 
 // HandleBlockBroadcast handles a block broadcast
 func (a *Applicator) HandleBlockBroadcast(blockAccept *broadcast.BlockAccepted) {
+	log.Infof("HandleBlockBroadcast: 0x%s", hex.EncodeToString(blockAccept.Block.Id))
 	a.blockBroadcastChan <- blockAccept
 }
 
 func (a *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
+	log.Infof("addBlockEntry: 0x%s", hex.EncodeToString(entry.block.Id))
+
 	id := string(entry.block.Id)
 	previousId := string(entry.block.Header.Previous)
 	height := entry.block.Header.Height
@@ -175,6 +182,8 @@ func (a *Applicator) addBlockEntry(ctx context.Context, entry *blockEntry) {
 }
 
 func (a *Applicator) removeBlockEntry(ctx context.Context, id string, err error) {
+	log.Infof("removeBlockEntry: 0x%s", hex.EncodeToString([]byte(id)))
+
 	if entry, ok := a.blocksById[id]; ok {
 		for _, ch := range entry.errChans {
 			select {
@@ -208,6 +217,7 @@ func (a *Applicator) removeBlockEntry(ctx context.Context, id string, err error)
 }
 
 func (a *Applicator) tryBlockApplication(ctx context.Context, block *protocol.Block, force bool) {
+	log.Infof("tryBlockApplication: 0x%s", hex.EncodeToString(block.Id))
 	go func() {
 		select {
 		case a.tryBlockChan <- &tryBlockApplicationRequest{
@@ -221,6 +231,7 @@ func (a *Applicator) tryBlockApplication(ctx context.Context, block *protocol.Bl
 
 func (a *Applicator) handleTryBlockApplication(ctx context.Context, request *tryBlockApplicationRequest) {
 	// If there is already a pending application of the block, return
+	log.Infof("handleTryBlockApplication: 0x%s", hex.EncodeToString(request.block.Id))
 	if _, ok := a.pendingBlocks[string(request.block.Id)]; ok {
 		if request.force {
 			go func() {
@@ -281,6 +292,7 @@ func (a *Applicator) handleTryBlockApplication(ctx context.Context, request *try
 }
 
 func (a *Applicator) handleBlockStatus(ctx context.Context, status *blockApplicationStatus) {
+	log.Infof("handleBlockStatus: 0x%s", hex.EncodeToString(status.block.Id))
 	delete(a.pendingBlocks, string(status.block.Id))
 
 	if status.err != nil && (errors.Is(status.err, p2perrors.ErrBlockState)) {
@@ -296,6 +308,7 @@ func (a *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 }
 
 func (a *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
+	log.Infof("handleNewBlock: 0x%s", hex.EncodeToString(entry.block.Id))
 	var err error
 
 	if entry.block.Header.Height > a.highestBlock+a.opts.MaxHeightDelta {
@@ -320,6 +333,7 @@ func (a *Applicator) handleNewBlock(ctx context.Context, entry *blockEntry) {
 }
 
 func (a *Applicator) checkBlockChildren(ctx context.Context, blockID string) {
+	log.Infof("checkBlockChildren: 0x%s", hex.EncodeToString([]byte(blockID)))
 	if children, ok := a.blocksByPrevious[string(blockID)]; ok {
 		for id := range children {
 			if entry, ok := a.blocksById[id]; ok {
@@ -357,6 +371,7 @@ func (a *Applicator) handleForkHeads(ctx context.Context, forkHeads *broadcast.F
 }
 
 func (a *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broadcast.BlockAccepted) {
+	log.Infof("handleBlockBroadcast: 0x%s", hex.EncodeToString(blockAccept.Block.Id))
 	a.transactionCache.CheckBlock(blockAccept.Block)
 
 	// It is not possible for a block with a new highest height to not be head, so this check is sufficient
@@ -368,12 +383,15 @@ func (a *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 }
 
 func (a *Applicator) handleApplyBlock(request *applyBlockRequest) {
+	log.Infof("handleApplyBlock: 0x%s", hex.EncodeToString(request.block.Id))
 	var err error
 	if request.block.Header.Height <= atomic.LoadUint64(&a.lib) {
 		err = p2perrors.ErrBlockIrreversibility
 	} else {
 		_, err = a.rpc.ApplyBlock(request.ctx, request.block)
 	}
+
+	log.Infof("handleApplyBlock: response 0x%s, %v", hex.EncodeToString(request.block.Id), err)
 
 	request.errChan <- err
 	close(request.errChan)
