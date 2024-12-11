@@ -2,10 +2,13 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"slices"
 	"sync/atomic"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -60,6 +63,7 @@ type Applicator struct {
 	blockBroadcastChan chan *broadcast.BlockAccepted
 	blockStatusChan    chan *blockApplicationStatus
 	tryBlockChan       chan *tryBlockApplicationRequest
+	resetChan          chan *void
 
 	applyBlockChan       chan *applyBlockRequest
 	applyTransactionChan chan *applyTransactionRequest
@@ -89,6 +93,7 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 		blockBroadcastChan:   make(chan *broadcast.BlockAccepted, 10),
 		blockStatusChan:      make(chan *blockApplicationStatus, 10),
 		tryBlockChan:         make(chan *tryBlockApplicationRequest, 10),
+		resetChan:            make(chan *void, 1),
 		applyBlockChan:       make(chan *applyBlockRequest, 10),
 		applyTransactionChan: make(chan *applyTransactionRequest, 10),
 		opts:                 opts,
@@ -126,6 +131,13 @@ func (a *Applicator) ApplyTransaction(ctx context.Context, trx *protocol.Transac
 
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+func (a *Applicator) Reset(ctx context.Context) {
+	select {
+	case a.resetChan <- &void{}:
+	case <-ctx.Done():
 	}
 }
 
@@ -367,6 +379,73 @@ func (a *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 	a.checkBlockChildren(ctx, string(blockAccept.Block.Id))
 }
 
+func (a *Applicator) handleReset(ctx context.Context) {
+	log.Warn("Resetting applicator...")
+
+	// Block IDs
+	log.Warn("Block IDs:")
+
+	for id, entry := range a.blocksById {
+		log.Warnf(" - 0x%s", hex.EncodeToString([]byte(id)))
+
+		for _, errChan := range entry.errChans {
+			defer close(errChan)
+			select {
+			case errChan <- p2perrors.ErrBlockApplicationTimeout:
+			case <-ctx.Done():
+			}
+		}
+	}
+
+	a.blocksById = make(map[string]*blockEntry)
+
+	// Blocks by Previous
+	log.Warn("Blocks by previous:")
+
+	for prevId, blocks := range a.blocksByPrevious {
+		log.Warnf(" - 0x%s:", hex.EncodeToString([]byte(prevId)))
+
+		for id, _ := range blocks {
+			log.Warnf("    - 0x%s", hex.EncodeToString([]byte(id)))
+		}
+	}
+
+	a.blocksByPrevious = make(map[string]map[string]void)
+
+	// Blocks by Height
+	log.Warnf("Blocks by height:")
+	heights := make([]uint64, 0)
+
+	for height := range a.blocksByHeight {
+		heights = append(heights, height)
+	}
+
+	slices.Sort(heights)
+
+	for _, height := range heights {
+		log.Warnf(" - %v:", height)
+
+		for id, _ := range a.blocksByHeight[height] {
+			log.Warnf("    - 0x%s", hex.EncodeToString([]byte(id)))
+		}
+	}
+
+	a.blocksByHeight = make(map[uint64]map[string]void)
+
+	// Pending Blocks
+	log.Warnf("Pending blocks:")
+
+	for id, _ := range a.pendingBlocks {
+		log.Warnf(" - 0x%s", hex.EncodeToString([]byte(id)))
+	}
+
+	a.pendingBlocks = make(map[string]void)
+
+	a.forkWatchdog = NewForkWatchdog()
+	// Transaction cache is sent to use during construction so we cannot reset it
+	// HighestBlock and LIB should not be reset because these values are still accurate from Chain
+}
+
 func (a *Applicator) handleApplyBlock(request *applyBlockRequest) {
 	var err error
 	if request.block.Header.Height <= atomic.LoadUint64(&a.lib) {
@@ -403,6 +482,8 @@ func (a *Applicator) Start(ctx context.Context) {
 				a.handleBlockBroadcast(ctx, blockBroadcast)
 			case tryApplyBlock := <-a.tryBlockChan:
 				a.handleTryBlockApplication(ctx, tryApplyBlock)
+			case <-a.resetChan:
+				a.handleReset(ctx)
 
 			case <-ctx.Done():
 				return
