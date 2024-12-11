@@ -205,6 +205,7 @@ func (kg *KoinosGossip) EnableGossip(ctx context.Context, enable bool) {
 		kg.StopGossip()
 		if kg.rpc != nil {
 			_ = kg.rpc.BroadcastGossipStatus(ctx, false)
+			kg.applicator.Reset(ctx)
 		}
 	}
 }
