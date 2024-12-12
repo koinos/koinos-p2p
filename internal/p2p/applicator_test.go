@@ -243,6 +243,169 @@ func TestApplicator(t *testing.T) {
 	<-testChan4
 }
 
+func TestReset(t *testing.T) {
+	ctx := context.Background()
+	rpc := applicatorTestRPC{
+		blocksToFail:     make(map[string]void),
+		unlinkableBlocks: make(map[string]void),
+		head:             []byte{0x00},
+		invalidNonceTrxs: make(map[string]void),
+	}
+
+	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
+	if err != nil {
+		t.Error(err)
+	}
+
+	applicator.Start(ctx)
+
+	// Blocks will be applied using the following topology
+	//
+	// 0 -- 1 -- 2a -- 3a
+	//           2b  \ 3b
+	//
+	// These blocks will be applied in the following order
+	//
+	// 2b (does not connect)
+	// 3a (block is in the future, passes)
+	// 3b (block is in the future, fails)
+	// 2a (success immediately, triggers 3)
+	// 1  (succeeds immediately)
+
+	block1 := &protocol.Block{
+		Id: []byte{0x01},
+		Header: &protocol.BlockHeader{
+			Height:   1,
+			Previous: []byte{0},
+		},
+	}
+
+	block2a := &protocol.Block{
+		Id: []byte{0x02, 0x0a},
+		Header: &protocol.BlockHeader{
+			Height:   2,
+			Previous: block1.Id,
+		},
+	}
+
+	block2b := &protocol.Block{
+		Id: []byte{0x02, 0x0b},
+		Header: &protocol.BlockHeader{
+			Height:   2,
+			Previous: []byte{0x00, 0x00},
+		},
+	}
+
+	block3a := &protocol.Block{
+		Id: []byte{0x03, 0x0a},
+		Header: &protocol.BlockHeader{
+			Height:   3,
+			Previous: block2a.Id,
+		},
+	}
+
+	block3b := &protocol.Block{
+		Id: []byte{0x03, 0x0b},
+		Header: &protocol.BlockHeader{
+			Height:   3,
+			Previous: block2a.Id,
+		},
+	}
+
+	testChan1 := make(chan struct{})
+	testChan2 := make(chan struct{})
+	testChan3 := make(chan struct{})
+	testChan4 := make(chan struct{})
+	testChan5 := make(chan struct{})
+
+	rpc.unlinkableBlocks[string(block1.Id)] = void{}
+
+	go func() {
+		err := applicator.ApplyBlock(ctx, block1)
+		if err != p2perrors.ErrBlockApplicationTimeout {
+			t.Errorf("block1 - ErrBlockApplicationTimeout expected but not returned, was: %v", err)
+		}
+		testChan1 <- struct{}{}
+	}()
+
+	go func() {
+		err := applicator.ApplyBlock(ctx, block2a)
+		if err != p2perrors.ErrBlockApplicationTimeout {
+			t.Errorf("block2a - ErrBlockApplicationTimeout expected but not returned, was: %v", err)
+		}
+		testChan2 <- struct{}{}
+	}()
+
+	go func() {
+		err := applicator.ApplyBlock(ctx, block2b)
+		if err != p2perrors.ErrBlockApplicationTimeout {
+			t.Errorf("block2b - ErrBlockApplicationTimeout expected but not returned, was: %v", err)
+		}
+		testChan3 <- struct{}{}
+	}()
+
+	go func() {
+		err := applicator.ApplyBlock(ctx, block3a)
+		if err != p2perrors.ErrBlockApplicationTimeout {
+			t.Errorf("block3a - ErrBlockApplicationTimeout expected but not returned, was: %v", err)
+		}
+		testChan4 <- struct{}{}
+	}()
+
+	go func() {
+		err := applicator.ApplyBlock(ctx, block3b)
+		if err != p2perrors.ErrBlockApplicationTimeout {
+			t.Errorf("block3b - ErrBlockApplicationTimeout expected but not returned, was: %v", err)
+		}
+		testChan5 <- struct{}{}
+	}()
+
+	time.Sleep(time.Second)
+
+	// Lengths are sufficient for this test as other tests check correctness by behavior
+	if len(applicator.blocksById) != 5 {
+		t.Errorf("Expected 5 blocks by ID, was: %v", len(applicator.blocksById))
+	}
+
+	if len(applicator.blocksByPrevious) != 4 {
+		t.Errorf("Expected 3 entries for blocks by previous, was: %v", len(applicator.blocksByPrevious))
+	}
+
+	if len(applicator.blocksByHeight) != 3 {
+		t.Errorf("Expected 3 entries for blocks by height, was: %v", len(applicator.blocksByHeight))
+	}
+
+	if len(applicator.pendingBlocks) != 0 {
+		t.Errorf("Expected 0 entries in pending blocks, was: %v", len(applicator.pendingBlocks))
+	}
+
+	applicator.Reset(ctx)
+
+	time.Sleep(time.Second)
+
+	if len(applicator.blocksById) != 0 {
+		t.Errorf("Expected 0 blocks by ID, was: %v", len(applicator.blocksById))
+	}
+
+	if len(applicator.blocksByPrevious) != 0 {
+		t.Errorf("Expected 0 entries for blocks by previous, was: %v", len(applicator.blocksByPrevious))
+	}
+
+	if len(applicator.blocksByHeight) != 0 {
+		t.Errorf("Expected 0 entries for blocks by height, was: %v", len(applicator.blocksByHeight))
+	}
+
+	if len(applicator.pendingBlocks) != 0 {
+		t.Errorf("Expected 0 entries in pending blocks, was: %v", len(applicator.pendingBlocks))
+	}
+
+	<-testChan1
+	<-testChan2
+	<-testChan3
+	<-testChan4
+	<-testChan5
+}
+
 func TestApplicatorLimits(t *testing.T) {
 	ctx := context.Background()
 	rpc := applicatorTestRPC{
