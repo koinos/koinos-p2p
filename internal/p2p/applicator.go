@@ -479,6 +479,7 @@ func (a *Applicator) handleTransactionStatus(ctx context.Context, status *transa
 	delete(a.pendingTransactions, string(status.transaction.Id))
 
 	if status.err == nil {
+		a.transactionCache.AddTransactions(status.transaction)
 		a.checkTransactionChildren(ctx, status.transaction)
 	} else if errors.Is(status.err, p2perrors.ErrInvalidNonce) {
 		return
@@ -615,6 +616,7 @@ func (a *Applicator) handleBlockBroadcast(ctx context.Context, blockAccept *broa
 }
 
 func (a *Applicator) handleTransactionBroadcast(ctx context.Context, transactionAccept *broadcast.TransactionAccepted) {
+	a.transactionCache.AddTransactions(transactionAccept.Transaction)
 	a.checkTransactionChildren(ctx, transactionAccept.Transaction)
 }
 
