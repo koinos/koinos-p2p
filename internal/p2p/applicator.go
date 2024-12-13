@@ -30,6 +30,11 @@ type tryBlockApplicationRequest struct {
 	force bool
 }
 
+type tryTransactionApplicationRequest struct {
+	transaction *protocol.Transaction
+	force       bool
+}
+
 type applyBlockRequest struct {
 	block   *protocol.Block
 	errChan chan<- error
@@ -79,6 +84,7 @@ type Applicator struct {
 	blockStatusChan          chan *blockApplicationStatus
 	transactionStatusChan    chan *transactionApplicationStatus
 	tryBlockChan             chan *tryBlockApplicationRequest
+	tryTransactionChan       chan *tryTransactionApplicationRequest
 	removeTransactionChan    chan string
 
 	applyBlockChan       chan *applyBlockRequest
@@ -115,6 +121,7 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 		blockStatusChan:          make(chan *blockApplicationStatus, 10),
 		transactionStatusChan:    make(chan *transactionApplicationStatus, 10),
 		tryBlockChan:             make(chan *tryBlockApplicationRequest, 10),
+		tryTransactionChan:       make(chan *tryTransactionApplicationRequest, 10),
 		removeTransactionChan:    make(chan string),
 		applyBlockChan:           make(chan *applyBlockRequest, 10),
 		applyTransactionChan:     make(chan *applyTransactionRequest, 10),
@@ -266,7 +273,7 @@ func (a *Applicator) addTransactionEntry(ctx context.Context, entry *transaction
 		return
 	}
 
-	a.requestTransactionApplication(ctx, entry.transaction)
+	a.tryTransactionApplication(ctx, entry.transaction, false)
 }
 
 func (a *Applicator) removeBlockEntry(ctx context.Context, id string, err error) {
@@ -404,18 +411,40 @@ func (a *Applicator) handleTryBlockApplication(ctx context.Context, request *try
 	}()
 }
 
-func (a *Applicator) requestTransactionApplication(ctx context.Context, transaction *protocol.Transaction) {
-	if _, ok := a.pendingTransactions[string(transaction.Id)]; ok {
+func (a *Applicator) tryTransactionApplication(ctx context.Context, transaction *protocol.Transaction, force bool) {
+	go func() {
+		select {
+		case a.tryTransactionChan <- &tryTransactionApplicationRequest{
+			transaction: transaction,
+			force:       force,
+		}:
+		case <-ctx.Done():
+		}
+	}()
+}
+
+func (a *Applicator) handleTryTransactionApplication(ctx context.Context, request *tryTransactionApplicationRequest) {
+	if _, ok := a.pendingTransactions[string(request.transaction.Id)]; ok {
+		if request.force {
+			go func() {
+				select {
+				case <-time.After(a.opts.ForceApplicationRetryDelay):
+					a.tryTransactionApplication(ctx, request.transaction, request.force)
+				case <-ctx.Done():
+				}
+			}()
+		}
+
 		return
 	}
 
-	a.pendingTransactions[string(transaction.Id)] = void{}
+	a.pendingTransactions[string(request.transaction.Id)] = void{}
 
 	go func() {
 		errChan := make(chan error, 1)
 
 		select {
-		case a.applyTransactionChan <- &applyTransactionRequest{transaction, errChan, ctx}:
+		case a.applyTransactionChan <- &applyTransactionRequest{request.transaction, errChan, ctx}:
 		case <-ctx.Done():
 			return
 		}
@@ -423,7 +452,7 @@ func (a *Applicator) requestTransactionApplication(ctx context.Context, transact
 		select {
 		case err := <-errChan:
 			select {
-			case a.transactionStatusChan <- &transactionApplicationStatus{transaction, err}:
+			case a.transactionStatusChan <- &transactionApplicationStatus{request.transaction, err}:
 			case <-ctx.Done():
 			}
 		case <-ctx.Done():
@@ -449,7 +478,9 @@ func (a *Applicator) handleBlockStatus(ctx context.Context, status *blockApplica
 func (a *Applicator) handleTransactionStatus(ctx context.Context, status *transactionApplicationStatus) {
 	delete(a.pendingTransactions, string(status.transaction.Id))
 
-	if status.err != nil && errors.Is(status.err, p2perrors.ErrInvalidNonce) {
+	if status.err == nil {
+		a.checkTransactionChildren(ctx, status.transaction)
+	} else if errors.Is(status.err, p2perrors.ErrInvalidNonce) {
 		return
 	}
 
@@ -536,7 +567,7 @@ func (a *Applicator) checkTransactionChildren(ctx context.Context, transaction *
 	if children, ok := a.transactionsByPayeeNonce[nextPayeeNonce]; ok {
 		for id := range children {
 			if entry, ok := a.transactionsById[id]; ok {
-				a.requestTransactionApplication(ctx, entry.transaction)
+				a.tryTransactionApplication(ctx, entry.transaction, true)
 			}
 		}
 	}
@@ -629,6 +660,8 @@ func (a *Applicator) Start(ctx context.Context) {
 				a.handleTransactionBroadcast(ctx, transactionBroadcast)
 			case tryApplyBlock := <-a.tryBlockChan:
 				a.handleTryBlockApplication(ctx, tryApplyBlock)
+			case tryApplyTransaction := <-a.tryTransactionChan:
+				a.handleTryTransactionApplication(ctx, tryApplyTransaction)
 
 			case <-ctx.Done():
 				return
