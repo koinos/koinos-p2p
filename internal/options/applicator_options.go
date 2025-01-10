@@ -22,7 +22,7 @@ const (
 	applicationJobsDefault            = 8
 	forceChildRequestThresholdDefault = time.Minute
 	forceApplicationRetryDelayDefault = 50 * time.Millisecond
-	transactionExpirationDefault      = time.Second * 10
+	transactionExpirationDefault      = time.Second * 30
 )
 
 // ApplicatorOptions are options for Applicator
