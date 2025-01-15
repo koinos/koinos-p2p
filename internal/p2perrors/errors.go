@@ -23,6 +23,10 @@ var (
 	// ErrInvalidNonce represents when a transaction cannot be applied because of an invalid nonce
 	ErrInvalidNonce = errors.New("invalid nonce")
 
+	// ErrPendingTransactionLimitExceeded represents when a transaction cannot be applied because
+	// the pending transaction limit has been exceed
+	ErrPendingTransactionLimitExceeded = errors.New("pending transaction limit exceeded")
+
 	// ErrChainIDMismatch represents the peer has a different chain id
 	ErrChainIDMismatch = errors.New("chain id does not match peer's")
 
