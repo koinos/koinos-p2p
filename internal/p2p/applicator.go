@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -100,10 +101,29 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 	}, nil
 }
 
+func (a *Applicator) validateBlock(block *protocol.Block) error {
+	if block.Id == nil {
+		return fmt.Errorf("%w, block id was nil", p2perrors.ErrInvalidBlock)
+	}
+
+	if block.Header == nil {
+		return fmt.Errorf("%w, block header was nil", p2perrors.ErrInvalidBlock)
+	}
+
+	if block.Header.Previous == nil {
+		return fmt.Errorf("%w, previous block was nil", p2perrors.ErrInvalidBlock)
+	}
+
+	return nil
+}
+
 // ApplyBlock will apply the block to the chain at the appropriate time
 func (a *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) error {
-	err := a.forkWatchdog.Add(block)
-	if err != nil {
+	if err := a.validateBlock(block); err != nil {
+		return err
+	}
+
+	if err := a.forkWatchdog.Add(block); err != nil {
 		return err
 	}
 
@@ -120,7 +140,31 @@ func (a *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 	}
 }
 
+func (a *Applicator) validateTransaction(trx *protocol.Transaction) error {
+	if trx.Id == nil {
+		return fmt.Errorf("%w, transaction id was nil", p2perrors.ErrInvalidTransaction)
+	}
+
+	if trx.Header == nil {
+		return fmt.Errorf("%w, transaction header was nil", p2perrors.ErrInvalidTransaction)
+	}
+
+	if trx.Header.Payer == nil {
+		return fmt.Errorf("%w, transaction payer was nil", p2perrors.ErrInvalidTransaction)
+	}
+
+	if trx.Header.Nonce == nil {
+		return fmt.Errorf("%w, transaction nonce was nil", p2perrors.ErrInvalidTransaction)
+	}
+
+	return nil
+}
+
 func (a *Applicator) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) error {
+	if err := a.validateTransaction(trx); err != nil {
+		return err
+	}
+
 	errChan := make(chan error, 1)
 
 	a.applyTransactionChan <- &applyTransactionRequest{trx, errChan, ctx}

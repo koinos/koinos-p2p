@@ -174,6 +174,10 @@ func (p *PeerErrorHandler) getScoreForError(err error) uint64 {
 		return p.opts.PeerRPCTimeoutErrorScore
 	case errors.Is(err, p2perrors.ErrForkBomb):
 		return p.opts.ForkBombErrorScore
+	case errors.Is(err, p2perrors.ErrInvalidBlock):
+		return p.opts.InvalidBlockErrorScore
+	case errors.Is(err, p2perrors.ErrInvalidTransaction):
+		return p.opts.InvalidTransactionErrorScore
 
 	// These errors are expected, but result in instant disconnection
 	case errors.Is(err, p2perrors.ErrChainIDMismatch):
