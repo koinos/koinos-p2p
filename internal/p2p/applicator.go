@@ -2,10 +2,14 @@ package p2p
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"slices"
 	"sync/atomic"
 	"time"
 
+	log "github.com/koinos/koinos-log-golang/v2"
 	"github.com/koinos/koinos-p2p/internal/options"
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-p2p/internal/rpc"
@@ -86,6 +90,7 @@ type Applicator struct {
 	tryBlockChan             chan *tryBlockApplicationRequest
 	tryTransactionChan       chan *tryTransactionApplicationRequest
 	removeTransactionChan    chan string
+	resetChan                chan *void
 
 	applyBlockChan       chan *applyBlockRequest
 	applyTransactionChan chan *applyTransactionRequest
@@ -123,16 +128,36 @@ func NewApplicator(ctx context.Context, rpc rpc.LocalRPC, cache *TransactionCach
 		tryBlockChan:             make(chan *tryBlockApplicationRequest, 10),
 		tryTransactionChan:       make(chan *tryTransactionApplicationRequest, 10),
 		removeTransactionChan:    make(chan string),
+		resetChan:                make(chan *void, 1),
 		applyBlockChan:           make(chan *applyBlockRequest, 10),
 		applyTransactionChan:     make(chan *applyTransactionRequest, 10),
 		opts:                     opts,
 	}, nil
 }
 
+func (a *Applicator) validateBlock(block *protocol.Block) error {
+	if block.Id == nil {
+		return fmt.Errorf("%w, block id was nil", p2perrors.ErrInvalidBlock)
+	}
+
+	if block.Header == nil {
+		return fmt.Errorf("%w, block header was nil", p2perrors.ErrInvalidBlock)
+	}
+
+	if block.Header.Previous == nil {
+		return fmt.Errorf("%w, previous block was nil", p2perrors.ErrInvalidBlock)
+	}
+
+	return nil
+}
+
 // ApplyBlock will apply the block to the chain at the appropriate time
 func (a *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) error {
-	err := a.forkWatchdog.Add(block)
-	if err != nil {
+	if err := a.validateBlock(block); err != nil {
+		return err
+	}
+
+	if err := a.forkWatchdog.Add(block); err != nil {
 		return err
 	}
 
@@ -149,7 +174,31 @@ func (a *Applicator) ApplyBlock(ctx context.Context, block *protocol.Block) erro
 	}
 }
 
+func (a *Applicator) validateTransaction(transaction *protocol.Transaction) error {
+	if transaction.Id == nil {
+		return fmt.Errorf("%w, transaction id was nil", p2perrors.ErrInvalidTransaction)
+	}
+
+	if transaction.Header == nil {
+		return fmt.Errorf("%w, transaction header was nil", p2perrors.ErrInvalidTransaction)
+	}
+
+	if transaction.Header.Payer == nil {
+		return fmt.Errorf("%w, transaction payer was nil", p2perrors.ErrInvalidTransaction)
+	}
+
+	if transaction.Header.Nonce == nil {
+		return fmt.Errorf("%w, transaction nonce was nil", p2perrors.ErrInvalidTransaction)
+	}
+
+	return nil
+}
+
 func (a *Applicator) ApplyTransaction(ctx context.Context, transaction *protocol.Transaction) error {
+	if err := a.validateTransaction(transaction); err != nil {
+		return err
+	}
+
 	errChan := make(chan error, 1)
 
 	a.newTransactionChan <- &transactionEntry{transaction: transaction, errChans: []chan<- error{errChan}}
@@ -160,6 +209,13 @@ func (a *Applicator) ApplyTransaction(ctx context.Context, transaction *protocol
 
 	case <-ctx.Done():
 		return p2perrors.ErrTransactionApplicationTimeout
+	}
+}
+
+func (a *Applicator) Reset(ctx context.Context) {
+	select {
+	case a.resetChan <- &void{}:
+	case <-ctx.Done():
 	}
 }
 
@@ -624,6 +680,102 @@ func (a *Applicator) handleTransactionBroadcast(ctx context.Context, transaction
 	a.checkTransactionChildren(ctx, transactionAccept.Transaction)
 }
 
+func (a *Applicator) handleReset(ctx context.Context) {
+	log.Warn("Resetting applicator...")
+
+	// Block IDs
+	log.Warn("Block IDs:")
+
+	for id, entry := range a.blocksById {
+		log.Warnf(" - 0x%s", hex.EncodeToString([]byte(id)))
+
+		for _, errChan := range entry.errChans {
+			defer close(errChan)
+			select {
+			case errChan <- p2perrors.ErrBlockApplicationTimeout:
+			case <-ctx.Done():
+			}
+		}
+	}
+
+	a.blocksById = make(map[string]*blockEntry)
+
+	// Blocks by Previous
+	log.Warn("Blocks by previous:")
+
+	for prevId, blocks := range a.blocksByPrevious {
+		log.Warnf(" - 0x%s:", hex.EncodeToString([]byte(prevId)))
+
+		for id := range blocks {
+			log.Warnf("    - 0x%s", hex.EncodeToString([]byte(id)))
+		}
+	}
+
+	a.blocksByPrevious = make(map[string]map[string]void)
+
+	// Blocks by Height
+	log.Warnf("Blocks by height:")
+	heights := make([]uint64, 0)
+
+	for height := range a.blocksByHeight {
+		heights = append(heights, height)
+	}
+
+	slices.Sort(heights)
+
+	for _, height := range heights {
+		log.Warnf(" - %v:", height)
+
+		for id := range a.blocksByHeight[height] {
+			log.Warnf("    - 0x%s", hex.EncodeToString([]byte(id)))
+		}
+	}
+
+	a.blocksByHeight = make(map[uint64]map[string]void)
+
+	// Pending Blocks
+	log.Warnf("Pending blocks:")
+
+	for id := range a.pendingBlocks {
+		log.Warnf(" - 0x%s", hex.EncodeToString([]byte(id)))
+	}
+
+	a.pendingBlocks = make(map[string]void)
+
+	// Transactions by ID
+	log.Warnf("Transactions by ID:")
+
+	for id, entry := range a.transactionsById {
+		log.Warnf(" - 0x%s", hex.EncodeToString([]byte(id)))
+
+		for _, errChan := range entry.errChans {
+			defer close(errChan)
+			select {
+			case errChan <- p2perrors.ErrTransactionApplicationTimeout:
+			case <-ctx.Done():
+			}
+		}
+	}
+
+	a.transactionsById = make(map[string]*transactionEntry)
+
+	// Payee nonce is not easily convertible back to a form for output, just reset it.
+	a.transactionsByPayeeNonce = make(map[string]map[string]void)
+
+	// Pending Transactions
+	log.Warnf("Pending Transactions:")
+
+	for id := range a.pendingTransactions {
+		log.Warnf(" - 0x%s", hex.EncodeToString([]byte(id)))
+	}
+
+	a.pendingTransactions = make(map[string]void)
+
+	a.forkWatchdog = NewForkWatchdog()
+	// Transaction cache is sent to use during construction so we cannot reset it
+	// HighestBlock and LIB should not be reset because these values are still accurate from Chain
+}
+
 func (a *Applicator) handleApplyBlock(request *applyBlockRequest) {
 	var err error
 	if request.block.Header.Height <= atomic.LoadUint64(&a.lib) {
@@ -668,6 +820,8 @@ func (a *Applicator) Start(ctx context.Context) {
 				a.handleTryBlockApplication(ctx, tryApplyBlock)
 			case tryApplyTransaction := <-a.tryTransactionChan:
 				a.handleTryTransactionApplication(ctx, tryApplyTransaction)
+			case <-a.resetChan:
+				a.handleReset(ctx)
 
 			case <-ctx.Done():
 				return

@@ -30,6 +30,8 @@ const (
 	forkBombErrorScoreDefault                      = errorScoreThresholdDefault * 2
 	maxHeightErrorScoreDefault                     = blockApplicationErrorScoreDefault
 	protocolMistmatchErrorScoreDefault             = errorScoreThresholdDefault * 2
+	invalidBlockErrorScoreDefault                  = errorScoreThresholdDefault / 10
+	invalidTransactionErrorScoreDefault            = errorScoreThresholdDefault / 10
 	unknownErrorScoreDefault                       = blockApplicationErrorScoreDefault
 )
 
@@ -60,6 +62,8 @@ type PeerErrorHandlerOptions struct {
 	ForkBombErrorScore                      uint64
 	MaxHeightErrorScore                     uint64
 	ProtocolMismatchErrorScore              uint64
+	InvalidBlockErrorScore                  uint64
+	InvalidTransactionErrorScore            uint64
 	UnknownErrorScore                       uint64
 }
 
@@ -90,6 +94,8 @@ func NewPeerErrorHandlerOptions() *PeerErrorHandlerOptions {
 		ForkBombErrorScore:                      forkBombErrorScoreDefault,
 		MaxHeightErrorScore:                     maxHeightErrorScoreDefault,
 		ProtocolMismatchErrorScore:              protocolMistmatchErrorScoreDefault,
+		InvalidBlockErrorScore:                  invalidBlockErrorScoreDefault,
+		InvalidTransactionErrorScore:            invalidTransactionErrorScoreDefault,
 		UnknownErrorScore:                       unknownErrorScoreDefault,
 	}
 }

@@ -1,6 +1,6 @@
 module github.com/koinos/koinos-p2p
 
-go 1.20
+go 1.21
 
 require (
 	filippo.io/keygen v0.0.0-20230306160926-5201437acf8e

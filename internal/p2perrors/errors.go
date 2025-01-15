@@ -76,4 +76,10 @@ var (
 
 	// ErrProtocolMissing represents when a peer's protocol version is missing
 	ErrProtocolMissing = errors.New("protocol version is missing")
+
+	// ErrInvalidBlock represents when a block fails validation
+	ErrInvalidBlock = errors.New("block did not pass validation")
+
+	// ErrInvalidTransaction represents when a transaction fails validation
+	ErrInvalidTransaction = errors.New("transaction did not pass validation")
 )
