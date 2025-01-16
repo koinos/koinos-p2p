@@ -4,7 +4,7 @@ import "time"
 
 const (
 	blockTimeoutDefault       = 3 * time.Second
-	transactionTimeoutDefault = 1 * time.Second
+	transactionTimeoutDefault = 10 * time.Second
 )
 
 // GossipOptions are options for Gossip

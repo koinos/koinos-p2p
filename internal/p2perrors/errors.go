@@ -53,8 +53,14 @@ var (
 	// ErrBlockApplicationTimeout represents when a block application timed out
 	ErrBlockApplicationTimeout = errors.New("block application timed out")
 
+	// ErrTransactionApplicationTimeout represents when a transaction application timed out
+	ErrTransactionApplicationTimeout = errors.New("transaction application timed out")
+
 	// ErrMaxPendingBlocks represents when too many blocks are pending application
 	ErrMaxPendingBlocks = errors.New("max blocks are pending application")
+
+	// ErrMaxPendingTransactions represents when too many transactions are pending application
+	ErrMaxPendingTransactions = errors.New("max transactions are pending application")
 
 	// ErrForkBomb represents when too many forks from a producer is detected
 	ErrForkBomb = errors.New("unacceptable number of forks on the same parent for a single producer")

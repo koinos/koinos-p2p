@@ -61,10 +61,6 @@ type KoinosP2PNode struct {
 const (
 	transactionCacheDuration = 5 * time.Minute
 	pubsubTimeCacheDuration  = 30 * time.Second
-	gossipHeartbeatInterval  = 1 * time.Second
-	gossipIWantFollowupTime  = 3 * time.Second
-	gossipHistoryLength      = 5
-	gossipHistoryGossip      = 3
 )
 
 // NewKoinosP2PNode creates a libp2p node object listening on the given multiaddress
@@ -135,7 +131,7 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	node.localRPC = localRPC
 
 	if requestHandler != nil {
-		requestHandler.SetBroadcastHandler("koinos.block.accept", node.handleBlockBroadcast)
+		requestHandler.SetBroadcastHandler("koinos.mempool.block_accepted", node.handleBlockBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.mempool.accept", node.handleTransactionBroadcast)
 		requestHandler.SetBroadcastHandler("koinos.block.forks", node.handleForkUpdate)
 		requestHandler.SetRPCHandler("p2p", node.handleRPC)
@@ -144,34 +140,12 @@ func NewKoinosP2PNode(ctx context.Context, listenAddr string, localRPC rpc.Local
 	}
 
 	pubsub.TimeCacheDuration = pubsubTimeCacheDuration
-	gossipOpts := pubsub.DefaultGossipSubParams()
-	gossipOpts.HeartbeatInterval = gossipHeartbeatInterval
-	gossipOpts.IWantFollowupTime = gossipIWantFollowupTime
-	gossipOpts.HistoryLength = gossipHistoryLength
-	gossipOpts.HistoryGossip = gossipHistoryGossip
 	ps, err := pubsub.NewGossipSub(
 		ctx, node.Host,
 		pubsub.WithMessageIdFn(generateMessageID),
 		pubsub.WithPeerExchange(true),
-		pubsub.WithPeerScore(
-			&pubsub.PeerScoreParams{
-				AppSpecificScore: func(p peer.ID) float64 {
-					rawScore := float64(node.PeerErrorHandler.GetPeerErrorScore(ctx, p))
-					return -rawScore + float64(node.PeerErrorHandler.GetOptions().ErrorScoreReconnectThreshold)
-				},
-				AppSpecificWeight: 1,
-				DecayInterval:     1 * time.Minute,
-				DecayToZero:       0.01,
-			},
-			&pubsub.PeerScoreThresholds{
-				GossipThreshold:             -1,
-				PublishThreshold:            -1,
-				GraylistThreshold:           -1,
-				AcceptPXThreshold:           5000,
-				OpportunisticGraftThreshold: .1,
-			},
-		),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictSign),
+		pubsub.WithFloodPublish(true),
 	)
 	if err != nil {
 		return nil, err
@@ -248,13 +222,15 @@ func (n *KoinosP2PNode) handleBlockBroadcast(topic string, data []byte) {
 }
 
 func (n *KoinosP2PNode) handleTransactionBroadcast(topic string, data []byte) {
-	log.Debug("Received koinos.mempool.accept broadcast")
-	trxBroadcast := &broadcast.MempoolAccepted{}
+	log.Debug("Received koinos.chain.transaction_accepted")
+	trxBroadcast := &broadcast.TransactionAccepted{}
 	err := proto.Unmarshal(data, trxBroadcast)
 	if err != nil {
 		log.Warnf("Unable to parse koinos.transaction.accept broadcast: %v", err.Error())
 		return
 	}
+
+	n.Applicator.HandleTransactionBroadcast(trxBroadcast)
 
 	// If gossip is enabled publish the transaction
 	err = n.Gossip.PublishTransaction(context.Background(), trxBroadcast.Transaction)

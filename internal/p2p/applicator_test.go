@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,10 +11,12 @@ import (
 	"github.com/koinos/koinos-p2p/internal/p2perrors"
 	"github.com/koinos/koinos-proto-golang/v2/koinos"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/broadcast"
+	"github.com/koinos/koinos-proto-golang/v2/koinos/chain"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/protocol"
 	"github.com/koinos/koinos-proto-golang/v2/koinos/rpc/block_store"
-	"github.com/koinos/koinos-proto-golang/v2/koinos/rpc/chain"
+	chainrpc "github.com/koinos/koinos-proto-golang/v2/koinos/rpc/chain"
 	"github.com/multiformats/go-multihash"
+	"google.golang.org/protobuf/proto"
 )
 
 type applicatorTestRPC struct {
@@ -23,8 +26,8 @@ type applicatorTestRPC struct {
 	invalidNonceTrxs map[string]void
 }
 
-func (b *applicatorTestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInfoResponse, error) {
-	return &chain.GetHeadInfoResponse{
+func (b *applicatorTestRPC) GetHeadBlock(ctx context.Context) (*chainrpc.GetHeadInfoResponse, error) {
+	return &chainrpc.GetHeadInfoResponse{
 		HeadTopology: &koinos.BlockTopology{
 			Id:       []byte{0},
 			Height:   0,
@@ -33,7 +36,7 @@ func (b *applicatorTestRPC) GetHeadBlock(ctx context.Context) (*chain.GetHeadInf
 	}, nil
 }
 
-func (b *applicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chain.SubmitBlockResponse, error) {
+func (b *applicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol.Block) (*chainrpc.SubmitBlockResponse, error) {
 	if _, ok := b.blocksToFail[string(block.Id)]; ok {
 		return nil, p2perrors.ErrBlockApplication
 	}
@@ -42,27 +45,27 @@ func (b *applicatorTestRPC) ApplyBlock(ctx context.Context, block *protocol.Bloc
 		return nil, p2perrors.ErrUnknownPreviousBlock
 	}
 
-	return &chain.SubmitBlockResponse{}, nil
+	return &chainrpc.SubmitBlockResponse{}, nil
 }
 
-func (b *applicatorTestRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) (*chain.SubmitTransactionResponse, error) {
+func (b *applicatorTestRPC) ApplyTransaction(ctx context.Context, trx *protocol.Transaction) (*chainrpc.SubmitTransactionResponse, error) {
 	if _, ok := b.invalidNonceTrxs[string(trx.Id)]; ok {
 		return nil, p2perrors.ErrInvalidNonce
 	}
 
-	return &chain.SubmitTransactionResponse{}, nil
+	return &chainrpc.SubmitTransactionResponse{}, nil
 }
 
 func (b *applicatorTestRPC) GetBlocksByHeight(ctx context.Context, blockIDs multihash.Multihash, height uint64, numBlocks uint32) (*block_store.GetBlocksByHeightResponse, error) {
 	return &block_store.GetBlocksByHeightResponse{}, nil
 }
 
-func (b *applicatorTestRPC) GetChainID(ctx context.Context) (*chain.GetChainIdResponse, error) {
-	return &chain.GetChainIdResponse{}, nil
+func (b *applicatorTestRPC) GetChainID(ctx context.Context) (*chainrpc.GetChainIdResponse, error) {
+	return &chainrpc.GetChainIdResponse{}, nil
 }
 
-func (b *applicatorTestRPC) GetForkHeads(ctx context.Context) (*chain.GetForkHeadsResponse, error) {
-	return &chain.GetForkHeadsResponse{}, nil
+func (b *applicatorTestRPC) GetForkHeads(ctx context.Context) (*chainrpc.GetForkHeadsResponse, error) {
+	return &chainrpc.GetForkHeadsResponse{}, nil
 }
 
 func (b *applicatorTestRPC) GetBlocksByID(ctx context.Context, blockIDs []multihash.Multihash) (*block_store.GetBlocksByIdResponse, error) {
@@ -547,8 +550,17 @@ func TestInvalidNonce(t *testing.T) {
 		head:             []byte{0x00},
 		invalidNonceTrxs: make(map[string]void),
 	}
-
 	applicator, err := NewApplicator(ctx, &rpc, NewTransactionCache(time.Minute), *options.NewApplicatorOptions())
+	if err != nil {
+		t.Error(err)
+	}
+
+	nonce := &chain.ValueType{
+		Kind: &chain.ValueType_Uint64Value{
+			Uint64Value: 0,
+		},
+	}
+	nonceBytes, err := proto.Marshal(nonce)
 	if err != nil {
 		t.Error(err)
 	}
@@ -557,7 +569,7 @@ func TestInvalidNonce(t *testing.T) {
 		Id: []byte{0},
 		Header: &protocol.TransactionHeader{
 			Payer: []byte{0},
-			Nonce: []byte{0},
+			Nonce: nonceBytes,
 		},
 	}
 
@@ -565,7 +577,7 @@ func TestInvalidNonce(t *testing.T) {
 		Id: []byte{1},
 		Header: &protocol.TransactionHeader{
 			Payer: []byte{0},
-			Nonce: []byte{0},
+			Nonce: nonceBytes,
 		},
 	}
 
@@ -578,10 +590,61 @@ func TestInvalidNonce(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = applicator.ApplyTransaction(ctx, badTrx)
-	if err != p2perrors.ErrInvalidNonce {
-		t.Errorf("badTrx - ErrInvalidNonce expected but was not returned, was: %v", err)
+	trx1 := &protocol.Transaction{
+		Id: []byte{0},
+		Header: &protocol.TransactionHeader{
+			Payer: []byte{0},
+			Nonce: nonceBytes,
+		},
 	}
+
+	nonce.Kind = &chain.ValueType_Uint64Value{
+		Uint64Value: 1,
+	}
+	nonceBytes, err = proto.Marshal(nonce)
+	if err != nil {
+		t.Error(err)
+	}
+
+	trx2 := &protocol.Transaction{
+		Id: []byte{1},
+		Header: &protocol.TransactionHeader{
+			Payer: []byte{0},
+			Nonce: nonceBytes,
+		},
+	}
+
+	rpc.invalidNonceTrxs[string(trx2.Id)] = void{}
+
+	applicator.Start(ctx)
+	testChan1 := make(chan struct{})
+	defer close(testChan1)
+
+	go func() {
+		err := applicator.ApplyTransaction(ctx, trx2)
+		fmt.Printf("%v - Trx2 Err: %v\n", time.Now(), err)
+		if err != nil {
+			t.Error(err)
+		}
+		testChan1 <- struct{}{}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	delete(rpc.invalidNonceTrxs, string(trx2.Id))
+
+	err = applicator.ApplyTransaction(ctx, trx1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	trxBroadcast := &broadcast.TransactionAccepted{
+		Transaction: trx1,
+	}
+
+	applicator.HandleTransactionBroadcast(trxBroadcast)
+
+	<-testChan1
 }
 
 func TestValidateBlock(t *testing.T) {
