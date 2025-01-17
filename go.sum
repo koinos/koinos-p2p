@@ -970,6 +970,10 @@ github.com/koinos/koinos-mq-golang v1.0.1 h1:0o2WCFtlWdDbSWpboqYiuplWNCkieQja/tW
 github.com/koinos/koinos-mq-golang v1.0.1/go.mod h1:Xxc1jERCh7N9wjVQJTEBsR3RS6HGU7c30SoScaE9wX0=
 github.com/koinos/koinos-proto-golang/v2 v2.0.2 h1:XPV+V5AvQE3gQQqNIXekHKU749WAepdbs8+hOgNKOsA=
 github.com/koinos/koinos-proto-golang/v2 v2.0.2/go.mod h1:BJg2czLOSVW2/ExpK/SBIrcN+N9bu7ejVyDnNYFuW/o=
+github.com/koinos/koinos-proto-golang/v2 v2.3.1-0.20250114233942-d19670aa3294 h1:JWzzVfoIxQMKA0y9iRyFZZYtARKBaLwj8RSWeKeq0wA=
+github.com/koinos/koinos-proto-golang/v2 v2.3.1-0.20250114233942-d19670aa3294/go.mod h1:BJg2czLOSVW2/ExpK/SBIrcN+N9bu7ejVyDnNYFuW/o=
+github.com/koinos/koinos-proto-golang/v2 v2.4.0 h1:8vS2zbTmtpDQS8eloMtUHK9I/62C3whREOOj1ONvQXk=
+github.com/koinos/koinos-proto-golang/v2 v2.4.0/go.mod h1:BJg2czLOSVW2/ExpK/SBIrcN+N9bu7ejVyDnNYFuW/o=
 github.com/koinos/koinos-util-golang/v2 v2.0.1 h1:sKXIpko9BSPJ9Nymb4ES+2rtbQKYDapCv2HjMYuhuzo=
 github.com/koinos/koinos-util-golang/v2 v2.0.1/go.mod h1:Iw80hOODPUeXU1rnfUgtn2hMT2GiuZ2h+bomNGL1q2A=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=

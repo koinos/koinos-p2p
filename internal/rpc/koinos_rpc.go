@@ -36,7 +36,8 @@ var blockErrorMap = map[chain.ErrorCode]error{
 }
 
 var transactionErrorMap = map[chain.ErrorCode]error{
-	chain.ErrorCode_invalid_nonce: p2perrors.ErrInvalidNonce,
+	chain.ErrorCode_invalid_nonce:                      p2perrors.ErrInvalidNonce,
+	chain.ErrorCode_pending_transaction_limit_exceeded: p2perrors.ErrPendingTransactionLimitExceeded,
 }
 
 // KoinosRPC implements LocalRPC implementation by communicating with a local Koinos node via AMQP

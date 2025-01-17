@@ -541,7 +541,7 @@ func (a *Applicator) handleTransactionStatus(ctx context.Context, status *transa
 	// We might get an error if the transaction has already been applied, if it is in the cache, check children again
 	if a.transactionCache.CheckTransactions(status.transaction) > 0 {
 		a.checkTransactionChildren(ctx, status.transaction)
-	} else if errors.Is(status.err, p2perrors.ErrInvalidNonce) {
+	} else if errors.Is(status.err, p2perrors.ErrInvalidNonce) || errors.Is(status.err, p2perrors.ErrPendingTransactionLimitExceeded) {
 		return
 	}
 
