@@ -65,7 +65,7 @@ const (
 // Version display values
 const (
 	DisplayAppName = "Koinos P2P"
-	Version        = "v1.2.0"
+	Version        = "v1.3.0"
 )
 
 // Gets filled in by the linker
