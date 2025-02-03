@@ -49,6 +49,7 @@ jobs:
         - docker build . -t $TRAVIS_REPO_SLUG:$TAG
       script:
         - pushd koinos-integration-tests
+        - which go
         - ./run.sh
       after_success:
         - |
