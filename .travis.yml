@@ -1,8 +1,5 @@
 language: go
 
-go:
-  - 1.20.x
-
 addons:
   apt:
     update: true
@@ -15,6 +12,9 @@ jobs:
       os: linux
       dist: jammy
       install:
+        - curl -sL -o ~/bin/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+        - chmod +x ~/bin/gimme
+        - eval "$(gimme 1.23)"
         - sudo gem install coveralls-lcov
         - go install github.com/jandelgado/gcov2lcov@latest
         - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
@@ -40,6 +40,9 @@ jobs:
         - TAG=`if [ $TRAVIS_BRANCH == "master" ]; then echo -n latest; else echo -n $TRAVIS_BRANCH; fi`
         - P2P_TAG=$TAG
       install:
+        - curl -sL -o ~/bin/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+        - chmod +x ~/bin/gimme
+        - eval "$(gimme 1.23)"
         - git clone https://github.com/koinos/koinos-integration-tests.git
         - pushd koinos-integration-tests
         - go get ./...
@@ -49,6 +52,8 @@ jobs:
         - docker build . -t $TRAVIS_REPO_SLUG:$TAG
       script:
         - pushd koinos-integration-tests
+        - echo "PATH=$PATH"
+        - which go
         - ./run.sh
       after_success:
         - |
